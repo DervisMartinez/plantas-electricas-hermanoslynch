@@ -44,7 +44,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
   children,
 }) => {
   const { isDark, toggleTheme } = useTheme();
-  const { myMoto, records, setUserRole } = useMyMoto();
+  const { myMoto, records, logout } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -317,6 +317,15 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
                 color={activeTab === 'profile' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
               />
             </TouchableOpacity>
+
+            {/* CERRAR SESIÓN */}
+            <TouchableOpacity
+              onPress={logout}
+              style={[styles.railIconBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2' }]}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="logout" size={20} color="#ef4444" />
+            </TouchableOpacity>
           </View>
         </View>
       )}
@@ -396,18 +405,22 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
               )}
             </TouchableOpacity>
 
-            {/* ROLE SWITCHER PILL */}
+            {/* BOTÓN CERRAR SESIÓN */}
             <TouchableOpacity
-              onPress={() => setUserRole('admin')}
-              style={[styles.roleSwitchPill, { backgroundColor: 'rgba(0, 180, 216, 0.15)', borderColor: accentCyan }]}
+              onPress={logout}
+              style={[
+                styles.logoutHeaderPill,
+                {
+                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
+                  borderColor: 'rgba(239, 68, 68, 0.35)',
+                },
+              ]}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="sync-alt" size={16} color={accentCyan} />
-              {isDesktop && (
-                <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11 }}>
-                  CLIENTE • Ver Admin ⚡
-                </Text>
-              )}
+              <MaterialIcons name="logout" size={16} color="#ef4444" />
+              <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 12 }}>
+                Cerrar Sesión
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -1045,6 +1058,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  logoutHeaderPill: {
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 19,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   roleSwitchPill: {
     height: 38,

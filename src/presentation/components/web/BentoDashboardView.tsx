@@ -54,7 +54,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     selectMoto, 
     records, 
     drivesCompanyVehicle, 
-    setUserRole,
+    logout,
     systemMetrics,
     loadSystemUsers
   } = useMyMoto();
@@ -431,6 +431,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               color={activeTab === 'profile' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
             />
           </TouchableOpacity>
+
+          <TouchableOpacity
+            onPress={logout}
+            style={[styles.railIconBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2' }]}
+            activeOpacity={0.7}
+          >
+            <MaterialIcons name="logout" size={20} color="#ef4444" />
+          </TouchableOpacity>
         </View>
       </View>
       )}
@@ -556,16 +564,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               )}
             </TouchableOpacity>
 
-            {/* ROLE SWITCHER PILL */}
+            {/* LOGOUT BUTTON */}
             <TouchableOpacity
-              onPress={() => setUserRole('client')}
-              style={[styles.roleSwitchPill, { backgroundColor: 'rgba(26, 92, 255, 0.15)', borderColor: accentBlue }]}
+              onPress={logout}
+              style={[styles.logoutHeaderPill, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2', borderColor: 'rgba(239, 68, 68, 0.35)' }]}
               activeOpacity={0.8}
             >
-              <MaterialIcons name="admin-panel-settings" size={16} color={accentBlue} />
+              <MaterialIcons name="logout" size={16} color="#ef4444" />
               {isDesktop && (
-                <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 11 }}>
-                  ADMIN • Ver Cliente 👁️
+                <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 11 }}>
+                  Cerrar Sesión
                 </Text>
               )}
             </TouchableOpacity>
@@ -1421,6 +1429,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  logoutHeaderPill: {
+    height: 38,
+    paddingHorizontal: 14,
+    borderRadius: 19,
+    borderWidth: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   roleSwitchPill: {
     height: 38,

@@ -199,7 +199,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
           .single();
 
         if (profile) {
-          if (profile.role === 'superadmin' || profile.role === 'admin') {
+          if (profile.role === 'superadmin' || profile.role === 'admin' || profile.role === 'operator') {
             detectedRole = 'admin';
             setApprovalStatus('approved');
           } else {
