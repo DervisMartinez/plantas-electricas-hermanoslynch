@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "GARAGE",
-    "slug": "moto-app",
+    "name": "Hermanos Lynch - Plantas Eléctricas",
+    "slug": "plantas-electricas-hermanoslynch",
     "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -32,6 +32,7 @@
       ]
     },
     "web": {
+      "bundler": "metro",
       "output": "static"
     },
     "plugins": [

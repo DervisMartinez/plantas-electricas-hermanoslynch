@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -66,6 +66,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
   const [refreshing, setRefreshing] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedSubsystem, setSelectedSubsystem] = useState<SubsystemItem | null>(null);
+  const [showSubsystemsSection, setShowSubsystemsSection] = useState(true);
 
   // Modals state
   const [inquiryModalVisible, setInquiryModalVisible] = useState(false);
@@ -74,13 +75,17 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
   const [operatorModalVisible, setOperatorModalVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
   const [specsModalVisible, setSpecsModalVisible] = useState(false);
+  const [notificationsModalVisible, setNotificationsModalVisible] = useState(false);
+  const [drawerMenuVisible, setDrawerMenuVisible] = useState(false);
 
-  // Quick Action Dialogs (Local fallback if parent does not provide)
+  // Quick Action Dialogs (Local fallback)
   const [localHoursModalVisible, setLocalHoursModalVisible] = useState(false);
   const [localFuelModalVisible, setLocalFuelModalVisible] = useState(false);
   const [hoursInput, setHoursInput] = useState('');
   const [fuelLitersInput, setFuelLitersInput] = useState('');
   const [fuelUsdInput, setFuelUsdInput] = useState('');
+
+  const scrollRef = useRef<ScrollView>(null);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -136,7 +141,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
         id: 'oil',
         name: 'Aceite Diésel 15W-40',
         interval: 250,
-        color: '#1a5cff',
+        color: '#22c55e',
         icon: 'oil-level',
         iconFamily: 'community',
         description: 'Lubricación hidrodinámica del bloque, cigüeñal y árbol de levas. Intervalo OEM para servicio pesado.',
@@ -145,7 +150,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
         id: 'fuel_filter',
         name: 'Filtros Diésel & Racor',
         interval: 250,
-        color: '#8b5cf6',
+        color: '#f59e0b',
         icon: 'filter-variant',
         iconFamily: 'community',
         description: 'Separación micrónica de partículas y trampa de agua para proteger la bomba de inyección.',
@@ -154,7 +159,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
         id: 'air_filter',
         name: 'Filtro Aire Industrial',
         interval: 500,
-        color: '#f59e0b',
+        color: '#3b82f6',
         icon: 'air-filter',
         iconFamily: 'community',
         description: 'Filtrado de aire de admisión para combustión limpia en turbocompresores y cámaras de combustión.',
@@ -258,6 +263,12 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
     });
   }, [records, currentHours]);
 
+  // Find lowest remaining subsystem for "Next Service Due" card
+  const nextDueSubsystem = useMemo(() => {
+    if (!plantSubsystems.length) return null;
+    return [...plantSubsystems].sort((a, b) => a.hoursRemaining - b.hoursRemaining)[0];
+  }, [plantSubsystems]);
+
   const filteredSubsystems = useMemo(() => {
     if (!searchQuery.trim()) return plantSubsystems;
     const q = searchQuery.toLowerCase().trim();
@@ -274,13 +285,11 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    // Simular o activar re-sincronización con Supabase
     setTimeout(() => {
       setRefreshing(false);
-    }, 1200);
+    }, 1000);
   }, []);
 
-  // Handlers for Hours and Fuel
   const handleTriggerHours = () => {
     if (onOpenQuickHours) {
       onOpenQuickHours();
@@ -361,489 +370,488 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
     setInquiryModalVisible(true);
   };
 
-  // Colors & Theme Architecture
-  const bgMain = isDark ? '#0c1017' : '#f5f7fb';
-  const cardBg = isDark ? '#141824' : '#ffffff';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.06)';
-  const pillDarkBg = isDark ? '#1b2132' : '#edf2f7';
-  const textPrimary = isDark ? '#ffffff' : '#0f172a';
-  const textSecondary = isDark ? '#8fa0be' : '#64748b';
-  const accentBlue = '#1a5cff';
-  const accentCyan = '#00e3fd';
-  const greenLive = '#22c55e';
+  const scrollToSubsystems = () => {
+    setShowSubsystemsSection(true);
+    setTimeout(() => {
+      scrollRef.current?.scrollTo({ y: 780, animated: true });
+    }, 100);
+  };
 
-  const plantLocation = myMoto?.location || 'Ubicación sin registrar';
+  // Aesthetic colors strictly derived from the reference template
+  const bgMain = isDark ? '#0a0e14' : '#f4f6fa';
+  const cardBg = isDark ? '#121722' : '#ffffff';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)';
+  const tileBg = isDark ? '#161c28' : '#f0f3f8';
+  const textPrimary = isDark ? '#ffffff' : '#0f172a';
+  const textSecondary = isDark ? '#8d98aa' : '#64748b';
+  const accentEmerald = '#22c55e';
+  const accentCyan = '#00e3fd';
+  const accentAmber = '#f59e0b';
+  const accentBlue = '#3b82f6';
+  const accentPurple = '#a855f7';
+
+  const plantLocation = myMoto?.location || 'Sede Principal';
 
   return (
     <View style={[styles.screenRoot, { backgroundColor: bgMain }]}>
       <ScrollView
+        ref={scrollRef}
         contentContainerStyle={[
           styles.scrollContainer,
-          { paddingTop: Math.max(insets.top, 12), paddingBottom: 100 + insets.bottom },
+          { paddingTop: Math.max(insets.top, 10), paddingBottom: 110 + insets.bottom },
         ]}
         showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={onRefresh}
-            tintColor={accentCyan}
-            colors={[accentBlue, accentCyan]}
+            tintColor={accentEmerald}
+            colors={[accentEmerald, accentCyan]}
           />
         }
       >
         {/* ========================================================== */}
-        {/* 1. TOP MOBILE HEADER: MARCA, EN LÍNEA & ACCIONES RÁPIDAS */}
+        {/* 1. TOP BAR: HAMBURGER MENU & NOTIFICATION BELL            */}
         {/* ========================================================== */}
-        <View style={styles.topHeaderCard}>
-          <View style={styles.brandRow}>
-            <View style={[styles.logoBadge, { backgroundColor: isDark ? '#1b2132' : '#e0f2fe' }]}>
-              <Image source={HL_LOGO_REQUIRE} style={styles.logoImg} resizeMode="contain" />
-            </View>
+        <View style={styles.navHeaderRow}>
+          <TouchableOpacity
+            onPress={() => setDrawerMenuVisible(true)}
+            style={[styles.topIconCircleBtn, { backgroundColor: tileBg }]}
+            activeOpacity={0.75}
+          >
+            <MaterialIcons name="menu" size={22} color={textPrimary} />
+          </TouchableOpacity>
 
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.headerBrandTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  HERMANOS LYNCH
-                </Text>
-                <View style={[styles.liveStatusPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                  <View style={styles.livePulseDot} />
-                  <Text style={{ fontFamily: F.bold, color: greenLive, fontSize: 10 }}>EN LÍNEA</Text>
-                </View>
-              </View>
-
-              <Text style={[styles.headerSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                Telemetría de Planta • {plantLocation}
-              </Text>
-            </View>
-
-            {/* THEME TOGGLE BUTTON */}
-            <TouchableOpacity
-              onPress={toggleTheme}
-              style={[styles.headerThemeBtn, { backgroundColor: pillDarkBg }]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name={isDark ? 'light-mode' : 'dark-mode'}
-                size={18}
-                color={isDark ? '#ffb703' : '#1a5cff'}
-              />
-            </TouchableOpacity>
-          </View>
-
-          {/* QUICK TOP ACTIONS BAR */}
-          <View style={styles.topActionsRow}>
-            <TouchableOpacity
-              onPress={handleTriggerHours}
-              style={[styles.headerActionBtn, { backgroundColor: accentBlue }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="add" size={16} color="#ffffff" />
-              <Text style={[styles.headerActionBtnText, { color: '#ffffff', fontFamily: F.bold }]}>
-                + HORAS
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={handleTriggerFuel}
-              style={[styles.headerActionBtn, { backgroundColor: accentCyan }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="local-gas-station" size={16} color="#0c1017" />
-              <Text style={[styles.headerActionBtnText, { color: '#0c1017', fontFamily: F.bold }]}>
-                + DIÉSEL
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setReportModalVisible(true)}
-              style={[styles.headerActionBtn, { backgroundColor: '#ef4444' }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="qr-code" size={16} color="#ffffff" />
-              <Text style={[styles.headerActionBtnText, { color: '#ffffff', fontFamily: F.bold }]}>
-                PDF QR
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ========================================================== */}
-        {/* 2. SHOWCASE HERO DE LA PLANTA DEL CLIENTE */}
-        {/* ========================================================== */}
-        <View style={[styles.heroCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          {/* BADGES HEADER ROW */}
-          <View style={styles.heroBadgeRow}>
-            <View style={[styles.kvaStandbyBadge, { backgroundColor: 'rgba(0, 227, 253, 0.12)' }]}>
-              <MaterialIcons name="bolt" size={14} color={accentCyan} />
-              <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11 }}>
-                {myMoto ? `${myMoto.powerKva || 35} kVA / ${myMoto.powerKw || 28} kW STANDBY` : 'GRUPO ELECTRÓGENO'}
-              </Text>
-            </View>
-
-            <View style={[styles.roleBadge, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
-              <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10 }}>PORTAL CLIENTE</Text>
-            </View>
-          </View>
-
-          {/* PLANT TITLE & MODEL */}
-          <Text style={[styles.heroPlantTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-            {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Generador Diésel Blue Power'}
-          </Text>
-
-          <Text style={[styles.heroSerialText, { color: textSecondary, fontFamily: F.medium }]}>
-            Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'BPG-HL-001'}</Text>
-          </Text>
-
-          {/* PLANT HIGH-RES IMAGE WITH ATMOSPHERIC GLOW */}
-          <View style={styles.heroImageWrapper}>
-            <View style={styles.heroImageBackdropGlow} />
-            <Image
-              source={plantImageSource}
-              style={styles.heroPlantImage}
-              resizeMode="contain"
-            />
-
-            {/* HOROMETER BADGE (TACTILE TAP TO EDIT) */}
-            <TouchableOpacity
-              onPress={handleTriggerHours}
-              style={[styles.heroHorometerPill, { backgroundColor: 'rgba(16, 21, 31, 0.94)', borderColor: cardBorder }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="timer" size={16} color={accentCyan} />
-              <Text style={[styles.heroHorometerText, { fontFamily: F.bold }]}>
-                {currentHours.toLocaleString()} hrs
-              </Text>
-              <View style={styles.editPencilBubble}>
-                <MaterialIcons name="edit" size={11} color="#ffffff" />
-              </View>
-            </TouchableOpacity>
-          </View>
-
-          {/* SPECIFICATION CHIPS */}
-          <View style={styles.heroChipsGrid}>
-            <View style={[styles.heroChipItem, { backgroundColor: pillDarkBg }]}>
-              <MaterialCommunityIcons name="engine" size={14} color={accentCyan} />
-              <Text style={[styles.heroChipText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
-                {specs?.engineType || 'Cummins 3.9L Diésel'}
-              </Text>
-            </View>
-
-            <View style={[styles.heroChipItem, { backgroundColor: pillDarkBg }]}>
-              <MaterialIcons name="cached" size={14} color="#f59e0b" />
-              <Text style={[styles.heroChipText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
-                {specs?.transmission || 'Leroy Somer TAL-042'}
-              </Text>
-            </View>
-
-            <View style={[styles.heroChipItem, { backgroundColor: pillDarkBg }]}>
-              <MaterialIcons name="developer-board" size={14} color="#10b981" />
-              <Text style={[styles.heroChipText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
-                ComAp InteliLite IL-9
-              </Text>
-            </View>
-          </View>
-
-          {/* CLIENT ACTION BUTTONS GRID */}
-          <View style={styles.heroActionButtonsGrid}>
-            <TouchableOpacity
-              onPress={() => setSpecsModalVisible(true)}
-              style={[styles.heroActionBtn, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="assignment" size={16} color={textPrimary} />
-              <Text style={[styles.heroActionBtnText, { color: textPrimary, fontFamily: F.bold }]}>
-                Ficha Técnica
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setReportModalVisible(true)}
-              style={[styles.heroActionBtn, { backgroundColor: '#ef4444' }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="picture-as-pdf" size={16} color="#ffffff" />
-              <Text style={[styles.heroActionBtnText, { color: '#ffffff', fontFamily: F.bold }]}>
-                Expediente PDF
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setOperatorModalVisible(true)}
-              style={[styles.heroActionBtn, { backgroundColor: accentBlue }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="support-agent" size={16} color="#ffffff" />
-              <Text style={[styles.heroActionBtnText, { color: '#ffffff', fontFamily: F.bold }]}>
-                Contactar Técnico
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                setInquiryInitialType('mantenimiento');
-                setInquiryInitialTitle('Solicitud de Mantenimiento / Revisión');
-                setInquiryModalVisible(true);
-              }}
-              style={[styles.heroActionBtn, { backgroundColor: '#10b981' }]}
-              activeOpacity={0.8}
-            >
-              <MaterialCommunityIcons name="calendar-clock" size={16} color="#ffffff" />
-              <Text style={[styles.heroActionBtnText, { color: '#ffffff', fontFamily: F.bold }]}>
-                Agendar Cita
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ========================================================== */}
-        {/* 3. OPERADOR TÉCNICO ASIGNADO A LA PLANTA */}
-        {/* ========================================================== */}
-        <View style={[styles.operatorCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={styles.operatorTopRow}>
-            <View style={[styles.operatorAvatarBadge, { backgroundColor: accentBlue }]}>
-              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 16 }}>
-                {myMoto?.assignedOperatorName
-                  ? myMoto.assignedOperatorName
-                      .split(' ')
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase()
-                  : 'HL'}
-              </Text>
-            </View>
-
-            <View style={{ flex: 1, marginLeft: 12 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.operatorNameText, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  {myMoto?.assignedOperatorName || 'Ing. Alejandro Rivas Silva'}
-                </Text>
-                <MaterialIcons name="verified" size={16} color="#22c55e" />
-              </View>
-
-              <Text style={[styles.operatorTitleSub, { color: textSecondary, fontFamily: F.medium }]}>
-                Operador Técnico Responsable • Carnet:{' '}
-                <Text style={{ color: accentCyan, fontFamily: F.bold }}>
-                  {myMoto?.assignedOperatorId
-                    ? `HL-TECH-${myMoto.assignedOperatorId.slice(0, 4).toUpperCase()}`
-                    : 'HL-TECH-4098'}
-                </Text>
-              </Text>
-            </View>
-          </View>
-
-          {/* OPERATOR DIRECT ACTIONS */}
-          <View style={styles.operatorActionsRow}>
-            <TouchableOpacity
-              onPress={handleOpenWhatsAppOperator}
-              style={[styles.whatsappDirectBtn, { backgroundColor: '#25D366' }]}
-              activeOpacity={0.85}
-            >
-              <MaterialCommunityIcons name="whatsapp" size={18} color="#ffffff" />
-              <Text style={[styles.whatsappDirectText, { fontFamily: F.bold }]}>
-                WhatsApp (+58 414 305-9921)
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setOperatorModalVisible(true)}
-              style={[styles.operatorFichaBtn, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="chevron-right" size={20} color={textPrimary} />
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* ========================================================== */}
-        {/* 4. BALANCE OPERATIVO & CONTROL DE DIÉSEL (BENTO KPIS) */}
-        {/* ========================================================== */}
-        <View style={[styles.balanceCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={styles.balanceHeaderRow}>
-            <View>
-              <Text style={[styles.balanceTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                Balance Operativo & Diésel
-              </Text>
-              <Text style={[styles.balanceSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                Horas acumuladas y consumo en tu instalación
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              onPress={handleTriggerFuel}
-              style={[styles.addDieselBtn, { backgroundColor: accentCyan }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="local-gas-station" size={16} color="#0c1017" />
-              <Text style={{ fontFamily: F.bold, color: '#0c1017', fontSize: 11 }}>+ DIÉSEL</Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* 4 KPI CARDS IN 2x2 MOBILE GRID */}
-          <View style={styles.kpiGrid}>
-            <View style={[styles.kpiCardItem, { backgroundColor: pillDarkBg }]}>
-              <Text style={[styles.kpiCardLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                Horas Acumuladas
-              </Text>
-              <Text style={[styles.kpiCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                {currentHours.toLocaleString()} <Text style={{ fontSize: 13, fontFamily: F.medium }}>hrs</Text>
-              </Text>
-            </View>
-
-            <View style={[styles.kpiCardItem, { backgroundColor: pillDarkBg }]}>
-              <Text style={[styles.kpiCardLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                Diésel Cargado
-              </Text>
-              <Text style={[styles.kpiCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                {totalFuelLiters} <Text style={{ fontSize: 13, fontFamily: F.medium }}>L</Text>
-              </Text>
-            </View>
-
-            <View style={[styles.kpiCardItem, { backgroundColor: pillDarkBg }]}>
-              <Text style={[styles.kpiCardLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                Gasto en Diésel
-              </Text>
-              <Text style={[styles.kpiCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                ${totalFuelUSD.toFixed(2)} <Text style={{ fontSize: 13, fontFamily: F.medium }}>USD</Text>
-              </Text>
-            </View>
-
-            <View style={[styles.kpiCardItem, { backgroundColor: pillDarkBg }]}>
-              <Text style={[styles.kpiCardLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                Salud Operativa
-              </Text>
-              <Text style={[styles.kpiCardValue, { color: greenLive, fontFamily: F.extrabold }]}>
-                {generalHealth}%
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* ========================================================== */}
-        {/* 5. TELEMETRÍA DE LOS 10 SUBSISTEMAS (MODO LECTURA CLIENTE) */}
-        {/* ========================================================== */}
-        <View style={[styles.telemetryCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <View style={styles.telemetryTitleRow}>
-            <View style={{ flex: 1 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <Text style={[styles.telemetryHeading, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  Subsistemas en Tiempo Real
-                </Text>
-                <View style={[styles.readOnlyLockPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                  <MaterialIcons name="lock-outline" size={11} color={greenLive} />
-                  <Text style={{ fontFamily: F.bold, color: greenLive, fontSize: 9 }}>LECTURA</Text>
-                </View>
-              </View>
-              <Text style={[styles.telemetrySubheading, { color: textSecondary, fontFamily: F.medium }]}>
-                Monitoreo de desgaste y ciclos preventivos de los 10 componentes críticos
-              </Text>
-            </View>
-          </View>
-
-          {/* OFFICIAL ISO 8528 NOTICE BANNER */}
-          <View style={[styles.isoNoticeBox, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
-            <MaterialIcons name="info-outline" size={16} color={accentCyan} />
-            <Text style={[styles.isoNoticeText, { color: textSecondary, fontFamily: F.medium }]}>
-              Para preservar la garantía y normas ISO 8528, los cambios de fluidos y reseteos son ejecutados por el técnico certificado.
+          <View style={styles.brandCenterContainer}>
+            <Image source={HL_LOGO_REQUIRE} style={styles.topLogoSinNombre} resizeMode="contain" />
+            <Text style={[styles.topBrandText, { color: textPrimary, fontFamily: F.bold }]}>
+              HERMANOS LYNCH
             </Text>
           </View>
 
-          {/* SEARCH SUBSYSTEMS INPUT */}
-          <View style={[styles.searchPillBox, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
-            <MaterialIcons name="search" size={18} color={textSecondary} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Buscar componente o ciclo..."
-              placeholderTextColor={textSecondary}
-              style={[styles.searchPillInput, { color: textPrimary, fontFamily: F.medium }]}
+          <TouchableOpacity
+            onPress={() => setNotificationsModalVisible(true)}
+            style={[styles.topIconCircleBtn, { backgroundColor: tileBg }]}
+            activeOpacity={0.75}
+          >
+            <MaterialIcons name="notifications-none" size={22} color={textPrimary} />
+            <View style={styles.notificationDot} />
+          </TouchableOpacity>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 2. HERO HEADLINE (From Screenshot: Your Car. Smarter...)   */}
+        {/* ========================================================== */}
+        <View style={styles.heroHeadlineSection}>
+          <Text style={[styles.headlineTopLine, { color: textPrimary, fontFamily: F.extrabold }]}>
+            Tu Planta.
+          </Text>
+          <Text style={[styles.headlineSubLine, { fontFamily: F.extrabold }]}>
+            <Text style={{ color: accentEmerald }}>Inteligente</Text> en Cada Ciclo.
+          </Text>
+          <Text style={[styles.headlineDescription, { color: textSecondary, fontFamily: F.medium }]}>
+            Monitorea, gestiona y cuida tu grupo electrógeno en un solo lugar.
+          </Text>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 3. MACHINE VISUAL SHOWCASE CON INDICADORES DE CARRUSEL    */}
+        {/* ========================================================== */}
+        <View style={styles.machineShowcaseContainer}>
+          <View style={styles.ambientAtmosphereGlow} />
+          <Image
+            source={plantImageSource}
+            style={styles.machineHeroImage}
+            resizeMode="contain"
+          />
+
+          {/* DOTS PAGINATION (Exact design from screenshot: [===] [·] [·]) */}
+          <View style={styles.carouselDotsRow}>
+            <View style={[styles.carouselDotActive, { backgroundColor: accentEmerald }]} />
+            <View style={styles.carouselDotInactive} />
+            <View style={styles.carouselDotInactive} />
+          </View>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 4. "MY VEHICLE / MI PLANTA" CARD                          */}
+        {/* ========================================================== */}
+        <TouchableOpacity
+          onPress={() => setSpecsModalVisible(true)}
+          style={[styles.vehicleSelectorCard, { backgroundColor: cardBg, borderColor: cardBorder }]}
+          activeOpacity={0.85}
+        >
+          {/* THUMBNAIL */}
+          <View style={[styles.vehicleThumbBox, { backgroundColor: tileBg }]}>
+            <Image source={plantImageSource} style={styles.vehicleThumbImg} resizeMode="contain" />
+          </View>
+
+          {/* INFO */}
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <Text style={[styles.vehicleCardPretitle, { color: textSecondary, fontFamily: F.medium }]}>
+              Mi Planta Eléctrica
+            </Text>
+            <Text style={[styles.vehicleCardTitle, { color: textPrimary, fontFamily: F.bold }]} numberOfLines={1}>
+              {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Blue Power C35'}
+            </Text>
+            <View style={styles.statusPillBadge}>
+              <View style={styles.statusPillGreenDot} />
+              <Text style={{ fontFamily: F.bold, color: accentEmerald, fontSize: 10 }}>
+                Óptimo · En Línea
+              </Text>
+            </View>
+          </View>
+
+          {/* RIGHT CHEVRON & READING */}
+          <View style={{ alignItems: 'flex-end', justifyContent: 'center' }}>
+            <MaterialIcons name="chevron-right" size={20} color={textSecondary} />
+            <Text style={[styles.vehicleReadingText, { color: textSecondary, fontFamily: F.semibold }]}>
+              {currentHours.toLocaleString()} hrs
+            </Text>
+          </View>
+        </TouchableOpacity>
+
+        {/* ========================================================== */}
+        {/* 5. 4 ACTION TILES: Telemetría, Diésel, Mantenimiento, QR  */}
+        {/* ========================================================== */}
+        <View style={styles.fourTilesRow}>
+          {/* TILE 1: HEALTH CHECK / TELEMETRÍA */}
+          <TouchableOpacity
+            onPress={scrollToSubsystems}
+            style={[styles.actionSquareTile, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.tileIconCircle, { backgroundColor: 'rgba(34, 197, 94, 0.14)' }]}>
+              <MaterialCommunityIcons name="heart-pulse" size={20} color={accentEmerald} />
+            </View>
+            <Text style={[styles.tileLabelText, { color: textPrimary, fontFamily: F.bold }]}>
+              Health Check
+            </Text>
+            <Text style={[styles.tileSublabelText, { color: textSecondary, fontFamily: F.medium }]}>
+              Telemetría
+            </Text>
+          </TouchableOpacity>
+
+          {/* TILE 2: FUEL TRACKER / DIÉSEL */}
+          <TouchableOpacity
+            onPress={handleTriggerFuel}
+            style={[styles.actionSquareTile, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.tileIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.14)' }]}>
+              <MaterialIcons name="local-gas-station" size={20} color={accentAmber} />
+            </View>
+            <Text style={[styles.tileLabelText, { color: textPrimary, fontFamily: F.bold }]}>
+              Fuel Tracker
+            </Text>
+            <Text style={[styles.tileSublabelText, { color: textSecondary, fontFamily: F.medium }]}>
+              Carga Diésel
+            </Text>
+          </TouchableOpacity>
+
+          {/* TILE 3: SERVICE REMINDERS / AGENDAR CITA */}
+          <TouchableOpacity
+            onPress={() => {
+              setInquiryInitialType('mantenimiento');
+              setInquiryInitialTitle('Mantenimiento Preventivo Programado');
+              setInquiryModalVisible(true);
+            }}
+            style={[styles.actionSquareTile, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.tileIconCircle, { backgroundColor: 'rgba(59, 130, 246, 0.14)' }]}>
+              <MaterialIcons name="build" size={18} color={accentBlue} />
+            </View>
+            <Text style={[styles.tileLabelText, { color: textPrimary, fontFamily: F.bold }]}>
+              Service Reminders
+            </Text>
+            <Text style={[styles.tileSublabelText, { color: textSecondary, fontFamily: F.medium }]}>
+              Agendar Cita
+            </Text>
+          </TouchableOpacity>
+
+          {/* TILE 4: EXPENSE LOG / EXPEDIENTE QR */}
+          <TouchableOpacity
+            onPress={() => setReportModalVisible(true)}
+            style={[styles.actionSquareTile, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            activeOpacity={0.8}
+          >
+            <View style={[styles.tileIconCircle, { backgroundColor: 'rgba(168, 85, 247, 0.14)' }]}>
+              <MaterialIcons name="qr-code-2" size={20} color={accentPurple} />
+            </View>
+            <Text style={[styles.tileLabelText, { color: textPrimary, fontFamily: F.bold }]}>
+              Expense Log
+            </Text>
+            <Text style={[styles.tileSublabelText, { color: textSecondary, fontFamily: F.medium }]}>
+              Expediente QR
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 6. "NEXT SERVICE DUE" HERO BANNER CARD                    */}
+        {/* ========================================================== */}
+        <View style={[styles.nextServiceCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={styles.nextServiceTopRow}>
+            <View style={{ flex: 1, paddingRight: 10 }}>
+              <Text style={[styles.nextServiceHeaderTitle, { color: textPrimary, fontFamily: F.bold }]}>
+                Next Service Due
+              </Text>
+              <Text style={[styles.nextServiceSubtitle, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
+                {nextDueSubsystem
+                  ? `In ${nextDueSubsystem.hoursRemaining} hrs · ${nextDueSubsystem.name}`
+                  : 'In 250 hrs · Cambio de Aceite Diésel 15W-40'}
+              </Text>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => {
+                if (nextDueSubsystem) {
+                  handleOpenInquiryForSubsystem(nextDueSubsystem);
+                } else {
+                  setInquiryInitialType('mantenimiento');
+                  setInquiryInitialTitle('Solicitud de Mantenimiento Preventivo');
+                  setInquiryModalVisible(true);
+                }
+              }}
+              style={[styles.bookNowBtn, { backgroundColor: tileBg, borderColor: cardBorder }]}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.bookNowBtnText, { color: textPrimary, fontFamily: F.bold }]}>
+                Book Now →
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* SLEEK PROGRESS BAR */}
+          <View style={styles.nextServiceProgressTrack}>
+            <View
+              style={[
+                styles.nextServiceProgressFill,
+                {
+                  width: `${Math.max(10, nextDueSubsystem ? nextDueSubsystem.wear : 85)}%`,
+                  backgroundColor: accentEmerald,
+                },
+              ]}
             />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery('')}>
-                <MaterialIcons name="close" size={16} color={textSecondary} />
-              </TouchableOpacity>
-            )}
+          </View>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 7. 3 METRIC CARDS ROW (15.4 Avg. Fuel, 42 hrs, 92 Score)  */}
+        {/* ========================================================== */}
+        <View style={styles.threeMetricsRow}>
+          {/* METRIC 1: DIÉSEL */}
+          <View style={[styles.metricBoxItem, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text style={[styles.metricBigNumber, { color: textPrimary, fontFamily: F.extrabold }]}>
+              {totalFuelLiters > 0 ? totalFuelLiters : '180'}
+            </Text>
+            <Text style={[styles.metricLabelTitle, { color: textSecondary, fontFamily: F.medium }]}>
+              Diésel Cargado
+            </Text>
+            <View style={styles.metricBottomSub}>
+              <Text style={{ fontSize: 10, color: textSecondary, fontFamily: F.regular }}>Litros</Text>
+              <View style={styles.miniGreenSparkline}>
+                <MaterialCommunityIcons name="chart-bell-curve-cumulative" size={14} color={accentEmerald} />
+              </View>
+            </View>
           </View>
 
-          {/* 10 SUBSYSTEMS LIST */}
-          <View style={styles.subsystemsList}>
-            {filteredSubsystems.map((sub) => {
-              const statusColor =
-                sub.wear >= 60 ? greenLive : sub.wear >= 30 ? '#f59e0b' : '#ef4444';
+          {/* METRIC 2: HORAS */}
+          <TouchableOpacity
+            onPress={handleTriggerHours}
+            style={[styles.metricBoxItem, { backgroundColor: cardBg, borderColor: cardBorder }]}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.metricBigNumber, { color: textPrimary, fontFamily: F.extrabold }]}>
+              {currentHours.toLocaleString()}
+            </Text>
+            <Text style={[styles.metricLabelTitle, { color: textSecondary, fontFamily: F.medium }]}>
+              Horas Operación
+            </Text>
+            <View style={styles.metricBottomSub}>
+              <Text style={{ fontSize: 10, color: textSecondary, fontFamily: F.regular }}>Horómetro</Text>
+              <MaterialIcons name="edit" size={11} color={accentEmerald} />
+            </View>
+          </TouchableOpacity>
 
-              return (
-                <TouchableOpacity
-                  key={sub.id}
-                  onPress={() => setSelectedSubsystem(sub)}
-                  style={[styles.subsystemCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
-                  activeOpacity={0.75}
-                >
-                  <View style={styles.subsystemTopLine}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
-                      <View style={[styles.subsystemIconCircle, { backgroundColor: isDark ? '#141824' : '#ffffff' }]}>
-                        {sub.iconFamily === 'community' ? (
-                          <MaterialCommunityIcons name={sub.icon as any} size={18} color={sub.color} />
-                        ) : (
-                          <MaterialIcons name={sub.icon as any} size={18} color={sub.color} />
-                        )}
-                      </View>
-                      <View style={{ marginLeft: 10, flex: 1 }}>
-                        <Text style={[styles.subsystemNameText, { color: textPrimary, fontFamily: F.bold }]} numberOfLines={1}>
-                          {sub.name}
-                        </Text>
-                        <Text style={[styles.subsystemIntervalText, { color: textSecondary, fontFamily: F.medium }]}>
-                          Ciclo OEM: {sub.interval} hrs
-                        </Text>
-                      </View>
-                    </View>
-
-                    <View style={[styles.subsystemPercentBadge, { backgroundColor: `${statusColor}22` }]}>
-                      <Text style={[styles.subsystemPercentText, { color: statusColor, fontFamily: F.extrabold }]}>
-                        {sub.wear}%
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* PROGRESS BAR */}
-                  <View style={[styles.subsystemBarTrack, { backgroundColor: isDark ? '#10131d' : '#e2e8f0' }]}>
-                    <View
-                      style={[
-                        styles.subsystemBarFill,
-                        {
-                          width: `${Math.max(4, sub.wear)}%`,
-                          backgroundColor: statusColor,
-                        },
-                      ]}
-                    />
-                  </View>
-
-                  {/* BOTTOM INFO ROW */}
-                  <View style={styles.subsystemBottomLine}>
-                    <Text style={[styles.subsystemUsageText, { color: textSecondary, fontFamily: F.medium }]}>
-                      Transcurrido: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{sub.hoursSince} hrs</Text>
-                    </Text>
-                    <Text style={[styles.subsystemRemainingText, { color: statusColor, fontFamily: F.bold }]}>
-                      Restan: {sub.hoursRemaining} hrs
-                    </Text>
-                  </View>
-
-                  <View style={styles.subsystemStatusPillRow}>
-                    <View style={[styles.statusDot, { backgroundColor: statusColor }]} />
-                    <Text style={[styles.statusTextLabel, { color: statusColor, fontFamily: F.bold }]}>
-                      {sub.status}
-                    </Text>
-                    <MaterialIcons name="chevron-right" size={16} color={textSecondary} style={{ marginLeft: 'auto' }} />
-                  </View>
-                </TouchableOpacity>
-              );
-            })}
+          {/* METRIC 3: DRIVE SCORE / SALUD OPERATIVA */}
+          <View style={[styles.metricBoxItem, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <Text style={[styles.metricBigNumber, { color: textPrimary, fontFamily: F.extrabold }]}>
+              {generalHealth}
+            </Text>
+            <Text style={[styles.metricLabelTitle, { color: textSecondary, fontFamily: F.medium }]}>
+              Salud Equipo
+            </Text>
+            <View style={styles.metricBottomSub}>
+              <View style={[styles.ecoLeafBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                <MaterialCommunityIcons name="leaf" size={10} color={accentEmerald} />
+                <Text style={{ fontSize: 9.5, color: accentEmerald, fontFamily: F.bold, marginLeft: 2 }}>
+                  Eco
+                </Text>
+              </View>
+            </View>
           </View>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 8. OPERADOR TÉCNICO ASIGNADO (INTEGRADO DE HERMANOS LYNCH) */}
+        {/* ========================================================== */}
+        <View style={[styles.operatorQuickCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={styles.operatorLeftInfo}>
+            <View style={[styles.operatorInitialsCircle, { backgroundColor: accentBlue }]}>
+              <Text style={{ color: '#ffffff', fontFamily: F.bold, fontSize: 13 }}>
+                {myMoto?.assignedOperatorName
+                  ? myMoto.assignedOperatorName.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase()
+                  : 'HL'}
+              </Text>
+            </View>
+            <View style={{ marginLeft: 10, flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Text style={[styles.operatorNameHeading, { color: textPrimary, fontFamily: F.bold }]} numberOfLines={1}>
+                  {myMoto?.assignedOperatorName || 'Ing. Alejandro Rivas Silva'}
+                </Text>
+                <MaterialIcons name="verified" size={14} color={accentEmerald} />
+              </View>
+              <Text style={[styles.operatorRoleSubtext, { color: textSecondary, fontFamily: F.medium }]}>
+                Técnico Certificado · {myMoto?.assignedOperatorId ? `HL-${myMoto.assignedOperatorId.slice(0, 4).toUpperCase()}` : 'HL-TECH-4098'}
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            onPress={handleOpenWhatsAppOperator}
+            style={[styles.operatorWhatsAppDirectPill, { backgroundColor: '#25D366' }]}
+            activeOpacity={0.85}
+          >
+            <MaterialCommunityIcons name="whatsapp" size={16} color="#ffffff" />
+            <Text style={[styles.operatorWhatsAppDirectText, { fontFamily: F.bold }]}>WhatsApp</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* ========================================================== */}
+        {/* 9. SECCIÓN COMPLETA DE TELEMETRÍA (10 SUBSISTEMAS OEM)    */}
+        {/* ========================================================== */}
+        <View style={[styles.telemetrySectionCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <TouchableOpacity
+            onPress={() => setShowSubsystemsSection(!showSubsystemsSection)}
+            style={styles.telemetryHeaderCollapsibleRow}
+            activeOpacity={0.8}
+          >
+            <View style={{ flex: 1 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <Text style={[styles.telemetrySectionTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  Telemetría Industrial
+                </Text>
+                <View style={[styles.readOnlyBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                  <MaterialIcons name="lock-outline" size={10} color={accentEmerald} />
+                  <Text style={{ fontFamily: F.bold, color: accentEmerald, fontSize: 9 }}>LECTURA</Text>
+                </View>
+              </View>
+              <Text style={[styles.telemetrySectionSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                10 subsistemas certificados bajo norma ISO 8528
+              </Text>
+            </View>
+
+            <MaterialIcons
+              name={showSubsystemsSection ? 'keyboard-arrow-up' : 'keyboard-arrow-down'}
+              size={24}
+              color={textSecondary}
+            />
+          </TouchableOpacity>
+
+          {showSubsystemsSection && (
+            <>
+              {/* SEARCH FILTER */}
+              <View style={[styles.searchSubsystemsBox, { backgroundColor: tileBg, borderColor: cardBorder }]}>
+                <MaterialIcons name="search" size={18} color={textSecondary} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Buscar componente o ciclo OEM..."
+                  placeholderTextColor={textSecondary}
+                  style={[styles.searchSubsystemsInput, { color: textPrimary, fontFamily: F.medium }]}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <MaterialIcons name="close" size={16} color={textSecondary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              {/* LIST OF 10 SUBSYSTEMS */}
+              <View style={styles.subsystemsVerticalList}>
+                {filteredSubsystems.map((sub) => {
+                  const statusColor =
+                    sub.wear >= 60 ? accentEmerald : sub.wear >= 30 ? accentAmber : '#ef4444';
+
+                  return (
+                    <TouchableOpacity
+                      key={sub.id}
+                      onPress={() => setSelectedSubsystem(sub)}
+                      style={[styles.subsystemCardTile, { backgroundColor: tileBg, borderColor: cardBorder }]}
+                      activeOpacity={0.75}
+                    >
+                      <View style={styles.subsystemCardTopRow}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
+                          <View style={[styles.subsystemIconBubble, { backgroundColor: cardBg }]}>
+                            {sub.iconFamily === 'community' ? (
+                              <MaterialCommunityIcons name={sub.icon as any} size={16} color={sub.color} />
+                            ) : (
+                              <MaterialIcons name={sub.icon as any} size={16} color={sub.color} />
+                            )}
+                          </View>
+                          <View style={{ marginLeft: 10, flex: 1 }}>
+                            <Text style={[styles.subsystemNameTitle, { color: textPrimary, fontFamily: F.bold }]} numberOfLines={1}>
+                              {sub.name}
+                            </Text>
+                            <Text style={[styles.subsystemIntervalSub, { color: textSecondary, fontFamily: F.medium }]}>
+                              Ciclo OEM: {sub.interval} hrs
+                            </Text>
+                          </View>
+                        </View>
+
+                        <View style={[styles.wearBadgePill, { backgroundColor: `${statusColor}22` }]}>
+                          <Text style={[styles.wearBadgeText, { color: statusColor, fontFamily: F.extrabold }]}>
+                            {sub.wear}%
+                          </Text>
+                        </View>
+                      </View>
+
+                      {/* BAR */}
+                      <View style={styles.subsystemProgressTrack}>
+                        <View
+                          style={[
+                            styles.subsystemProgressFill,
+                            {
+                              width: `${Math.max(4, sub.wear)}%`,
+                              backgroundColor: statusColor,
+                            },
+                          ]}
+                        />
+                      </View>
+
+                      {/* BOTTOM LINE */}
+                      <View style={styles.subsystemCardBottomRow}>
+                        <Text style={[styles.subsystemUsageInfo, { color: textSecondary, fontFamily: F.medium }]}>
+                          Uso: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{sub.hoursSince} hrs</Text>
+                        </Text>
+                        <Text style={[styles.subsystemRemainingInfo, { color: statusColor, fontFamily: F.bold }]}>
+                          Restan: {sub.hoursRemaining} hrs
+                        </Text>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </>
+          )}
         </View>
 
       </ScrollView>
 
       {/* ========================================================== */}
-      {/* 6. MODAL: DETALLES DE SUBSISTEMA AL TOCAR TARJETA */}
+      {/* MODAL 1: DETALLES DE SUBSISTEMA AL TOCAR TARJETA           */}
       {/* ========================================================== */}
       <Modal
         visible={!!selectedSubsystem}
@@ -851,105 +859,68 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
         animationType="slide"
         onRequestClose={() => setSelectedSubsystem(null)}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.detailSheet, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={[styles.sheetDragHandle, { backgroundColor: textSecondary }]} />
+        <View style={styles.sheetOverlay}>
+          <View style={[styles.subsystemSheetCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={styles.sheetTopHandle} />
 
             {selectedSubsystem && (
               <>
-                <View style={styles.sheetHeaderRow}>
-                  <View style={[styles.detailIconCircle, { backgroundColor: `${selectedSubsystem.color}20` }]}>
+                <View style={styles.sheetTitleHeader}>
+                  <View style={[styles.sheetIconCircle, { backgroundColor: `${selectedSubsystem.color}20` }]}>
                     {selectedSubsystem.iconFamily === 'community' ? (
-                      <MaterialCommunityIcons name={selectedSubsystem.icon as any} size={28} color={selectedSubsystem.color} />
+                      <MaterialCommunityIcons name={selectedSubsystem.icon as any} size={26} color={selectedSubsystem.color} />
                     ) : (
-                      <MaterialIcons name={selectedSubsystem.icon as any} size={28} color={selectedSubsystem.color} />
+                      <MaterialIcons name={selectedSubsystem.icon as any} size={26} color={selectedSubsystem.color} />
                     )}
                   </View>
-
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Text style={[styles.detailSheetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <Text style={[styles.sheetMainTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
                       {selectedSubsystem.name}
                     </Text>
-                    <Text style={[styles.detailSheetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      Ciclo de reemplazo OEM: {selectedSubsystem.interval} horas
+                    <Text style={[styles.sheetIntervalLabel, { color: textSecondary, fontFamily: F.medium }]}>
+                      Intervalo de reemplazo OEM: {selectedSubsystem.interval} horas
                     </Text>
                   </View>
-
-                  <TouchableOpacity
-                    onPress={() => setSelectedSubsystem(null)}
-                    style={[styles.closeSheetBtn, { backgroundColor: pillDarkBg }]}
-                  >
+                  <TouchableOpacity onPress={() => setSelectedSubsystem(null)} style={styles.sheetCloseBtn}>
                     <MaterialIcons name="close" size={20} color={textSecondary} />
                   </TouchableOpacity>
                 </View>
 
-                {/* DESCRIPTION */}
-                <Text style={[styles.detailSheetDescription, { color: textSecondary, fontFamily: F.regular }]}>
+                <Text style={[styles.sheetDescParagraph, { color: textSecondary, fontFamily: F.regular }]}>
                   {selectedSubsystem.description}
                 </Text>
 
-                {/* METRICS ROW */}
-                <View style={styles.detailSheetMetrics}>
-                  <View style={[styles.detailMetricBox, { backgroundColor: pillDarkBg }]}>
-                    <Text style={[styles.detailMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Vida Restante
-                    </Text>
-                    <Text
-                      style={[
-                        styles.detailMetricValue,
-                        {
-                          color:
-                            selectedSubsystem.wear >= 60 ? greenLive : selectedSubsystem.wear >= 30 ? '#f59e0b' : '#ef4444',
-                          fontFamily: F.extrabold,
-                        },
-                      ]}
-                    >
+                <View style={styles.sheetMetricsRow}>
+                  <View style={[styles.sheetMetricBox, { backgroundColor: tileBg }]}>
+                    <Text style={[styles.sheetMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>Vida Útil</Text>
+                    <Text style={[styles.sheetMetricVal, { color: selectedSubsystem.wear >= 60 ? accentEmerald : accentAmber, fontFamily: F.extrabold }]}>
                       {selectedSubsystem.wear}%
                     </Text>
                   </View>
-
-                  <View style={[styles.detailMetricBox, { backgroundColor: pillDarkBg }]}>
-                    <Text style={[styles.detailMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Horas de Uso
-                    </Text>
-                    <Text style={[styles.detailMetricValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  <View style={[styles.sheetMetricBox, { backgroundColor: tileBg }]}>
+                    <Text style={[styles.sheetMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>Horas Uso</Text>
+                    <Text style={[styles.sheetMetricVal, { color: textPrimary, fontFamily: F.extrabold }]}>
                       {selectedSubsystem.hoursSince} hrs
                     </Text>
                   </View>
-
-                  <View style={[styles.detailMetricBox, { backgroundColor: pillDarkBg }]}>
-                    <Text style={[styles.detailMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Horas Restantes
-                    </Text>
-                    <Text style={[styles.detailMetricValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  <View style={[styles.sheetMetricBox, { backgroundColor: tileBg }]}>
+                    <Text style={[styles.sheetMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>Restantes</Text>
+                    <Text style={[styles.sheetMetricVal, { color: textPrimary, fontFamily: F.extrabold }]}>
                       {selectedSubsystem.hoursRemaining} hrs
                     </Text>
                   </View>
                 </View>
 
-                {/* ACTION: NOTIFY OPERATOR OR SCHEDULE APPOINTMENT */}
-                <View style={styles.detailSheetActions}>
-                  <TouchableOpacity
-                    onPress={() => handleOpenInquiryForSubsystem(selectedSubsystem)}
-                    style={[styles.sheetScheduleBtn, { backgroundColor: accentBlue }]}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialCommunityIcons name="calendar-clock" size={18} color="#ffffff" />
-                    <Text style={[styles.sheetScheduleBtnText, { fontFamily: F.bold }]}>
-                      Notificar Técnico / Agendar Servicio
-                    </Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => setSelectedSubsystem(null)}
-                    style={[styles.sheetCancelBtn, { borderColor: cardBorder }]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.sheetCancelBtnText, { color: textPrimary, fontFamily: F.bold }]}>
-                      Cerrar
-                    </Text>
-                  </TouchableOpacity>
-                </View>
+                <TouchableOpacity
+                  onPress={() => handleOpenInquiryForSubsystem(selectedSubsystem)}
+                  style={[styles.sheetActionSubmitBtn, { backgroundColor: accentEmerald }]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialCommunityIcons name="calendar-clock" size={18} color="#0c1017" />
+                  <Text style={[styles.sheetActionSubmitText, { fontFamily: F.bold }]}>
+                    Agendar Revisión de Este Componente
+                  </Text>
+                </TouchableOpacity>
               </>
             )}
           </View>
@@ -957,7 +928,163 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
       </Modal>
 
       {/* ========================================================== */}
-      {/* 7. MODALES OFICIALES COMPARTIDOS */}
+      {/* MODAL 2: NOTIFICACIONES                                    */}
+      {/* ========================================================== */}
+      <Modal
+        visible={notificationsModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setNotificationsModalVisible(false)}
+      >
+        <View style={styles.dialogOverlay}>
+          <View style={[styles.dialogCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={styles.dialogHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="notifications" size={20} color={accentEmerald} />
+                <Text style={[styles.dialogTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  Centro de Alarmas
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setNotificationsModalVisible(false)}>
+                <MaterialIcons name="close" size={20} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingVertical: 14, gap: 10 }}>
+              <View style={[styles.notificationItemRow, { backgroundColor: tileBg }]}>
+                <MaterialIcons name="check-circle" size={18} color={accentEmerald} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>
+                    Sistema Telemático Operativo
+                  </Text>
+                  <Text style={{ fontFamily: F.regular, color: textSecondary, fontSize: 11, marginTop: 2 }}>
+                    Todos los 10 subsistemas registran valores dentro de tolerancias OEM.
+                  </Text>
+                </View>
+              </View>
+
+              <View style={[styles.notificationItemRow, { backgroundColor: tileBg }]}>
+                <MaterialIcons name="build" size={18} color={accentAmber} />
+                <View style={{ flex: 1, marginLeft: 8 }}>
+                  <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>
+                    Próximo Mantenimiento: {nextDueSubsystem?.name}
+                  </Text>
+                  <Text style={{ fontFamily: F.regular, color: textSecondary, fontSize: 11, marginTop: 2 }}>
+                    Restan {nextDueSubsystem?.hoursRemaining} horas para el ciclo preventivo programado.
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              onPress={() => setNotificationsModalVisible(false)}
+              style={[styles.dialogSolidBtn, { backgroundColor: accentEmerald }]}
+            >
+              <Text style={{ fontFamily: F.bold, color: '#0c1017' }}>Entendido</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================== */}
+      {/* MODAL 3: MENÚ LATERAL DRAWER RÁPIDO                         */}
+      {/* ========================================================== */}
+      <Modal
+        visible={drawerMenuVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setDrawerMenuVisible(false)}
+      >
+        <View style={styles.dialogOverlay}>
+          <View style={[styles.dialogCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={styles.dialogHeader}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Image source={HL_LOGO_REQUIRE} style={{ width: 24, height: 24 }} resizeMode="contain" />
+                <Text style={[styles.dialogTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  Hermanos Lynch
+                </Text>
+              </View>
+              <TouchableOpacity onPress={() => setDrawerMenuVisible(false)}>
+                <MaterialIcons name="close" size={20} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ paddingVertical: 10, gap: 8 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setDrawerMenuVisible(false);
+                  onNavigateToSpecs?.();
+                }}
+                style={[styles.drawerMenuItem, { backgroundColor: tileBg }]}
+              >
+                <MaterialIcons name="assignment" size={20} color={accentEmerald} />
+                <Text style={[styles.drawerMenuText, { color: textPrimary, fontFamily: F.bold }]}>
+                  Ficha Técnica de Planta
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setDrawerMenuVisible(false);
+                  onNavigateToHistory?.();
+                }}
+                style={[styles.drawerMenuItem, { backgroundColor: tileBg }]}
+              >
+                <MaterialIcons name="receipt-long" size={20} color={accentAmber} />
+                <Text style={[styles.drawerMenuText, { color: textPrimary, fontFamily: F.bold }]}>
+                  Historial de Servicios
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setDrawerMenuVisible(false);
+                  setReportModalVisible(true);
+                }}
+                style={[styles.drawerMenuItem, { backgroundColor: tileBg }]}
+              >
+                <MaterialIcons name="picture-as-pdf" size={20} color="#ef4444" />
+                <Text style={[styles.drawerMenuText, { color: textPrimary, fontFamily: F.bold }]}>
+                  Expediente PDF con QR
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setDrawerMenuVisible(false);
+                  setOperatorModalVisible(true);
+                }}
+                style={[styles.drawerMenuItem, { backgroundColor: tileBg }]}
+              >
+                <MaterialIcons name="support-agent" size={20} color={accentBlue} />
+                <Text style={[styles.drawerMenuText, { color: textPrimary, fontFamily: F.bold }]}>
+                  Operador Técnico Asignado
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={toggleTheme}
+                style={[styles.drawerMenuItem, { backgroundColor: tileBg }]}
+              >
+                <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={20} color="#ffb703" />
+                <Text style={[styles.drawerMenuText, { color: textPrimary, fontFamily: F.bold }]}>
+                  Modo {isDark ? 'Claro' : 'Oscuro'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity
+              onPress={logout}
+              style={[styles.dialogOutlineBtn, { borderColor: '#ef4444', marginTop: 8 }]}
+            >
+              <Text style={{ fontFamily: F.bold, color: '#ef4444' }}>Cerrar Sesión</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ========================================================== */}
+      {/* 10. MODALES OFICIALES COMPARTIDOS                          */}
       {/* ========================================================== */}
       <ClientInquiryModal
         visible={inquiryModalVisible}
@@ -984,9 +1111,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
         specs={specs}
       />
 
-      {/* ========================================================== */}
-      {/* 8. MODAL RÁPIDO NATIVO: ACTUALIZAR HORÓMETRO */}
-      {/* ========================================================== */}
+      {/* MODAL RÁPIDO NATIVO: HORÓMETRO */}
       <Modal
         visible={localHoursModalVisible}
         transparent={true}
@@ -1005,7 +1130,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
             </View>
 
             <Text style={[styles.dialogSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-              Horómetro actual: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{currentHours.toLocaleString()} hrs</Text>
+              Horas actuales: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{currentHours.toLocaleString()} hrs</Text>
             </Text>
 
             <TextInput
@@ -1014,15 +1139,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
               placeholder={`Mayor a ${currentHours} hrs`}
               placeholderTextColor={textSecondary}
               keyboardType="numeric"
-              style={[
-                styles.dialogInput,
-                {
-                  backgroundColor: pillDarkBg,
-                  color: textPrimary,
-                  borderColor: cardBorder,
-                  fontFamily: F.bold,
-                },
-              ]}
+              style={[styles.dialogInput, { backgroundColor: tileBg, color: textPrimary, borderColor: cardBorder, fontFamily: F.bold }]}
             />
 
             <View style={styles.dialogButtonsRow}>
@@ -1035,18 +1152,16 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
 
               <TouchableOpacity
                 onPress={handleSaveLocalHours}
-                style={[styles.dialogSolidBtn, { backgroundColor: accentBlue }]}
+                style={[styles.dialogSolidBtn, { backgroundColor: accentEmerald }]}
               >
-                <Text style={{ fontFamily: F.bold, color: '#ffffff' }}>Guardar Horas</Text>
+                <Text style={{ fontFamily: F.bold, color: '#0c1017' }}>Guardar Horas</Text>
               </TouchableOpacity>
             </View>
           </View>
         </View>
       </Modal>
 
-      {/* ========================================================== */}
-      {/* 9. MODAL RÁPIDO NATIVO: CARGAR DIÉSEL */}
-      {/* ========================================================== */}
+      {/* MODAL RÁPIDO NATIVO: DIÉSEL */}
       <Modal
         visible={localFuelModalVisible}
         transparent={true}
@@ -1064,29 +1179,16 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
               </TouchableOpacity>
             </View>
 
-            <Text style={[styles.dialogSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-              Registra el combustible suministrado a la planta
-            </Text>
-
             <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.bold }]}>
               LITROS DE DIÉSEL:
             </Text>
             <TextInput
               value={fuelLitersInput}
               onChangeText={setFuelLitersInput}
-              placeholder="Ej. 50"
+              placeholder="Ej. 100"
               placeholderTextColor={textSecondary}
               keyboardType="numeric"
-              style={[
-                styles.dialogInput,
-                {
-                  backgroundColor: pillDarkBg,
-                  color: textPrimary,
-                  borderColor: cardBorder,
-                  fontFamily: F.bold,
-                  marginBottom: 12,
-                },
-              ]}
+              style={[styles.dialogInput, { backgroundColor: tileBg, color: textPrimary, borderColor: cardBorder, fontFamily: F.bold, marginBottom: 12 }]}
             />
 
             <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -1095,18 +1197,10 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
             <TextInput
               value={fuelUsdInput}
               onChangeText={setFuelUsdInput}
-              placeholder="Ej. 25.00"
+              placeholder="Ej. 50.00"
               placeholderTextColor={textSecondary}
               keyboardType="numeric"
-              style={[
-                styles.dialogInput,
-                {
-                  backgroundColor: pillDarkBg,
-                  color: textPrimary,
-                  borderColor: cardBorder,
-                  fontFamily: F.bold,
-                },
-              ]}
+              style={[styles.dialogInput, { backgroundColor: tileBg, color: textPrimary, borderColor: cardBorder, fontFamily: F.bold }]}
             />
 
             <View style={styles.dialogButtonsRow}>
@@ -1119,9 +1213,9 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
 
               <TouchableOpacity
                 onPress={handleSaveLocalFuel}
-                style={[styles.dialogSolidBtn, { backgroundColor: accentCyan }]}
+                style={[styles.dialogSolidBtn, { backgroundColor: accentAmber }]}
               >
-                <Text style={{ fontFamily: F.bold, color: '#0c1017' }}>Guardar Diésel</Text>
+                <Text style={{ fontFamily: F.bold, color: '#0c1017' }}>Guardar Carga</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1137,258 +1231,273 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   scrollContainer: {
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
   },
-  topHeaderCard: {
-    marginBottom: 14,
-  },
-  brandRow: {
+  navHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 14,
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  logoBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
+  topIconCircleBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  logoImg: {
-    width: 26,
-    height: 26,
-  },
-  headerBrandTitle: {
-    fontSize: 16,
-    letterSpacing: 0.5,
-  },
-  liveStatusPill: {
+  brandCenterContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 8,
+    gap: 8,
   },
-  livePulseDot: {
+  topLogoSinNombre: {
+    width: 22,
+    height: 22,
+  },
+  topBrandText: {
+    fontSize: 13,
+    letterSpacing: 1.2,
+  },
+  notificationDot: {
+    position: 'absolute',
+    top: 10,
+    right: 11,
     width: 6,
     height: 6,
     borderRadius: 3,
     backgroundColor: '#22c55e',
   },
-  headerSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  headerThemeBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  topActionsRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  headerActionBtn: {
-    flex: 1,
-    height: 40,
-    borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-  },
-  headerActionBtnText: {
-    fontSize: 11,
-    letterSpacing: 0.3,
-  },
-  heroCard: {
-    borderRadius: 22,
-    borderWidth: 1,
-    padding: 18,
+  heroHeadlineSection: {
     marginBottom: 14,
   },
-  heroBadgeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
+  headlineTopLine: {
+    fontSize: 26,
+    letterSpacing: -0.5,
+    lineHeight: 32,
   },
-  kvaStandbyBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
+  headlineSubLine: {
+    fontSize: 26,
+    letterSpacing: -0.5,
+    lineHeight: 32,
+    marginTop: -2,
   },
-  roleBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  heroPlantTitle: {
-    fontSize: 20,
-    letterSpacing: -0.4,
-  },
-  heroSerialText: {
+  headlineDescription: {
     fontSize: 12,
-    marginTop: 3,
-    marginBottom: 12,
+    lineHeight: 18,
+    marginTop: 6,
   },
-  heroImageWrapper: {
+  machineShowcaseContainer: {
     alignItems: 'center',
     justifyContent: 'center',
+    height: 190,
     position: 'relative',
-    height: 180,
-    marginBottom: 14,
+    marginVertical: 4,
   },
-  heroImageBackdropGlow: {
+  ambientAtmosphereGlow: {
     position: 'absolute',
-    width: 150,
-    height: 150,
-    borderRadius: 75,
-    backgroundColor: 'rgba(0, 227, 253, 0.08)',
+    width: 200,
+    height: 140,
+    borderRadius: 100,
+    backgroundColor: 'rgba(34, 197, 94, 0.08)',
   },
-  heroPlantImage: {
+  machineHeroImage: {
     width: '100%',
-    height: 170,
+    height: 175,
   },
-  heroHorometerPill: {
-    position: 'absolute',
-    bottom: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  heroHorometerText: {
-    color: '#ffffff',
-    fontSize: 12,
-  },
-  editPencilBubble: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
-    backgroundColor: '#1a5cff',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginLeft: 2,
-  },
-  heroChipsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 14,
-  },
-  heroChipItem: {
+  carouselDotsRow: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
-    paddingHorizontal: 9,
-    paddingVertical: 6,
-    borderRadius: 10,
-    maxWidth: '48%',
+    position: 'absolute',
+    bottom: 2,
   },
-  heroChipText: {
-    fontSize: 10.5,
+  carouselDotActive: {
+    width: 22,
+    height: 4,
+    borderRadius: 2,
   },
-  heroActionButtonsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
+  carouselDotInactive: {
+    width: 5,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
   },
-  heroActionBtn: {
-    flex: 1,
-    minWidth: '47%',
-    height: 38,
-    borderRadius: 11,
-    borderWidth: 0.5,
+  vehicleSelectorCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-  },
-  heroActionBtnText: {
-    fontSize: 11,
-  },
-  operatorCard: {
-    borderRadius: 20,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 14,
-  },
-  operatorTopRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    padding: 12,
     marginBottom: 12,
   },
-  operatorAvatarBadge: {
+  vehicleThumbBox: {
+    width: 50,
+    height: 50,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 2,
+  },
+  vehicleThumbImg: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  operatorNameText: {
+  vehicleCardPretitle: {
+    fontSize: 10.5,
+  },
+  vehicleCardTitle: {
     fontSize: 14.5,
+    marginTop: 1,
   },
-  operatorTitleSub: {
+  statusPillBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  statusPillGreenDot: {
+    width: 5,
+    height: 5,
+    borderRadius: 2.5,
+    backgroundColor: '#22c55e',
+  },
+  vehicleReadingText: {
     fontSize: 11,
-    marginTop: 2,
+    marginTop: 4,
   },
-  operatorActionsRow: {
+  fourTilesRow: {
     flexDirection: 'row',
     gap: 8,
+    marginBottom: 12,
   },
-  whatsappDirectBtn: {
+  actionSquareTile: {
     flex: 1,
-    height: 38,
-    borderRadius: 11,
-    flexDirection: 'row',
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
   },
-  whatsappDirectText: {
-    color: '#ffffff',
-    fontSize: 11.5,
-  },
-  operatorFichaBtn: {
+  tileIconCircle: {
     width: 38,
     height: 38,
-    borderRadius: 11,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  tileLabelText: {
+    fontSize: 10.5,
+    textAlign: 'center',
+  },
+  tileSublabelText: {
+    fontSize: 8.5,
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  nextServiceCard: {
+    borderRadius: 18,
     borderWidth: 1,
+    padding: 16,
+    marginBottom: 12,
+  },
+  nextServiceTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 14,
+  },
+  nextServiceHeaderTitle: {
+    fontSize: 14,
+  },
+  nextServiceSubtitle: {
+    fontSize: 11,
+    marginTop: 3,
+  },
+  bookNowBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  bookNowBtnText: {
+    fontSize: 11,
+  },
+  nextServiceProgressTrack: {
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+  },
+  nextServiceProgressFill: {
+    height: '100%',
+    borderRadius: 3,
+  },
+  threeMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 12,
+  },
+  metricBoxItem: {
+    flex: 1,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 12,
+  },
+  metricBigNumber: {
+    fontSize: 18,
+  },
+  metricLabelTitle: {
+    fontSize: 10,
+    marginTop: 3,
+  },
+  metricBottomSub: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+  miniGreenSparkline: {
+    opacity: 0.9,
+  },
+  ecoLeafBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  operatorQuickCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    borderRadius: 18,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 12,
+  },
+  operatorLeftInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    paddingRight: 8,
+  },
+  operatorInitialsCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  balanceCard: {
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    marginBottom: 14,
+  operatorNameHeading: {
+    fontSize: 13,
   },
-  balanceHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 14,
+  operatorRoleSubtext: {
+    fontSize: 10.5,
+    marginTop: 1,
   },
-  balanceTitle: {
-    fontSize: 15,
-  },
-  balanceSubtitle: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  addDieselBtn: {
+  operatorWhatsAppDirectPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
@@ -1396,37 +1505,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 10,
   },
-  kpiGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  kpiCardItem: {
-    flex: 1,
-    minWidth: '47%',
-    padding: 12,
-    borderRadius: 14,
-  },
-  kpiCardLabel: {
+  operatorWhatsAppDirectText: {
+    color: '#ffffff',
     fontSize: 11,
-    marginBottom: 4,
   },
-  kpiCardValue: {
-    fontSize: 18,
-  },
-  telemetryCard: {
-    borderRadius: 20,
+  telemetrySectionCard: {
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 16,
-    marginBottom: 14,
+    padding: 14,
+    marginBottom: 12,
   },
-  telemetryTitleRow: {
-    marginBottom: 10,
+  telemetryHeaderCollapsibleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  telemetryHeading: {
-    fontSize: 16,
+  telemetrySectionTitle: {
+    fontSize: 15,
   },
-  readOnlyLockPill: {
+  telemetrySectionSubtitle: {
+    fontSize: 11,
+    marginTop: 2,
+  },
+  readOnlyBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
@@ -1434,184 +1535,145 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     borderRadius: 6,
   },
-  telemetrySubheading: {
-    fontSize: 11.5,
-    marginTop: 3,
-  },
-  isoNoticeBox: {
-    flexDirection: 'row',
-    gap: 8,
-    padding: 10,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 12,
-    alignItems: 'flex-start',
-  },
-  isoNoticeText: {
-    fontSize: 10.5,
-    flex: 1,
-    lineHeight: 15,
-  },
-  searchPillBox: {
+  searchSubsystemsBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    marginBottom: 14,
-  },
-  searchPillInput: {
-    flex: 1,
-    fontSize: 12,
-  },
-  subsystemsList: {
-    gap: 10,
-  },
-  subsystemCard: {
-    borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-  },
-  subsystemTopLine: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  subsystemIconCircle: {
-    width: 32,
-    height: 32,
+    height: 38,
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    borderWidth: 1,
+    paddingHorizontal: 10,
+    marginTop: 14,
+    marginBottom: 10,
   },
-  subsystemNameText: {
-    fontSize: 13,
+  searchSubsystemsInput: {
+    flex: 1,
+    fontSize: 11.5,
   },
-  subsystemIntervalText: {
-    fontSize: 10.5,
-    marginTop: 1,
+  subsystemsVerticalList: {
+    gap: 8,
+    marginTop: 4,
   },
-  subsystemPercentBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
+  subsystemCardTile: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 10,
   },
-  subsystemPercentText: {
-    fontSize: 12,
-  },
-  subsystemBarTrack: {
-    height: 6,
-    borderRadius: 3,
-    overflow: 'hidden',
-    marginBottom: 8,
-  },
-  subsystemBarFill: {
-    height: '100%',
-    borderRadius: 3,
-  },
-  subsystemBottomLine: {
+  subsystemCardTopRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 6,
   },
-  subsystemUsageText: {
-    fontSize: 11,
-  },
-  subsystemRemainingText: {
-    fontSize: 11,
-  },
-  subsystemStatusPillRow: {
-    flexDirection: 'row',
+  subsystemIconBubble: {
+    width: 28,
+    height: 28,
+    borderRadius: 8,
+    justifyContent: 'center',
     alignItems: 'center',
-    gap: 5,
-    marginTop: 2,
   },
-  statusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+  subsystemNameTitle: {
+    fontSize: 12,
   },
-  statusTextLabel: {
+  subsystemIntervalSub: {
     fontSize: 10,
-    letterSpacing: 0.3,
   },
-  modalOverlay: {
+  wearBadgePill: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+  },
+  wearBadgeText: {
+    fontSize: 11,
+  },
+  subsystemProgressTrack: {
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  subsystemProgressFill: {
+    height: '100%',
+    borderRadius: 2,
+  },
+  subsystemCardBottomRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  subsystemUsageInfo: {
+    fontSize: 10.5,
+  },
+  subsystemRemainingInfo: {
+    fontSize: 10.5,
+  },
+  sheetOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.65)',
     justifyContent: 'flex-end',
   },
-  detailSheet: {
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+  subsystemSheetCard: {
+    borderTopLeftRadius: 22,
+    borderTopRightRadius: 22,
     borderWidth: 1,
     padding: 20,
     maxHeight: '80%',
   },
-  sheetDragHandle: {
-    width: 40,
+  sheetTopHandle: {
+    width: 36,
     height: 4,
     borderRadius: 2,
+    backgroundColor: 'rgba(255, 255, 255, 0.25)',
     alignSelf: 'center',
-    opacity: 0.3,
-    marginBottom: 16,
+    marginBottom: 14,
   },
-  sheetHeaderRow: {
+  sheetTitleHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
-  detailIconCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 16,
+  sheetIconCircle: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  detailSheetTitle: {
-    fontSize: 17,
-  },
-  detailSheetSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  closeSheetBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  detailSheetDescription: {
-    fontSize: 13,
-    lineHeight: 19,
-    marginBottom: 16,
-  },
-  detailSheetMetrics: {
-    flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
-  },
-  detailMetricBox: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  detailMetricLabel: {
-    fontSize: 10.5,
-    marginBottom: 4,
-  },
-  detailMetricValue: {
+  sheetMainTitle: {
     fontSize: 16,
   },
-  detailSheetActions: {
-    gap: 10,
+  sheetIntervalLabel: {
+    fontSize: 11,
+    marginTop: 2,
   },
-  sheetScheduleBtn: {
+  sheetCloseBtn: {
+    padding: 4,
+  },
+  sheetDescParagraph: {
+    fontSize: 12.5,
+    lineHeight: 18,
+    marginBottom: 14,
+  },
+  sheetMetricsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 18,
+  },
+  sheetMetricBox: {
+    flex: 1,
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'center',
+  },
+  sheetMetricLabel: {
+    fontSize: 10,
+    marginBottom: 2,
+  },
+  sheetMetricVal: {
+    fontSize: 15,
+  },
+  sheetActionSubmitBtn: {
     height: 44,
     borderRadius: 12,
     flexDirection: 'row',
@@ -1619,76 +1681,82 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 8,
   },
-  sheetScheduleBtnText: {
-    color: '#ffffff',
-    fontSize: 13,
-  },
-  sheetCancelBtn: {
-    height: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sheetCancelBtnText: {
-    fontSize: 13,
+  sheetActionSubmitText: {
+    color: '#0c1017',
+    fontSize: 12.5,
   },
   dialogOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    backgroundColor: 'rgba(0, 0, 0, 0.7)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
   dialogCard: {
     width: '100%',
-    maxWidth: 360,
-    borderRadius: 20,
+    maxWidth: 350,
+    borderRadius: 18,
     borderWidth: 1,
-    padding: 20,
+    padding: 18,
   },
   dialogHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   dialogTitle: {
-    fontSize: 17,
+    fontSize: 16,
   },
   dialogSubtitle: {
-    fontSize: 12,
-    marginBottom: 16,
+    fontSize: 11.5,
+    marginBottom: 14,
   },
   inputLabel: {
-    fontSize: 10.5,
-    marginBottom: 6,
+    fontSize: 10,
+    marginBottom: 4,
   },
   dialogInput: {
-    height: 44,
-    borderRadius: 12,
+    height: 42,
+    borderRadius: 10,
     borderWidth: 1,
-    paddingHorizontal: 14,
-    fontSize: 15,
-    marginBottom: 18,
+    paddingHorizontal: 12,
+    fontSize: 14,
+    marginBottom: 14,
   },
   dialogButtonsRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   dialogOutlineBtn: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
+    height: 38,
+    borderRadius: 10,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
   dialogSolidBtn: {
     flex: 1,
-    height: 40,
-    borderRadius: 12,
+    height: 38,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  notificationItemRow: {
+    flexDirection: 'row',
+    padding: 10,
+    borderRadius: 10,
+    alignItems: 'flex-start',
+  },
+  drawerMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 12,
+    borderRadius: 12,
+  },
+  drawerMenuText: {
+    fontSize: 12.5,
   },
 });

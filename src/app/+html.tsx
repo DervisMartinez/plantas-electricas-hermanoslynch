@@ -108,7 +108,11 @@ export default function Root({ children }: PropsWithChildren) {
             `,
           }}
         />
-        <title>GARAGE • Gestión Inteligente de Motocicletas</title>
+        <title>Hermanos Lynch • Gestión Inteligente de Plantas Eléctricas</title>
+        <meta name="description" content="Plataforma telemática y operativa para gestión, supervisión y mantenimiento de plantas eléctricas industriales Hermanos Lynch." />
+        <meta property="og:title" content="Hermanos Lynch • Plantas Eléctricas" />
+        <meta property="og:description" content="Gestión y monitoreo telemático en tiempo real de plantas y generadores eléctricos." />
+        <meta name="theme-color" content="#0c1017" />
       </head>
       <body>{children}</body>
     </html>

@@ -46,6 +46,13 @@ import { isWebPlatform } from '../utils/platformMode';
 import { ComponentType } from '../../constants/telemetry';
 import { isPlanta } from '../../domain/entities/Moto';
 
+interface TabNavItem {
+  id: 'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile';
+  icon: string;
+  iconFamily: 'material' | 'community';
+  label: string;
+}
+
 export const MainApp = () => {
   const { colors, mode } = useTheme();
   const { myMoto, updateMoto, addRecord, drivesCompanyVehicle, isAdmin } = useMyMoto();
@@ -107,21 +114,21 @@ export const MainApp = () => {
   };
 
   // Main Tabs flanking the Central [+] Quick Add Button
-  const tabs = useMemo(() => {
+  const tabs = useMemo<TabNavItem[]>(() => {
     if (!isAdmin) {
       return [
-        { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: isPlanta(myMoto) ? 'Mi Planta' : 'Vehículo' },
-        { id: 'specs' as const, icon: 'assignment', iconFamily: 'material' as const, label: 'Ficha' },
-        { id: 'history' as const, icon: 'receipt-long', iconFamily: 'material' as const, label: 'Historial' },
-        { id: 'profile' as const, icon: 'person', iconFamily: 'material' as const, label: 'Perfil' },
+        { id: 'moto', icon: 'home', iconFamily: 'material', label: 'Inicio' },
+        { id: 'specs', icon: 'explore', iconFamily: 'material', label: 'Ficha' },
+        { id: 'history', icon: 'receipt-long', iconFamily: 'material', label: 'Historial' },
+        { id: 'profile', icon: 'person', iconFamily: 'material', label: 'Perfil' },
       ];
     }
     return [
-      { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: isPlanta(myMoto) ? 'Planta' : 'Vehículo' },
-      { id: 'services' as const, icon: 'build', iconFamily: 'material' as const, label: 'Servicios' },
-      { id: 'history' as const, icon: 'receipt-long', iconFamily: 'material' as const, label: 'Historial' },
-      ...(drivesCompanyVehicle ? [{ id: 'wallet' as const, icon: 'account-balance-wallet', iconFamily: 'material' as const, label: 'Wallet' }] : []),
-      { id: 'profile' as const, icon: 'person', iconFamily: 'material' as const, label: 'Perfil' },
+      { id: 'moto', icon: 'home', iconFamily: 'material', label: isPlanta(myMoto) ? 'Inicio' : 'Vehículo' },
+      { id: 'services', icon: 'build', iconFamily: 'material', label: 'Servicios' },
+      { id: 'history', icon: 'receipt-long', iconFamily: 'material', label: 'Historial' },
+      ...(drivesCompanyVehicle ? [{ id: 'wallet', icon: 'account-balance-wallet', iconFamily: 'material', label: 'Wallet' } as TabNavItem] : []),
+      { id: 'profile', icon: 'person', iconFamily: 'material', label: 'Perfil' },
     ];
   }, [isAdmin, myMoto, drivesCompanyVehicle]);
 
@@ -481,53 +488,55 @@ export const MainApp = () => {
 
       {/* CURVED / RAISED FLOATING BOTTOM BAR CON BOTÓN [+] CENTRAL */}
       <View style={[styles.bottomNav, { 
-        backgroundColor: barBg, 
+        backgroundColor: isDark ? 'rgba(14, 18, 25, 0.96)' : 'rgba(255, 255, 255, 0.96)', 
         borderTopColor: borderHairline, 
         paddingBottom: Math.max(insets.bottom, 10),
         height: 64 + Math.max(insets.bottom, 10),
       }]}>
         {leftTabs.map((item) => {
           const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(item.id);
           return (
             <TouchableOpacity 
               key={item.id} 
               onPress={() => handleTabPress(item.id)} 
-              style={styles.navItem} 
+              style={[styles.navItem, isActive && styles.activeNavItemPill]} 
               activeOpacity={0.8}
             >
-              <Animated.View style={[
-                styles.iconBubble,
-                isActive && { 
-                  backgroundColor: isDark ? 'rgba(0, 227, 253, 0.15)' : 'rgba(39, 95, 227, 0.12)', 
-                  borderColor: isDark ? '#00e3fd' : colors.primary, 
-                  borderWidth: 1 
-                },
-                { transform: [{ scale }, { translateY }] }
+              <View style={[
+                styles.tabPillContainer,
+                isActive && {
+                  backgroundColor: 'rgba(34, 197, 94, 0.16)',
+                  borderColor: 'rgba(34, 197, 94, 0.35)',
+                  borderWidth: 1,
+                  flexDirection: 'row',
+                }
               ]}>
-                {item.iconFamily === 'community' ? (
+                {(item.iconFamily as string) === 'community' ? (
                   <MaterialCommunityIcons 
                     name={item.icon as any} 
-                    size={22} 
-                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                    size={isActive ? 18 : 20} 
+                    color={isActive ? '#22c55e' : (isDark ? '#707e94' : '#8e96aa')} 
                   />
                 ) : (
                   <MaterialIcons 
                     name={item.icon as any} 
-                    size={22} 
-                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                    size={isActive ? 18 : 20} 
+                    color={isActive ? '#22c55e' : (isDark ? '#707e94' : '#8e96aa')} 
                   />
                 )}
-              </Animated.View>
-              <Text style={[
-                styles.navLabel, 
-                { 
-                  color: isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant, 
-                  fontFamily: isActive ? F.bold : F.medium 
-                }
-              ]}>
-                {item.label}
-              </Text>
+                <Text style={[
+                  styles.navLabel, 
+                  { 
+                    color: isActive ? '#22c55e' : (isDark ? '#707e94' : '#8e96aa'), 
+                    fontFamily: isActive ? F.bold : F.medium,
+                    fontSize: isActive ? 11 : 9.5,
+                    marginLeft: isActive ? 6 : 0,
+                    marginTop: isActive ? 0 : 3,
+                  }
+                ]}>
+                  {item.label}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -540,56 +549,58 @@ export const MainApp = () => {
         >
           <Animated.View style={{ transform: [{ scale: plusScale }] }}>
             <LinearGradient
-              colors={isDark ? ['#00e3fd', '#1a5cff'] : ['#275FE3', '#1a5cff']}
+              colors={['#22c55e', '#16a34a']}
               style={styles.centerPlusCircle}
             >
-              <MaterialIcons name="add" size={28} color="#FFF" />
+              <MaterialIcons name="add" size={26} color="#0c1017" />
             </LinearGradient>
           </Animated.View>
         </TouchableOpacity>
 
         {rightTabs.map((item) => {
           const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(item.id);
           return (
             <TouchableOpacity 
               key={item.id} 
               onPress={() => handleTabPress(item.id)} 
-              style={styles.navItem} 
+              style={[styles.navItem, isActive && styles.activeNavItemPill]} 
               activeOpacity={0.8}
             >
-              <Animated.View style={[
-                styles.iconBubble,
-                isActive && { 
-                  backgroundColor: isDark ? 'rgba(0, 227, 253, 0.15)' : 'rgba(39, 95, 227, 0.12)', 
-                  borderColor: isDark ? '#00e3fd' : colors.primary, 
-                  borderWidth: 1 
-                },
-                { transform: [{ scale }, { translateY }] }
+              <View style={[
+                styles.tabPillContainer,
+                isActive && {
+                  backgroundColor: 'rgba(34, 197, 94, 0.16)',
+                  borderColor: 'rgba(34, 197, 94, 0.35)',
+                  borderWidth: 1,
+                  flexDirection: 'row',
+                }
               ]}>
-                {item.iconFamily === 'community' ? (
+                {(item.iconFamily as string) === 'community' ? (
                   <MaterialCommunityIcons 
                     name={item.icon as any} 
-                    size={22} 
-                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                    size={isActive ? 18 : 20} 
+                    color={isActive ? '#22c55e' : (isDark ? '#707e94' : '#8e96aa')} 
                   />
                 ) : (
                   <MaterialIcons 
                     name={item.icon as any} 
-                    size={22} 
-                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                    size={isActive ? 18 : 20} 
+                    color={isActive ? '#22c55e' : (isDark ? '#707e94' : '#8e96aa')} 
                   />
                 )}
-              </Animated.View>
-              <Text style={[
-                styles.navLabel, 
-                { 
-                  color: isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant, 
-                  fontFamily: isActive ? F.bold : F.medium 
-                }
-              ]}>
-                {item.label}
-              </Text>
+                <Text style={[
+                  styles.navLabel, 
+                  { 
+                    color: isActive ? '#22c55e' : (isDark ? '#707e94' : '#8e96aa'), 
+                    fontFamily: isActive ? F.bold : F.medium,
+                    fontSize: isActive ? 11 : 9.5,
+                    marginLeft: isActive ? 6 : 0,
+                    marginTop: isActive ? 0 : 3,
+                  }
+                ]}>
+                  {item.label}
+                </Text>
+              </View>
             </TouchableOpacity>
           );
         })}
@@ -967,6 +978,16 @@ const styles = StyleSheet.create({
     alignItems: 'center', 
     justifyContent: 'center',
     paddingVertical: 2,
+  },
+  activeNavItemPill: {
+    flex: 1.35,
+  },
+  tabPillContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   iconBubble: {
     width: 44,
