@@ -11,6 +11,10 @@ interface MotoContextType {
   userRole: 'admin' | 'client';
   setUserRole: (role: 'admin' | 'client') => void;
   isAdmin: boolean;
+  isSuperAdmin: boolean;
+  userName: string;
+  userEmail: string;
+  userRoleTitle: string;
   approvalStatus: 'approved' | 'pending' | 'rejected';
   systemMetrics: { total_operators: number; total_clients: number; total_plants: number; pending_approvals: number };
   pendingUsersList: any[];
@@ -47,6 +51,10 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     setUserRoleState(role);
     supabase.auth.updateUser({ data: { role } }).catch(() => {});
   };
+  const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
+  const [userRoleTitle, setUserRoleTitle] = useState('Operador');
   const [isAddingMoto, setIsAddingMoto] = useState(false);
   const [approvalStatus, setApprovalStatus] = useState<'approved' | 'pending' | 'rejected'>('approved');
   const [systemMetrics, setSystemMetrics] = useState({
@@ -161,6 +169,10 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         setMyMoto(null);
         setRecords([]);
         setDrivesCompanyVehicleState(false);
+        setUserName('');
+        setUserEmail('');
+        setIsSuperAdmin(false);
+        setUserRoleTitle('Operador');
         recordsCacheRef.current.clear();
         recordsFetchTimeRef.current.clear();
         initialLoadDoneRef.current = false;
@@ -179,14 +191,29 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       const user = session?.user || (await supabase.auth.getUser()).data?.user;
       if (!user) return;
 
-      // 0. DETERMINAR ROL (ADMIN vs CLIENTE) Y PREFERENCIA DE VEHÍCULO
+      // 0. DETERMINAR ROL (ADMIN vs CLIENTE), SUPER USUARIO Y NOMBRE REAL
       let detectedRole: 'admin' | 'client' = 'client';
       const emailLower = (user.email || '').toLowerCase();
+      const isSuper = emailLower.includes('kalioverload') || user.user_metadata?.role === 'superadmin';
+
+      setUserEmail(user.email || '');
+      setIsSuperAdmin(isSuper);
+
+      let realName = '';
+      if (user.user_metadata) {
+        const meta = user.user_metadata;
+        if (meta.full_name) realName = meta.full_name.trim();
+        else if (meta.first_name) realName = `${meta.first_name} ${meta.last_name || ''}`.trim();
+      }
+
       if (
         emailLower.includes('admin') ||
         emailLower.includes('hermanoslynch') ||
         emailLower.includes('lynch') ||
-        user.user_metadata?.role === 'admin'
+        emailLower.includes('kalioverload') ||
+        user.user_metadata?.role === 'admin' ||
+        user.user_metadata?.role === 'superadmin' ||
+        isSuper
       ) {
         detectedRole = 'admin';
       }
@@ -194,23 +221,47 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       try {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('drives_company_vehicle, role, approval_status')
+          .select('drives_company_vehicle, role, approval_status, full_name, email')
           .eq('id', user.id)
           .single();
 
         if (profile) {
-          if (profile.role === 'superadmin' || profile.role === 'admin' || profile.role === 'operator') {
+          if (profile.full_name && profile.full_name.trim() !== '') {
+            realName = profile.full_name.trim();
+          }
+
+          const isSuperProfile = profile.role === 'superadmin' || isSuper;
+          setIsSuperAdmin(isSuperProfile);
+
+          if (isSuperProfile || profile.role === 'admin' || profile.role === 'operator') {
             detectedRole = 'admin';
             setApprovalStatus('approved');
+            setUserRoleTitle(isSuperProfile ? 'Super Usuario' : (profile.role === 'operator' ? 'Operador de Planta' : 'Administrador'));
           } else {
             setApprovalStatus(profile.approval_status || 'pending');
-            if (profile.role === 'client') detectedRole = 'client';
+            if (profile.role === 'client') {
+              detectedRole = 'client';
+              setUserRoleTitle('Cliente');
+            }
           }
           setDrivesCompanyVehicleState(!!profile.drives_company_vehicle);
         }
       } catch (err) {
         console.warn('Notice al consultar perfil:', err);
       }
+
+      if (!realName) {
+        if (isSuper || emailLower.includes('kalioverload')) {
+          realName = 'Kalioverload';
+        } else if (user.email) {
+          const username = user.email.split('@')[0];
+          realName = username.charAt(0).toUpperCase() + username.slice(1);
+        } else {
+          realName = detectedRole === 'admin' ? 'Operador' : 'Cliente';
+        }
+      }
+
+      setUserName(realName);
 
       setUserRoleState(detectedRole);
       if (detectedRole === 'admin') {
@@ -584,6 +635,10 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       userRole,
       setUserRole,
       isAdmin,
+      isSuperAdmin,
+      userName,
+      userEmail,
+      userRoleTitle,
       approvalStatus,
       systemMetrics,
       pendingUsersList,

@@ -43,7 +43,10 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
     drivesCompanyVehicle, 
     setDrivesCompanyVehicle,
     userRole,
-    isAdmin
+    isAdmin,
+    isSuperAdmin,
+    userName,
+    userRoleTitle
   } = useMyMoto();
   const { colors, mode, isDark, toggleTheme } = useTheme();
   
@@ -160,7 +163,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
   if (!myMoto) return null;
 
   const isOperatorOrAdmin = isAdmin || userRole === 'admin';
-  const displayName = firstName || (isOperatorOrAdmin ? 'Operador Técnico' : 'Titular de Planta');
+  const displayName = firstName || userName || (isSuperAdmin ? 'Kalioverload' : (isOperatorOrAdmin ? 'Operador Técnico' : 'Titular de Planta'));
   const displayLastName = lastName || '';
   const avatarUrl = localAvatarUri || userData?.user_metadata?.avatar_url;
 
@@ -363,10 +366,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               <Text style={{
                 fontFamily: F.bold,
                 fontSize: 11,
-                color: isOperatorOrAdmin ? (isDark ? '#60a5fa' : '#1a5cff') : (isDark ? '#38bdf8' : '#0284c7'),
+                color: isSuperAdmin ? (isDark ? '#00e3fd' : '#0284c7') : (isOperatorOrAdmin ? (isDark ? '#60a5fa' : '#1a5cff') : (isDark ? '#38bdf8' : '#0284c7')),
                 letterSpacing: 0.5
               }}>
-                {isOperatorOrAdmin ? 'OPERADOR TÉCNICO • HERMANOS LYNCH' : 'CLIENTE / TITULAR DE PLANTA'}
+                {isSuperAdmin
+                  ? 'SUPER USUARIO • HERMANOS LYNCH'
+                  : (isOperatorOrAdmin ? 'OPERADOR TÉCNICO • HERMANOS LYNCH' : 'CLIENTE / TITULAR DE PLANTA')}
               </Text>
             </View>
 

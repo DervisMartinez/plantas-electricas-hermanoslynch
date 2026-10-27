@@ -56,9 +56,21 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     drivesCompanyVehicle, 
     logout,
     systemMetrics,
-    loadSystemUsers
+    loadSystemUsers,
+    userName,
+    isSuperAdmin,
+    userRoleTitle
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
+
+  const userInitials = useMemo(() => {
+    const name = (userName || (isSuperAdmin ? 'Kalioverload' : 'Operador')).trim();
+    const parts = name.split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }, [userName, isSuperAdmin]);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedBarIndex, setSelectedBarIndex] = useState<number>(3); // Default highlighted bar
@@ -692,13 +704,18 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               style={[styles.userProfilePill, { backgroundColor: cardBg, borderColor: cardBorder }]}
               activeOpacity={0.8}
             >
-              <View style={styles.avatarCircle}>
-                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>HL</Text>
+              <View style={[styles.avatarCircle, { backgroundColor: isSuperAdmin ? '#275FE3' : '#16a34a' }]}>
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>{userInitials}</Text>
               </View>
               {isDesktop && (
-                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 13, marginRight: 4 }}>
-                  Admin HL
-                </Text>
+                <View style={{ marginRight: 4 }}>
+                  <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12.5 }} numberOfLines={1}>
+                    {userName || (isSuperAdmin ? 'Kalioverload' : 'Operador')}
+                  </Text>
+                  <Text style={{ fontFamily: F.semibold, color: isSuperAdmin ? accentCyan : '#22c55e', fontSize: 10 }}>
+                    {isSuperAdmin ? 'Super Usuario' : (userRoleTitle || 'Operador')}
+                  </Text>
+                </View>
               )}
             </TouchableOpacity>
 
@@ -730,11 +747,38 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           {/* GREETING / HERO BANNER */}
           <View style={styles.greetingBannerRow}>
             <View>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <View style={[
+                  styles.roleBadgePill,
+                  { 
+                    backgroundColor: isSuperAdmin ? 'rgba(0, 227, 253, 0.15)' : 'rgba(34, 197, 94, 0.15)',
+                    borderColor: isSuperAdmin ? 'rgba(0, 227, 253, 0.45)' : 'rgba(34, 197, 94, 0.45)',
+                  }
+                ]}>
+                  <MaterialCommunityIcons 
+                    name={isSuperAdmin ? "shield-crown" : "account-hard-hat"} 
+                    size={13} 
+                    color={isSuperAdmin ? "#00e3fd" : "#22c55e"} 
+                  />
+                  <Text style={{ 
+                    fontFamily: F.bold, 
+                    color: isSuperAdmin ? "#00e3fd" : "#22c55e", 
+                    fontSize: 10.5, 
+                    letterSpacing: 0.8,
+                    textTransform: 'uppercase'
+                  }}>
+                    {isSuperAdmin ? 'Super Usuario' : (userRoleTitle || 'Operador de Planta')}
+                  </Text>
+                </View>
+              </View>
+
               <Text style={[styles.greetingTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                Hola, Operador!
+                ¡Hola, {userName || (isSuperAdmin ? 'Kalioverload' : 'Operador')}!
               </Text>
               <Text style={[styles.greetingSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                Monitoreo en tiempo real y telemetría de tus plantas eléctricas Hermanos Lynch.
+                {isSuperAdmin
+                  ? 'Consola central de supervisión telemática y control maestro de plantas eléctricas Hermanos Lynch.'
+                  : 'Monitoreo en tiempo real y telemetría de tus plantas eléctricas Hermanos Lynch.'}
               </Text>
             </View>
 
@@ -1609,6 +1653,16 @@ const styles = StyleSheet.create({
   bentoScrollContent: {
     paddingHorizontal: 28,
     paddingBottom: 60,
+  },
+  roleBadgePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignSelf: 'flex-start',
   },
   greetingBannerRow: {
     flexDirection: 'row',
