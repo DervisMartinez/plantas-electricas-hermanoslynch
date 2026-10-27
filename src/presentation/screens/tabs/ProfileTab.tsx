@@ -68,6 +68,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
   const [motoYear, setMotoYear] = useState('');
   const [showTutorial, setShowTutorial] = useState(false);
   const [localAvatarUri, setLocalAvatarUri] = useState<string | null>(null);
+  const [assignedVehicleProfile, setAssignedVehicleProfile] = useState<{
+    name?: string;
+    plate?: string;
+    imageUrl?: string;
+    odometer?: number;
+  } | null>(null);
 
   // Legal Modal Management
   const [showLegalModal, setShowLegalModal] = useState(false);
@@ -125,6 +131,22 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
           setLocalAvatarUri(meta.avatar_url);
           AsyncStorage.setItem('@user_avatar_url', meta.avatar_url);
         }
+
+        // Consultar asignación oficial de flota en perfil
+        supabase
+          .from('profiles')
+          .select('drives_company_vehicle, assigned_vehicle_name, assigned_vehicle_plate, assigned_vehicle_image')
+          .eq('id', data.user.id)
+          .single()
+          .then(({ data: prof }) => {
+            if (prof && prof.assigned_vehicle_name) {
+              setAssignedVehicleProfile({
+                name: prof.assigned_vehicle_name,
+                plate: prof.assigned_vehicle_plate,
+                imageUrl: prof.assigned_vehicle_image,
+              });
+            }
+          });
       }
     });
   }, []);
@@ -149,6 +171,22 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
   const vehiculosAsignados = useMemo(() => {
     return (motos || []).filter((m) => isCar(m) || m.vehicleType === 'car');
   }, [motos]);
+
+  const actualFleetVehicle = useMemo(() => {
+    if (vehiculosAsignados.length > 0) {
+      return vehiculosAsignados[0];
+    }
+    if (assignedVehicleProfile?.name) {
+      return {
+        brand: assignedVehicleProfile.name,
+        model: '',
+        plate: assignedVehicleProfile.plate || 'OFICIAL',
+        imageUrl: assignedVehicleProfile.imageUrl,
+        currentOdometer: assignedVehicleProfile.odometer || 0,
+      };
+    }
+    return null;
+  }, [vehiculosAsignados, assignedVehicleProfile]);
 
   const pickImage = async () => {
     try {
@@ -719,55 +757,101 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
 
               {/* TARJETA DEL VEHÍCULO DE FLOTA ASIGNADO */}
               {drivesCompanyVehicle && (
-                <View style={{
-                  backgroundColor: colors.surfaceContainer,
-                  borderRadius: 16,
-                  padding: 16,
-                  borderWidth: 1,
-                  borderColor: colors.outlineVariant,
-                  gap: 12
-                }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                      <View style={{
-                        width: 42,
-                        height: 42,
-                        borderRadius: 12,
-                        backgroundColor: 'rgba(26, 92, 255, 0.15)',
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                      }}>
-                        <MaterialIcons name="directions-car" size={24} color="#1a5cff" />
+                actualFleetVehicle ? (
+                  <View style={{
+                    backgroundColor: colors.surfaceContainer,
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: colors.outlineVariant,
+                    gap: 12
+                  }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        {actualFleetVehicle.imageUrl ? (
+                          <Image
+                            source={{ uri: actualFleetVehicle.imageUrl }}
+                            style={{ width: 48, height: 48, borderRadius: 12 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={{
+                            width: 42,
+                            height: 42,
+                            borderRadius: 12,
+                            backgroundColor: 'rgba(26, 92, 255, 0.15)',
+                            justifyContent: 'center',
+                            alignItems: 'center'
+                          }}>
+                            <MaterialIcons name="directions-car" size={24} color="#1a5cff" />
+                          </View>
+                        )}
+                        <View>
+                          <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 14 }}>
+                            {actualFleetVehicle.brand} {actualFleetVehicle.model}
+                          </Text>
+                          <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11.5 }}>
+                            Vehículo Oficial de Flota Hermanos Lynch
+                          </Text>
+                        </View>
                       </View>
-                      <View>
-                        <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 14 }}>
-                          Toyota Hilux 4x4 • Móvil de Asistencia
-                        </Text>
-                        <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11.5 }}>
-                          Vehículo Oficial Hermanos Lynch • Cuadrilla HL-04
+                      <View style={{ backgroundColor: 'rgba(26, 92, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                        <Text style={{ fontFamily: F.bold, color: '#1a5cff', fontSize: 11 }}>
+                          {actualFleetVehicle.plate || 'OFICIAL'}
                         </Text>
                       </View>
                     </View>
-                    <View style={{ backgroundColor: 'rgba(26, 92, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                      <Text style={{ fontFamily: F.bold, color: '#1a5cff', fontSize: 11 }}>A12B34C</Text>
-                    </View>
-                  </View>
 
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="speed" size={16} color={colors.primary} />
-                      <Text style={{ fontFamily: F.semibold, color: colors.onSurface, fontSize: 12 }}>
-                        Odómetro Flota: 48,250 km
-                      </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="speed" size={16} color={colors.primary} />
+                        <Text style={{ fontFamily: F.semibold, color: colors.onSurface, fontSize: 12 }}>
+                          Odómetro Flota: {Number(actualFleetVehicle.currentOdometer || 0).toLocaleString()} km
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="account-balance-wallet" size={16} color="#00e3fd" />
+                        <Text style={{ fontFamily: F.bold, color: '#00e3fd', fontSize: 11 }}>
+                          Wallet Activa
+                        </Text>
+                      </View>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <MaterialIcons name="account-balance-wallet" size={16} color="#00e3fd" />
+                  </View>
+                ) : (
+                  <View style={{
+                    backgroundColor: colors.surfaceContainer,
+                    borderRadius: 16,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: colors.outlineVariant,
+                    alignItems: 'center',
+                    gap: 8,
+                    paddingVertical: 18,
+                  }}>
+                    <View style={{
+                      width: 44,
+                      height: 44,
+                      borderRadius: 22,
+                      backgroundColor: 'rgba(245, 158, 11, 0.12)',
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}>
+                      <MaterialIcons name="no-transfer" size={24} color="#f59e0b" />
+                    </View>
+                    <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, textAlign: 'center' }}>
+                      Sin Unidad de Flota Asignada
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11.5, textAlign: 'center', maxWidth: 360 }}>
+                      El Super Administrador aún no ha asignado un vehículo oficial a tu perfil desde el catálogo de flota corporativo.
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                      <MaterialIcons name="account-balance-wallet" size={15} color="#00e3fd" />
                       <Text style={{ fontFamily: F.bold, color: '#00e3fd', fontSize: 11 }}>
-                        Wallet Activa
+                        Guantera Digital (Wallet) habilitada para tus documentos
                       </Text>
                     </View>
                   </View>
-                </View>
+                )
               )}
             </View>
           )}

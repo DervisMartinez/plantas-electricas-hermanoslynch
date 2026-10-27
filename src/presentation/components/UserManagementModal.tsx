@@ -9,10 +9,13 @@ import {
   ActivityIndicator,
   TextInput,
   useWindowDimensions,
+  Image,
+  Platform,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMyMoto } from '../context/MotoContext';
+import { supabase } from '../../data/supabaseClient';
 import { CreateOperatorModal } from './CreateOperatorModal';
 import { AssignOperatorModal } from './AssignOperatorModal';
 
@@ -34,11 +37,98 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
 
-  const [activeFilter, setActiveFilter] = useState<'pending' | 'operators' | 'clients' | 'all'>('pending');
+  const [activeFilter, setActiveFilter] = useState<'pending' | 'operators' | 'clients' | 'fleet' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [createOperatorVisible, setCreateOperatorVisible] = useState(false);
   const [assigningOperator, setAssigningOperator] = useState<any | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  // Fleet Catalog Management
+  const [fleetList, setFleetList] = useState<any[]>([]);
+  const [loadingFleet, setLoadingFleet] = useState(false);
+  const [showCreateFleetModal, setShowCreateFleetModal] = useState(false);
+  const [fleetBrand, setFleetBrand] = useState('');
+  const [fleetModel, setFleetModel] = useState('');
+  const [fleetPlate, setFleetPlate] = useState('');
+  const [fleetImageUrl, setFleetImageUrl] = useState('');
+  const [fleetKm, setFleetKm] = useState('');
+  const [savingFleetVehicle, setSavingFleetVehicle] = useState(false);
+
+  const fetchFleet = async () => {
+    setLoadingFleet(true);
+    try {
+      const { data } = await supabase
+        .from('vehiculos_empresa')
+        .select('*')
+        .order('created_at', { ascending: false });
+      setFleetList(data || []);
+    } catch (e) {
+      console.warn('Notice al cargar flota en admin:', e);
+    } finally {
+      setLoadingFleet(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (visible) {
+      fetchFleet();
+    }
+  }, [visible]);
+
+  const handleCreateFleetVehicle = async () => {
+    if (!fleetBrand.trim() || !fleetModel.trim() || !fleetPlate.trim()) {
+      const msg = 'Ingresa marca, modelo y placa del vehículo.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else alert(msg);
+      return;
+    }
+    setSavingFleetVehicle(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user;
+      const { error } = await supabase.from('vehiculos_empresa').insert({
+        user_id: user?.id || null,
+        brand: fleetBrand.trim(),
+        model: fleetModel.trim(),
+        plate: fleetPlate.trim().toUpperCase(),
+        image_url: fleetImageUrl.trim() || null,
+        current_odometer: parseInt(fleetKm) || 0,
+        year: 2026,
+      });
+
+      if (error) throw error;
+
+      await fetchFleet();
+      setShowCreateFleetModal(false);
+      setFleetBrand('');
+      setFleetModel('');
+      setFleetPlate('');
+      setFleetImageUrl('');
+      setFleetKm('');
+      const successMsg = 'Vehículo de flota registrado con éxito en el catálogo oficial.';
+      if (Platform.OS === 'web') window.alert(successMsg);
+      else alert(successMsg);
+    } catch (err: any) {
+      const errorMsg = 'Error al registrar vehículo: ' + (err.message || 'Intenta de nuevo.');
+      if (Platform.OS === 'web') window.alert(errorMsg);
+      else alert(errorMsg);
+    } finally {
+      setSavingFleetVehicle(false);
+    }
+  };
+
+  const handleDeleteFleetVehicle = async (vehicleId: string) => {
+    if (Platform.OS === 'web') {
+      if (!window.confirm('¿Deseas eliminar este vehículo del catálogo de flota?')) return;
+    }
+    try {
+      await supabase.from('vehiculos_empresa').delete().eq('id', vehicleId);
+      await fetchFleet();
+    } catch (err: any) {
+      if (Platform.OS === 'web') window.alert('Error eliminando vehículo: ' + err.message);
+      else alert('Error eliminando vehículo: ' + err.message);
+    }
+  };
 
   const isDesktop = windowWidth >= 800;
 
@@ -257,6 +347,24 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
               </TouchableOpacity>
 
               <TouchableOpacity
+                onPress={() => setActiveFilter('fleet')}
+                style={[
+                  styles.tabPill,
+                  activeFilter === 'fleet' && [styles.activeTabPill, { backgroundColor: '#10b981' }],
+                ]}
+              >
+                <Text
+                  style={{
+                    fontFamily: F.bold,
+                    fontSize: 11,
+                    color: activeFilter === 'fleet' ? '#ffffff' : textSecondary,
+                  }}
+                >
+                  Flota Oficial ({fleetList.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 onPress={() => setActiveFilter('all')}
                 style={[
                   styles.tabPill,
@@ -275,17 +383,30 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
               </TouchableOpacity>
             </View>
 
-            {/* BUTTON CREATE OPERATOR */}
-            <TouchableOpacity
-              onPress={() => setCreateOperatorVisible(true)}
-              style={[styles.createOperatorBtn, { backgroundColor: accentBlue }]}
-              activeOpacity={0.85}
-            >
-              <MaterialIcons name="person-add" size={16} color="#ffffff" />
-              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                + Crear Operador
-              </Text>
-            </TouchableOpacity>
+            {/* BUTTON CREATE OPERATOR OR FLEET VEHICLE */}
+            {activeFilter === 'fleet' ? (
+              <TouchableOpacity
+                onPress={() => setShowCreateFleetModal(true)}
+                style={[styles.createOperatorBtn, { backgroundColor: '#10b981' }]}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="add" size={16} color="#ffffff" />
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                  + Subir Vehículo a Flota
+                </Text>
+              </TouchableOpacity>
+            ) : (
+              <TouchableOpacity
+                onPress={() => setCreateOperatorVisible(true)}
+                style={[styles.createOperatorBtn, { backgroundColor: accentBlue }]}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="person-add" size={16} color="#ffffff" />
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                  + Crear Operador
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* SEARCH INPUT */}
@@ -294,15 +415,127 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
             <TextInput
               value={searchQuery}
               onChangeText={setSearchQuery}
-              placeholder="Buscar por nombre, correo, código o especialidad..."
+              placeholder={activeFilter === 'fleet' ? "Buscar vehículo por marca, modelo o placa..." : "Buscar por nombre, correo, código o especialidad..."}
               placeholderTextColor={textSecondary}
               style={[styles.searchInput, { color: textPrimary, fontFamily: F.medium }]}
             />
           </View>
 
-          {/* USERS LIST */}
+          {/* LIST CONTAINER */}
           <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-            {currentList.length === 0 ? (
+            {activeFilter === 'fleet' ? (
+              /* SECCIÓN DE CATÁLOGO DE FLOTA OFICIAL */
+              loadingFleet ? (
+                <View style={{ padding: 30, alignItems: 'center' }}>
+                  <ActivityIndicator color={accentCyan} />
+                </View>
+              ) : fleetList.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <MaterialIcons name="no-transfer" size={40} color={textSecondary} />
+                  <Text style={{ color: textPrimary, fontFamily: F.bold, fontSize: 14, marginTop: 8 }}>
+                    Catálogo de Flota Vacío
+                  </Text>
+                  <Text style={[styles.emptyText, { color: textSecondary, fontFamily: F.medium, textAlign: 'center', marginTop: 4, maxWidth: 380 }]}>
+                    Aún no se han subido vehículos de soporte técnico al catálogo oficial. Como Super Administrador, registra las unidades de la empresa con foto, modelo y placa.
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowCreateFleetModal(true)}
+                    style={{
+                      marginTop: 14,
+                      backgroundColor: '#10b981',
+                      paddingHorizontal: 16,
+                      paddingVertical: 9,
+                      borderRadius: 10,
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      gap: 6,
+                    }}
+                  >
+                    <MaterialIcons name="add" size={16} color="#ffffff" />
+                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                      + Subir Primer Vehículo al Catálogo
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                fleetList
+                  .filter((v) => {
+                    if (!searchQuery.trim()) return true;
+                    const q = searchQuery.toLowerCase().trim();
+                    return (
+                      (v.brand || '').toLowerCase().includes(q) ||
+                      (v.model || '').toLowerCase().includes(q) ||
+                      (v.plate || '').toLowerCase().includes(q)
+                    );
+                  })
+                  .map((v) => (
+                    <View
+                      key={v.id}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: 12,
+                        borderRadius: 14,
+                        borderWidth: 1,
+                        borderColor: borderModal,
+                        backgroundColor: cardSubBg,
+                        marginBottom: 8,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        {v.image_url ? (
+                          <Image
+                            source={{ uri: v.image_url }}
+                            style={{ width: 52, height: 52, borderRadius: 10 }}
+                            resizeMode="cover"
+                          />
+                        ) : (
+                          <View style={{
+                            width: 52,
+                            height: 52,
+                            borderRadius: 10,
+                            backgroundColor: isDark ? '#141721' : '#ffffff',
+                            justifyContent: 'center',
+                            alignItems: 'center',
+                          }}>
+                            <MaterialIcons name="directions-car" size={26} color={accentCyan} />
+                          </View>
+                        )}
+                        <View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 14 }}>
+                              {v.brand} {v.model}
+                            </Text>
+                            <View style={{ backgroundColor: 'rgba(26, 92, 255, 0.15)', paddingHorizontal: 7, paddingVertical: 2, borderRadius: 6 }}>
+                              <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10.5 }}>
+                                {v.plate}
+                              </Text>
+                            </View>
+                          </View>
+                          <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11.5, marginTop: 2 }}>
+                            Odómetro: {Number(v.current_odometer || 0).toLocaleString()} km • Año {v.year || 2026}
+                          </Text>
+                        </View>
+                      </View>
+
+                      <TouchableOpacity
+                        onPress={() => handleDeleteFleetVehicle(v.id)}
+                        style={{
+                          width: 32,
+                          height: 32,
+                          borderRadius: 16,
+                          backgroundColor: isDark ? 'rgba(239, 68, 68, 0.15)' : '#fee2e2',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <MaterialIcons name="delete-outline" size={18} color="#ef4444" />
+                      </TouchableOpacity>
+                    </View>
+                  ))
+              )
+            ) : currentList.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <MaterialIcons name="check-circle-outline" size={40} color={textSecondary} />
                 <Text style={[styles.emptyText, { color: textSecondary, fontFamily: F.medium }]}>
@@ -519,8 +752,143 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
         visible={!!assigningOperator}
         operator={assigningOperator}
         onClose={() => setAssigningOperator(null)}
-        onSaveSuccess={() => loadSystemUsers()}
+        onSaveSuccess={() => {
+          loadSystemUsers();
+          fetchFleet();
+        }}
       />
+
+      {/* MODAL PARA SUBIR VEHÍCULO AL CATÁLOGO DE FLOTA */}
+      <Modal visible={showCreateFleetModal} transparent animationType="fade" onRequestClose={() => setShowCreateFleetModal(false)}>
+        <View style={styles.backdrop}>
+          <View style={[styles.dialogContainer, { maxWidth: 520, backgroundColor: bgModal, borderColor: borderModal }]}>
+            <View style={styles.headerRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={[styles.headerIconBadge, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                  <MaterialIcons name="add-circle" size={24} color="#10b981" />
+                </View>
+                <View>
+                  <Text style={[styles.headerTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: 16 }]}>
+                    Registrar Unidad de Flota
+                  </Text>
+                  <Text style={[styles.headerSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                    Catálogo Oficial de Vehículos Hermanos Lynch
+                  </Text>
+                </View>
+              </View>
+
+              <TouchableOpacity onPress={() => setShowCreateFleetModal(false)} style={[styles.closeBtn, { backgroundColor: cardSubBg }]}>
+                <MaterialIcons name="close" size={18} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ gap: 12, marginVertical: 8 }}>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11.5, marginBottom: 4 }}>
+                    Marca
+                  </Text>
+                  <TextInput
+                    value={fleetBrand}
+                    onChangeText={setFleetBrand}
+                    placeholder="Ej. Toyota, Ford, Chevrolet"
+                    placeholderTextColor={textSecondary}
+                    style={[styles.searchInput, { borderColor: borderModal, backgroundColor: cardSubBg, color: textPrimary, fontFamily: F.medium, borderRadius: 10, paddingHorizontal: 12, height: 42 }]}
+                  />
+                </View>
+                <View style={{ flex: 1.2 }}>
+                  <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11.5, marginBottom: 4 }}>
+                    Modelo
+                  </Text>
+                  <TextInput
+                    value={fleetModel}
+                    onChangeText={setFleetModel}
+                    placeholder="Ej. Hilux 4x4, Ranger"
+                    placeholderTextColor={textSecondary}
+                    style={[styles.searchInput, { borderColor: borderModal, backgroundColor: cardSubBg, color: textPrimary, fontFamily: F.medium, borderRadius: 10, paddingHorizontal: 12, height: 42 }]}
+                  />
+                </View>
+              </View>
+
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11.5, marginBottom: 4 }}>
+                    Placa Oficial
+                  </Text>
+                  <TextInput
+                    value={fleetPlate}
+                    onChangeText={setFleetPlate}
+                    placeholder="Ej. AB123CD"
+                    placeholderTextColor={textSecondary}
+                    autoCapitalize="characters"
+                    style={[styles.searchInput, { borderColor: borderModal, backgroundColor: cardSubBg, color: textPrimary, fontFamily: F.medium, borderRadius: 10, paddingHorizontal: 12, height: 42 }]}
+                  />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11.5, marginBottom: 4 }}>
+                    Odómetro Inicial (km)
+                  </Text>
+                  <TextInput
+                    value={fleetKm}
+                    onChangeText={setFleetKm}
+                    placeholder="Ej. 12500"
+                    placeholderTextColor={textSecondary}
+                    keyboardType="numeric"
+                    style={[styles.searchInput, { borderColor: borderModal, backgroundColor: cardSubBg, color: textPrimary, fontFamily: F.medium, borderRadius: 10, paddingHorizontal: 12, height: 42 }]}
+                  />
+                </View>
+              </View>
+
+              <View>
+                <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11.5, marginBottom: 4 }}>
+                  URL de la Foto Oficial
+                </Text>
+                <TextInput
+                  value={fleetImageUrl}
+                  onChangeText={setFleetImageUrl}
+                  placeholder="https://... (Foto oficial del vehículo)"
+                  placeholderTextColor={textSecondary}
+                  style={[styles.searchInput, { borderColor: borderModal, backgroundColor: cardSubBg, color: textPrimary, fontFamily: F.medium, borderRadius: 10, paddingHorizontal: 12, height: 42 }]}
+                />
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 10, marginTop: 14 }}>
+              <TouchableOpacity
+                onPress={() => setShowCreateFleetModal(false)}
+                style={{ paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, borderWidth: 1, borderColor: borderModal }}
+              >
+                <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 12 }}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={handleCreateFleetVehicle}
+                disabled={savingFleetVehicle}
+                style={{
+                  backgroundColor: '#10b981',
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                  borderRadius: 10,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                {savingFleetVehicle ? (
+                  <ActivityIndicator size="small" color="#ffffff" />
+                ) : (
+                  <>
+                    <MaterialIcons name="check" size={16} color="#ffffff" />
+                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                      Guardar en Catálogo
+                    </Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 };

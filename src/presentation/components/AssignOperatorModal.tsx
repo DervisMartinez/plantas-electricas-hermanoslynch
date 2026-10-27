@@ -11,6 +11,7 @@ import {
   Switch,
   Alert,
   Platform,
+  Image,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -25,6 +26,18 @@ interface OperatorUser {
   drives_company_vehicle?: boolean;
   assigned_vehicle_name?: string;
   assigned_vehicle_plate?: string;
+  assigned_vehicle_image?: string;
+}
+
+interface FleetVehicle {
+  id: string;
+  brand: string;
+  model: string;
+  plate: string;
+  year?: number;
+  image_url?: string;
+  current_odometer?: number;
+  user_id?: string;
 }
 
 interface PlantWithClient {
@@ -64,10 +77,23 @@ export const AssignOperatorModal: React.FC<Props> = ({
   const [selectedPlantIds, setSelectedPlantIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Vehicle Assignment State
+  // Real Fleet Vehicle Assignment State
   const [drivesVehicle, setDrivesVehicle] = useState(false);
-  const [vehicleName, setVehicleName] = useState('Toyota Hilux 4x4 • Soporte Técnico');
-  const [vehiclePlate, setVehiclePlate] = useState('A12B34C');
+  const [fleetVehicles, setFleetVehicles] = useState<FleetVehicle[]>([]);
+  const [loadingFleet, setLoadingFleet] = useState(false);
+  const [selectedFleetId, setSelectedFleetId] = useState<string | null>(null);
+  const [vehicleName, setVehicleName] = useState('');
+  const [vehiclePlate, setVehiclePlate] = useState('');
+  const [vehicleImage, setVehicleImage] = useState('');
+
+  // Form for Superadmin to register vehicle directly into fleet catalog
+  const [showAddFleetForm, setShowAddFleetForm] = useState(false);
+  const [newBrand, setNewBrand] = useState('');
+  const [newModel, setNewModel] = useState('');
+  const [newPlate, setNewPlate] = useState('');
+  const [newImageUrl, setNewImageUrl] = useState('');
+  const [newKm, setNewKm] = useState('');
+  const [savingNewFleet, setSavingNewFleet] = useState(false);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -89,11 +115,88 @@ export const AssignOperatorModal: React.FC<Props> = ({
   useEffect(() => {
     if (visible && operator) {
       setDrivesVehicle(!!operator.drives_company_vehicle);
-      setVehicleName(operator.assigned_vehicle_name || 'Toyota Hilux 4x4 • Soporte Técnico');
-      setVehiclePlate(operator.assigned_vehicle_plate || 'A12B34C');
+      setVehicleName(operator.assigned_vehicle_name || '');
+      setVehiclePlate(operator.assigned_vehicle_plate || '');
+      setVehicleImage(operator.assigned_vehicle_image || '');
       fetchPlants();
+      fetchFleet();
     }
   }, [visible, operator]);
+
+  const fetchFleet = async () => {
+    setLoadingFleet(true);
+    try {
+      const { data } = await supabase
+        .from('vehiculos_empresa')
+        .select('*')
+        .order('created_at', { ascending: false });
+      const vehicles: FleetVehicle[] = data || [];
+      setFleetVehicles(vehicles);
+
+      if (operator?.assigned_vehicle_plate) {
+        const found = vehicles.find((v) => v.plate === operator.assigned_vehicle_plate);
+        if (found) {
+          setSelectedFleetId(found.id);
+          setVehicleName(`${found.brand} ${found.model}`);
+          setVehiclePlate(found.plate);
+          setVehicleImage(found.image_url || '');
+        }
+      }
+    } catch (e) {
+      console.warn('Notice al cargar flota en modal de asignación:', e);
+    } finally {
+      setLoadingFleet(false);
+    }
+  };
+
+  const handleCreateAndAssignFleetVehicle = async () => {
+    if (!newBrand.trim() || !newModel.trim() || !newPlate.trim()) {
+      const msg = 'Ingresa la marca, modelo y placa del vehículo de flota.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Campos requeridos', msg);
+      return;
+    }
+    setSavingNewFleet(true);
+    try {
+      const { data: newV, error } = await supabase
+        .from('vehiculos_empresa')
+        .insert({
+          user_id: operator?.id || null,
+          brand: newBrand.trim(),
+          model: newModel.trim(),
+          plate: newPlate.trim().toUpperCase(),
+          image_url: newImageUrl.trim() || null,
+          current_odometer: parseInt(newKm) || 0,
+          year: 2026,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      if (newV) {
+        setFleetVehicles((prev) => [newV, ...prev]);
+        setSelectedFleetId(newV.id);
+        setVehicleName(`${newV.brand} ${newV.model}`);
+        setVehiclePlate(newV.plate);
+        setVehicleImage(newV.image_url || '');
+        setDrivesVehicle(true);
+        setShowAddFleetForm(false);
+        setNewBrand('');
+        setNewModel('');
+        setNewPlate('');
+        setNewImageUrl('');
+        setNewKm('');
+      }
+    } catch (err: any) {
+      console.error('Error al registrar vehículo de flota:', err);
+      const msg = err.message || 'No se pudo registrar el vehículo.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Error', msg);
+    } finally {
+      setSavingNewFleet(false);
+    }
+  };
 
   const fetchPlants = async () => {
     if (!operator) return;
@@ -203,10 +306,24 @@ export const AssignOperatorModal: React.FC<Props> = ({
         .from('profiles')
         .update({
           drives_company_vehicle: drivesVehicle,
-          assigned_vehicle_name: drivesVehicle ? vehicleName.trim() : null,
-          assigned_vehicle_plate: drivesVehicle ? vehiclePlate.trim().toUpperCase() : null,
+          assigned_vehicle_name: drivesVehicle && vehicleName.trim() ? vehicleName.trim() : null,
+          assigned_vehicle_plate: drivesVehicle && vehiclePlate.trim() ? vehiclePlate.trim().toUpperCase() : null,
+          assigned_vehicle_image: drivesVehicle && vehicleImage.trim() ? vehicleImage.trim() : null,
         })
         .eq('id', operator.id);
+
+      // 3. Link or unlink vehicle in vehiculos_empresa
+      if (drivesVehicle && selectedFleetId) {
+        await supabase
+          .from('vehiculos_empresa')
+          .update({ user_id: operator.id })
+          .eq('id', selectedFleetId);
+      } else if (!drivesVehicle && operator.id) {
+        await supabase
+          .from('vehiculos_empresa')
+          .update({ user_id: null })
+          .eq('user_id', operator.id);
+      }
 
       if (Platform.OS === 'web') {
         window.alert(`Asignaciones guardadas para el operador ${operatorName}.`);
@@ -277,51 +394,229 @@ export const AssignOperatorModal: React.FC<Props> = ({
             <View style={[styles.sectionBox, { backgroundColor: cardSubBg, borderColor: borderModal }]}>
               <View style={styles.sectionHeaderRow}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <MaterialIcons name="directions-car" size={20} color={accentCyan} />
+                  <MaterialIcons name="local-shipping" size={20} color={accentCyan} />
                   <Text style={[styles.sectionTitle, { color: textPrimary, fontFamily: F.bold }]}>
                     Vehículo Oficial de la Empresa
                   </Text>
                 </View>
                 <Switch
                   value={drivesVehicle}
-                  onValueChange={setDrivesVehicle}
+                  onValueChange={(val) => {
+                    setDrivesVehicle(val);
+                    if (!val) {
+                      setSelectedFleetId(null);
+                      setVehicleName('');
+                      setVehiclePlate('');
+                      setVehicleImage('');
+                    }
+                  }}
                   trackColor={{ false: '#475569', true: accentBlue }}
                   thumbColor={drivesVehicle ? '#ffffff' : '#94a3b8'}
                 />
               </View>
 
               <Text style={[styles.sectionDesc, { color: textSecondary, fontFamily: F.medium }]}>
-                Habilita si este operador conduce una camioneta de asistencia técnica de Hermanos Lynch. Activará la Guantera Digital (Wallet).
+                Habilita si este operador conduce una unidad oficial de asistencia técnica. Los vehículos provienen del catálogo subido por el Super Administrador.
               </Text>
 
               {drivesVehicle && (
-                <View style={styles.vehicleInputsGrid}>
-                  <View style={{ flex: 1.4 }}>
-                    <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
-                      Modelo del Móvil de Flota
-                    </Text>
-                    <TextInput
-                      value={vehicleName}
-                      onChangeText={setVehicleName}
-                      placeholder="Ej. Toyota Hilux 4x4 • Soporte Técnico"
-                      placeholderTextColor={textSecondary}
-                      style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff' }]}
-                    />
-                  </View>
+                <View style={{ marginTop: 10, gap: 12 }}>
+                  {/* LISTADO DE VEHÍCULOS REALES EN CATÁLOGO */}
+                  {loadingFleet ? (
+                    <View style={{ padding: 16, alignItems: 'center' }}>
+                      <ActivityIndicator color={accentCyan} size="small" />
+                    </View>
+                  ) : fleetVehicles.length > 0 ? (
+                    <View style={{ gap: 8 }}>
+                      <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                        Selecciona la unidad asignada del catálogo oficial ({fleetVehicles.length} disponibles):
+                      </Text>
+                      {fleetVehicles.map((v) => {
+                        const isSelected = selectedFleetId === v.id || vehiclePlate === v.plate;
+                        return (
+                          <TouchableOpacity
+                            key={v.id}
+                            onPress={() => {
+                              setSelectedFleetId(v.id);
+                              setVehicleName(`${v.brand} ${v.model}`);
+                              setVehiclePlate(v.plate);
+                              setVehicleImage(v.image_url || '');
+                            }}
+                            style={{
+                              flexDirection: 'row',
+                              justifyContent: 'space-between',
+                              alignItems: 'center',
+                              padding: 12,
+                              borderRadius: 12,
+                              borderWidth: 1.5,
+                              borderColor: isSelected ? accentBlue : borderModal,
+                              backgroundColor: isSelected ? (isDark ? 'rgba(26, 92, 255, 0.15)' : '#e0f2fe') : (isDark ? '#141721' : '#ffffff'),
+                            }}
+                            activeOpacity={0.8}
+                          >
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                              {v.image_url ? (
+                                <Image
+                                  source={{ uri: v.image_url }}
+                                  style={{ width: 44, height: 44, borderRadius: 8 }}
+                                  resizeMode="cover"
+                                />
+                              ) : (
+                                <View style={{ width: 44, height: 44, borderRadius: 8, backgroundColor: cardSubBg, justifyContent: 'center', alignItems: 'center' }}>
+                                  <MaterialIcons name="directions-car" size={22} color={accentBlue} />
+                                </View>
+                              )}
+                              <View>
+                                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 13 }}>
+                                  {v.brand} {v.model}
+                                </Text>
+                                <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                                  Placa: <Text style={{ fontFamily: F.bold, color: textPrimary }}>{v.plate}</Text> • {Number(v.current_odometer || 0).toLocaleString()} km
+                                </Text>
+                              </View>
+                            </View>
 
-                  <View style={{ flex: 0.9 }}>
-                    <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
-                      Placa / Identificador
-                    </Text>
-                    <TextInput
-                      value={vehiclePlate}
-                      onChangeText={setVehiclePlate}
-                      placeholder="Ej. A12B34C"
-                      placeholderTextColor={textSecondary}
-                      autoCapitalize="characters"
-                      style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff' }]}
-                    />
-                  </View>
+                            <MaterialIcons
+                              name={isSelected ? 'check-circle' : 'radio-button-unchecked'}
+                              size={20}
+                              color={isSelected ? accentBlue : textSecondary}
+                            />
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  ) : (
+                    <View style={{
+                      padding: 14,
+                      borderRadius: 12,
+                      backgroundColor: isDark ? '#141721' : '#ffffff',
+                      borderWidth: 1,
+                      borderColor: borderModal,
+                      gap: 6,
+                    }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <MaterialIcons name="info-outline" size={16} color="#f59e0b" />
+                        <Text style={{ fontFamily: F.bold, color: '#f59e0b', fontSize: 12 }}>
+                          No hay vehículos creados en el catálogo de flota
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11.5 }}>
+                        Registra una unidad oficial a continuación con foto y placa para asignarla a este operador.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* BOTÓN O FORMULARIO PARA REGISTRAR VEHÍCULO EN CATÁLOGO */}
+                  {!showAddFleetForm ? (
+                    <TouchableOpacity
+                      onPress={() => setShowAddFleetForm(true)}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: 6,
+                        paddingVertical: 10,
+                        borderRadius: 10,
+                        borderWidth: 1,
+                        borderColor: accentBlue,
+                        backgroundColor: 'rgba(26, 92, 255, 0.08)',
+                      }}
+                      activeOpacity={0.8}
+                    >
+                      <MaterialIcons name="add" size={16} color={accentBlue} />
+                      <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 12 }}>
+                        + Registrar Nueva Unidad en el Catálogo de Flota
+                      </Text>
+                    </TouchableOpacity>
+                  ) : (
+                    <View style={{
+                      padding: 14,
+                      borderRadius: 14,
+                      backgroundColor: isDark ? '#141721' : '#ffffff',
+                      borderWidth: 1,
+                      borderColor: accentBlue,
+                      gap: 10,
+                    }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12.5 }}>
+                          Registrar Vehículo en Catálogo de Flota
+                        </Text>
+                        <TouchableOpacity onPress={() => setShowAddFleetForm(false)}>
+                          <MaterialIcons name="close" size={16} color={textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          value={newBrand}
+                          onChangeText={setNewBrand}
+                          placeholder="Marca (ej. Toyota)"
+                          placeholderTextColor={textSecondary}
+                          style={[styles.textInput, { flex: 1, color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#1c202d' : '#f8fafc' }]}
+                        />
+                        <TextInput
+                          value={newModel}
+                          onChangeText={setNewModel}
+                          placeholder="Modelo (ej. Hilux 4x4)"
+                          placeholderTextColor={textSecondary}
+                          style={[styles.textInput, { flex: 1, color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#1c202d' : '#f8fafc' }]}
+                        />
+                      </View>
+
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <TextInput
+                          value={newPlate}
+                          onChangeText={setNewPlate}
+                          placeholder="Placa Oficial"
+                          placeholderTextColor={textSecondary}
+                          autoCapitalize="characters"
+                          style={[styles.textInput, { flex: 1, color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#1c202d' : '#f8fafc' }]}
+                        />
+                        <TextInput
+                          value={newKm}
+                          onChangeText={setNewKm}
+                          placeholder="Km Odómetro"
+                          placeholderTextColor={textSecondary}
+                          keyboardType="numeric"
+                          style={[styles.textInput, { flex: 1, color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#1c202d' : '#f8fafc' }]}
+                        />
+                      </View>
+
+                      <TextInput
+                        value={newImageUrl}
+                        onChangeText={setNewImageUrl}
+                        placeholder="URL de la Foto Oficial del Vehículo"
+                        placeholderTextColor={textSecondary}
+                        style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#1c202d' : '#f8fafc' }]}
+                      />
+
+                      <TouchableOpacity
+                        onPress={handleCreateAndAssignFleetVehicle}
+                        disabled={savingNewFleet}
+                        style={{
+                          backgroundColor: accentBlue,
+                          paddingVertical: 10,
+                          borderRadius: 10,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          flexDirection: 'row',
+                          gap: 6,
+                        }}
+                        activeOpacity={0.8}
+                      >
+                        {savingNewFleet ? (
+                          <ActivityIndicator size="small" color="#ffffff" />
+                        ) : (
+                          <>
+                            <MaterialIcons name="check" size={16} color="#ffffff" />
+                            <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                              Guardar y Asignar a este Operador
+                            </Text>
+                          </>
+                        )}
+                      </TouchableOpacity>
+                    </View>
+                  )}
                 </View>
               )}
             </View>
