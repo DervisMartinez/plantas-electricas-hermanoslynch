@@ -13,6 +13,7 @@ import { TechnicalSheetModal } from '../../components/TechnicalSheetModal';
 import { VehicleStatsAndCalendarModal } from '../../components/VehicleStatsAndCalendarModal';
 import { AssignedOperatorModal } from '../../components/AssignedOperatorModal';
 import { VehicleReportModal } from '../../components/VehicleReportModal';
+import { ClientMobileDashboard } from '../../components/mobile/ClientMobileDashboard';
 import { useCrashDetection } from '../../hooks/useCrashDetection';
 import { LinearGradient } from 'expo-linear-gradient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -20,7 +21,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 let hasPromptedOdoThisSession = false;
 
 export const DashboardTab = () => {
-  const { myMoto, motos, selectMoto, records, addRecord, updateMoto, setIsAddingMoto } = useMyMoto();
+  const { myMoto, motos, selectMoto, records, addRecord, updateMoto, setIsAddingMoto, isAdmin } = useMyMoto();
   const { 
     isEnabled: isCrashEnabled, 
     toggleCrashDetection, 
@@ -216,6 +217,9 @@ export const DashboardTab = () => {
   };
 
   if (!myMoto) return null;
+  if (isCurrentPlanta || !isAdmin) {
+    return <ClientMobileDashboard />;
+  }
   const specs = getMotoSpecs(myMoto.brand, myMoto.model);
 
   // Check for components requiring attention and vehicle overall status

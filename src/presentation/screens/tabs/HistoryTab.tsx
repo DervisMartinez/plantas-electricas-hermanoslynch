@@ -5,6 +5,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useMyMoto } from '../../context/MotoContext';
 import { useTheme } from '../../context/ThemeContext';
 import { COMPONENT_NAMES } from '../../../constants/telemetry';
+import { isPlanta } from '../../../domain/entities/Moto';
 
 const MONTHS = [
   'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
@@ -25,7 +26,7 @@ const parseSafeDate = (d: string) => {
 };
 
 export const HistoryTab = () => {
-  const { records, deleteRecord } = useMyMoto();
+  const { records, deleteRecord, myMoto } = useMyMoto();
   const { colors } = useTheme();
 
   const F = {
@@ -179,7 +180,7 @@ export const HistoryTab = () => {
                         <View style={{ flex: 1 }}>
                           <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>{(COMPONENT_NAMES as any)[record.type] || record.type}</Text>
                           <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                            {record.odometer} km
+                            {record.odometer} {isPlanta(myMoto) ? 'hrs' : 'km'}
                           </Text>
                           {record.notes && <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>{record.notes}</Text>}
                         </View>

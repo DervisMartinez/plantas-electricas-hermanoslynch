@@ -6,7 +6,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMyMoto } from '../../context/MotoContext';
 import { getMotoSpecs, MotoSpecs } from '../../../data/specs';
 import { MOTO_CATALOG, VEHICLE_CATALOG } from '../../../data/catalog';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 
 interface SpecsTabProps {
   onNavigateToServices?: () => void;
@@ -155,23 +155,23 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ onNavigateToServices }) => {
               paddingHorizontal: windowWidth < 480 ? 12 : 24,
             }]}>
               <View style={styles.statMiniBox}>
-                <Text style={styles.statMiniLabel}>CILINDRADA</Text>
+                <Text style={styles.statMiniLabel}>{isPlanta(myMoto) ? 'STANDBY' : 'CILINDRADA'}</Text>
                 <Text style={[styles.statMiniVal, { color: '#00e3fd' }]}>
-                  {specs?.displacement || '150 cc'}
+                  {isPlanta(myMoto) ? `${myMoto.powerKva || 35} kVA` : (specs?.displacement || '150 cc')}
                 </Text>
               </View>
               <View style={styles.statMiniDivider} />
               <View style={styles.statMiniBox}>
-                <Text style={styles.statMiniLabel}>POTENCIA</Text>
+                <Text style={styles.statMiniLabel}>{isPlanta(myMoto) ? 'POTENCIA' : 'POTENCIA'}</Text>
                 <Text style={[styles.statMiniVal, { color: '#4169E1' }]}>
-                  {specs?.hp ? specs.hp.split('@')[0].trim() : '11.5 HP'}
+                  {isPlanta(myMoto) ? `${myMoto.powerKw || 28} kW` : (specs?.hp ? specs.hp.split('@')[0].trim() : '11.5 HP')}
                 </Text>
               </View>
               <View style={styles.statMiniDivider} />
               <View style={styles.statMiniBox}>
-                <Text style={styles.statMiniLabel}>PESO EN SECO</Text>
+                <Text style={styles.statMiniLabel}>{isPlanta(myMoto) ? 'SISTEMA' : 'PESO EN SECO'}</Text>
                 <Text style={[styles.statMiniVal, { color: colors.onSurface }]}>
-                  {specs?.weight || '120 kg'}
+                  {isPlanta(myMoto) ? (myMoto.systemVoltage || '24V DC') : (specs?.weight || '120 kg')}
                 </Text>
               </View>
             </View>
