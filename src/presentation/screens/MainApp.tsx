@@ -39,6 +39,8 @@ import { TechnicalSheetModal } from '../components/TechnicalSheetModal';
 import { VehicleStatsAndCalendarModal } from '../components/VehicleStatsAndCalendarModal';
 import { AssignedOperatorModal } from '../components/AssignedOperatorModal';
 import { VehicleReportModal } from '../components/VehicleReportModal';
+import { ClientInquiryModal } from '../components/ClientInquiryModal';
+import { ClientMobileDashboard } from '../components/mobile/ClientMobileDashboard';
 import { getMotoSpecs } from '../../data/specs';
 import { isWebPlatform } from '../utils/platformMode';
 import { ComponentType } from '../../constants/telemetry';
@@ -87,6 +89,7 @@ export const MainApp = () => {
   const [statsModalVisible, setStatsModalVisible] = useState(false);
   const [operatorModalVisible, setOperatorModalVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
+  const [inquiryModalVisible, setInquiryModalVisible] = useState(false);
 
   const desktopScrollRef = useRef<ScrollView>(null);
 
@@ -103,42 +106,47 @@ export const MainApp = () => {
     extrabold: 'Montserrat_800ExtraBold',
   };
 
-  // 5 Main Tabs flanking the Central [+] Quick Add Button
-  const tabs = [
-    { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: isPlanta(myMoto) ? 'Planta' : 'Vehículo' },
-    { id: 'services' as const, icon: 'build', iconFamily: 'material' as const, label: 'Servicios' },
-    { id: 'history' as const, icon: 'receipt-long', iconFamily: 'material' as const, label: 'Historial' },
-    ...(drivesCompanyVehicle ? [{ id: 'wallet' as const, icon: 'account-balance-wallet', iconFamily: 'material' as const, label: 'Wallet' }] : []),
-    { id: 'profile' as const, icon: 'person', iconFamily: 'material' as const, label: 'Perfil' },
-  ];
+  // Main Tabs flanking the Central [+] Quick Add Button
+  const tabs = useMemo(() => {
+    if (!isAdmin) {
+      return [
+        { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: isPlanta(myMoto) ? 'Mi Planta' : 'Vehículo' },
+        { id: 'specs' as const, icon: 'assignment', iconFamily: 'material' as const, label: 'Ficha' },
+        { id: 'history' as const, icon: 'receipt-long', iconFamily: 'material' as const, label: 'Historial' },
+        { id: 'profile' as const, icon: 'person', iconFamily: 'material' as const, label: 'Perfil' },
+      ];
+    }
+    return [
+      { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: isPlanta(myMoto) ? 'Planta' : 'Vehículo' },
+      { id: 'services' as const, icon: 'build', iconFamily: 'material' as const, label: 'Servicios' },
+      { id: 'history' as const, icon: 'receipt-long', iconFamily: 'material' as const, label: 'Historial' },
+      ...(drivesCompanyVehicle ? [{ id: 'wallet' as const, icon: 'account-balance-wallet', iconFamily: 'material' as const, label: 'Wallet' }] : []),
+      { id: 'profile' as const, icon: 'person', iconFamily: 'material' as const, label: 'Perfil' },
+    ];
+  }, [isAdmin, myMoto, drivesCompanyVehicle]);
 
   // Animated values for raised bubble effect (mobile)
-  const tabAnims = useRef(
-    [0, 1, 2, 3, 4].map(i => ({
-      scale: new Animated.Value(i === 0 ? 1.15 : 1),
-      translateY: new Animated.Value(i === 0 ? -8 : 0),
-    }))
-  );
+  const tabAnims = useRef<Record<string, { scale: Animated.Value; translateY: Animated.Value }>>({});
 
-  const getTabAnim = (index: number) => {
-    if (!tabAnims.current[index]) {
-      tabAnims.current[index] = {
-        scale: new Animated.Value(index === 0 ? 1.15 : 1),
-        translateY: new Animated.Value(index === 0 ? -8 : 0),
+  const getTabAnim = (id: string) => {
+    if (!tabAnims.current[id]) {
+      tabAnims.current[id] = {
+        scale: new Animated.Value(activeTab === id ? 1.18 : 1),
+        translateY: new Animated.Value(activeTab === id ? -6 : 0),
       };
     }
-    return tabAnims.current[index];
+    return tabAnims.current[id];
   };
 
   const plusScale = useRef(new Animated.Value(1)).current;
 
-  const handleTabPress = (id: 'moto' | 'services' | 'wallet' | 'history' | 'profile', index: number) => {
+  const handleTabPress = (id: 'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile') => {
     handleSelectTab(id);
 
     // Spring elevate the active tab and lower inactive tabs (mobile)
-    tabs.forEach((_, i) => {
-      const isTarget = i === index;
-      const anim = getTabAnim(i);
+    tabs.forEach((tab) => {
+      const isTarget = tab.id === id;
+      const anim = getTabAnim(tab.id);
       Animated.parallel([
         Animated.spring(anim.scale, {
           toValue: isTarget ? 1.18 : 1,
@@ -147,7 +155,7 @@ export const MainApp = () => {
           useNativeDriver: true,
         }),
         Animated.spring(anim.translateY, {
-          toValue: isTarget ? -8 : 0,
+          toValue: isTarget ? -6 : 0,
           friction: 5,
           tension: 90,
           useNativeDriver: true,
@@ -422,16 +430,30 @@ export const MainApp = () => {
   // ==========================================
   // MOBILE LAYOUT (Current Touch Phone View)
   // ==========================================
+  const midPoint = Math.ceil(tabs.length / 2);
+  const leftTabs = tabs.slice(0, midPoint);
+  const rightTabs = tabs.slice(midPoint);
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={{ flex: 1, paddingBottom: 68 + insets.bottom }}>
           <View style={{ flex: 1, display: activeTab === 'moto' ? 'flex' : 'none' }}>
-            <DashboardTab />
+            {(!isAdmin || isPlanta(myMoto)) ? (
+              <ClientMobileDashboard
+                onNavigateToSpecs={() => handleSelectTab('specs')}
+                onNavigateToHistory={() => handleSelectTab('history')}
+                onNavigateToProfile={() => handleSelectTab('profile')}
+                onOpenQuickHours={() => setQuickOdoVisible(true)}
+                onOpenQuickFuel={() => setQuickFuelVisible(true)}
+              />
+            ) : (
+              <DashboardTab />
+            )}
           </View>
           {visitedTabs.has('specs') && (
             <View style={{ flex: 1, display: activeTab === 'specs' ? 'flex' : 'none' }}>
-              <SpecsTab onNavigateToServices={() => handleSelectTab('services')} />
+              <SpecsTab onNavigateToServices={() => handleSelectTab(isAdmin ? 'services' : 'history')} />
             </View>
           )}
           {visitedTabs.has('services') && (
@@ -464,66 +486,51 @@ export const MainApp = () => {
         paddingBottom: Math.max(insets.bottom, 10),
         height: 64 + Math.max(insets.bottom, 10),
       }]}>
-
-        {/* TAB 1: VEHÍCULO */}
-        {(() => {
-          const item = tabs[0];
+        {leftTabs.map((item) => {
           const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(0);
+          const { scale, translateY } = getTabAnim(item.id);
           return (
             <TouchableOpacity 
               key={item.id} 
-              onPress={() => handleTabPress(item.id, 0)} 
+              onPress={() => handleTabPress(item.id)} 
               style={styles.navItem} 
               activeOpacity={0.8}
             >
               <Animated.View style={[
                 styles.iconBubble,
-                isActive && { backgroundColor: isDark ? 'rgba(10,132,255,0.18)' : 'rgba(0,122,255,0.14)', borderColor: colors.primary, borderWidth: 1 },
+                isActive && { 
+                  backgroundColor: isDark ? 'rgba(0, 227, 253, 0.15)' : 'rgba(39, 95, 227, 0.12)', 
+                  borderColor: isDark ? '#00e3fd' : colors.primary, 
+                  borderWidth: 1 
+                },
                 { transform: [{ scale }, { translateY }] }
               ]}>
-                <MaterialCommunityIcons 
-                  name={item.icon as any} 
-                  size={22} 
-                  color={isActive ? colors.primary : colors.onSurfaceVariant} 
-                />
+                {item.iconFamily === 'community' ? (
+                  <MaterialCommunityIcons 
+                    name={item.icon as any} 
+                    size={22} 
+                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                  />
+                ) : (
+                  <MaterialIcons 
+                    name={item.icon as any} 
+                    size={22} 
+                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                  />
+                )}
               </Animated.View>
-              <Text style={[styles.navLabel, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontFamily: isActive ? F.bold : F.medium }]}>
+              <Text style={[
+                styles.navLabel, 
+                { 
+                  color: isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant, 
+                  fontFamily: isActive ? F.bold : F.medium 
+                }
+              ]}>
                 {item.label}
               </Text>
             </TouchableOpacity>
           );
-        })()}
-
-        {/* TAB 2: SERVICIOS */}
-        {(() => {
-          const item = tabs[1];
-          const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(1);
-          return (
-            <TouchableOpacity 
-              key={item.id} 
-              onPress={() => handleTabPress(item.id, 1)} 
-              style={styles.navItem} 
-              activeOpacity={0.8}
-            >
-              <Animated.View style={[
-                styles.iconBubble,
-                isActive && { backgroundColor: isDark ? 'rgba(10,132,255,0.18)' : 'rgba(0,122,255,0.14)', borderColor: colors.primary, borderWidth: 1 },
-                { transform: [{ scale }, { translateY }] }
-              ]}>
-                <MaterialIcons 
-                  name={item.icon as any} 
-                  size={22} 
-                  color={isActive ? colors.primary : colors.onSurfaceVariant} 
-                />
-              </Animated.View>
-              <Text style={[styles.navLabel, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontFamily: isActive ? F.bold : F.medium }]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })()}
+        })}
 
         {/* BOTÓN CENTRAL [+] DE ACCIÓN RÁPIDA (ELEVADO / FLOTANTE) */}
         <TouchableOpacity 
@@ -533,7 +540,7 @@ export const MainApp = () => {
         >
           <Animated.View style={{ transform: [{ scale: plusScale }] }}>
             <LinearGradient
-              colors={['#0A84FF', '#0062D2']}
+              colors={isDark ? ['#00e3fd', '#1a5cff'] : ['#275FE3', '#1a5cff']}
               style={styles.centerPlusCircle}
             >
               <MaterialIcons name="add" size={28} color="#FFF" />
@@ -541,95 +548,51 @@ export const MainApp = () => {
           </Animated.View>
         </TouchableOpacity>
 
-        {/* TAB 3: HISTORIAL */}
-        {(() => {
-          const item = tabs[2];
+        {rightTabs.map((item) => {
           const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(2);
+          const { scale, translateY } = getTabAnim(item.id);
           return (
             <TouchableOpacity 
               key={item.id} 
-              onPress={() => handleTabPress(item.id, 2)} 
+              onPress={() => handleTabPress(item.id)} 
               style={styles.navItem} 
               activeOpacity={0.8}
             >
               <Animated.View style={[
                 styles.iconBubble,
-                isActive && { backgroundColor: isDark ? 'rgba(10,132,255,0.18)' : 'rgba(0,122,255,0.14)', borderColor: colors.primary, borderWidth: 1 },
+                isActive && { 
+                  backgroundColor: isDark ? 'rgba(0, 227, 253, 0.15)' : 'rgba(39, 95, 227, 0.12)', 
+                  borderColor: isDark ? '#00e3fd' : colors.primary, 
+                  borderWidth: 1 
+                },
                 { transform: [{ scale }, { translateY }] }
               ]}>
-                <MaterialIcons 
-                  name={item.icon as any} 
-                  size={22} 
-                  color={isActive ? colors.primary : colors.onSurfaceVariant} 
-                />
+                {item.iconFamily === 'community' ? (
+                  <MaterialCommunityIcons 
+                    name={item.icon as any} 
+                    size={22} 
+                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                  />
+                ) : (
+                  <MaterialIcons 
+                    name={item.icon as any} 
+                    size={22} 
+                    color={isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant} 
+                  />
+                )}
               </Animated.View>
-              <Text style={[styles.navLabel, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontFamily: isActive ? F.bold : F.medium }]}>
+              <Text style={[
+                styles.navLabel, 
+                { 
+                  color: isActive ? (isDark ? '#00e3fd' : colors.primary) : colors.onSurfaceVariant, 
+                  fontFamily: isActive ? F.bold : F.medium 
+                }
+              ]}>
                 {item.label}
               </Text>
             </TouchableOpacity>
           );
-        })()}
-
-        {/* TAB 4: WALLET */}
-        {(() => {
-          const item = tabs[3];
-          const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(3);
-          return (
-            <TouchableOpacity 
-              key={item.id} 
-              onPress={() => handleTabPress(item.id, 3)} 
-              style={styles.navItem} 
-              activeOpacity={0.8}
-            >
-              <Animated.View style={[
-                styles.iconBubble,
-                isActive && { backgroundColor: isDark ? 'rgba(10,132,255,0.18)' : 'rgba(0,122,255,0.14)', borderColor: colors.primary, borderWidth: 1 },
-                { transform: [{ scale }, { translateY }] }
-              ]}>
-                <MaterialIcons 
-                  name={item.icon as any} 
-                  size={22} 
-                  color={isActive ? colors.primary : colors.onSurfaceVariant} 
-                />
-              </Animated.View>
-              <Text style={[styles.navLabel, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontFamily: isActive ? F.bold : F.medium }]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })()}
-
-        {/* TAB 5: PERFIL */}
-        {(() => {
-          const item = tabs[4];
-          const isActive = activeTab === item.id;
-          const { scale, translateY } = getTabAnim(4);
-          return (
-            <TouchableOpacity 
-              key={item.id} 
-              onPress={() => handleTabPress(item.id, 4)} 
-              style={styles.navItem} 
-              activeOpacity={0.8}
-            >
-              <Animated.View style={[
-                styles.iconBubble,
-                isActive && { backgroundColor: isDark ? 'rgba(10,132,255,0.18)' : 'rgba(0,122,255,0.14)', borderColor: colors.primary, borderWidth: 1 },
-                { transform: [{ scale }, { translateY }] }
-              ]}>
-                <MaterialIcons 
-                  name={item.icon as any} 
-                  size={22} 
-                  color={isActive ? colors.primary : colors.onSurfaceVariant} 
-                />
-              </Animated.View>
-              <Text style={[styles.navLabel, { color: isActive ? colors.primary : colors.onSurfaceVariant, fontFamily: isActive ? F.bold : F.medium }]}>
-                {item.label}
-              </Text>
-            </TouchableOpacity>
-          );
-        })()}
+        })}
 
       </View>
 
@@ -651,87 +614,200 @@ export const MainApp = () => {
             </Text>
 
             <View style={{ gap: 12 }}>
-              <TouchableOpacity 
-                onPress={() => {
-                  setQuickActionVisible(false);
-                  setQuickOdoVisible(true);
-                }}
-                style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickIconBox, { backgroundColor: 'rgba(10,132,255,0.15)' }]}>
-                  <MaterialIcons name="speed" size={24} color="#0A84FF" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Actualizar Odómetro</Text>
-                  <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                    Actual: {myMoto?.currentOdometer || 0} km • Registra tu recorrido de hoy
-                  </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
+              {!isAdmin ? (
+                <>
+                  {/* CLIENT OPTION 1: ACTUALIZAR HORÓMETRO */}
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setQuickOdoVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(0, 227, 253, 0.15)' }]}>
+                      <MaterialIcons name="timer" size={24} color="#00e3fd" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Actualizar Horómetro</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Actual: {(myMoto?.currentHours || myMoto?.currentOdometer || 0).toLocaleString()} hrs • Sincroniza la lectura de planta
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
 
-              <TouchableOpacity 
-                onPress={() => {
-                  setQuickActionVisible(false);
-                  setQuickFuelVisible(true);
-                }}
-                style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickIconBox, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
-                  <MaterialIcons name="local-gas-station" size={24} color="#FF9500" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Cargar Combustible</Text>
-                  <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                    Registra litros, gasto en USD y tanqueo
-                  </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
+                  {/* CLIENT OPTION 2: CARGAR DIÉSEL */}
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setQuickFuelVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                      <MaterialIcons name="local-gas-station" size={24} color="#FF9500" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Cargar Diésel</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Registra litros de combustible y gasto en USD
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
 
-              <TouchableOpacity 
-                onPress={() => {
-                  setQuickActionVisible(false);
-                  setActiveTab('services');
-                }}
-                style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickIconBox, { backgroundColor: 'rgba(175,82,222,0.15)' }]}>
-                  <MaterialIcons name="build" size={24} color="#AF52DE" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Registrar Servicio</Text>
-                  <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                    Aceite, frenos, repuestos y costos
-                  </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
+                  {/* CLIENT OPTION 3: AGENDAR CITA O REPORTAR INQUIETUD */}
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setInquiryModalVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                      <MaterialCommunityIcons name="calendar-clock" size={24} color="#22c55e" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Agendar Cita o Reportar Alarma</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Solicita servicio preventivo o comunica una novedad
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
 
-              <TouchableOpacity 
-                onPress={() => {
-                  setQuickActionVisible(false);
-                  setActiveTab('wallet');
-                }}
-                style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
-                activeOpacity={0.8}
-              >
-                <View style={[styles.quickIconBox, { backgroundColor: 'rgba(48,209,88,0.15)' }]}>
-                  <MaterialIcons name={isDesktop ? "upload-file" : "qr-code-scanner"} size={24} color="#30D158" />
-                </View>
-                <View style={{ flex: 1, marginLeft: 14 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>
-                    {isDesktop ? 'Subir Documento o Carnet' : 'Escanear QR o Carnet'}
-                  </Text>
-                  <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                    {isDesktop ? 'Cargar archivo o foto de documento' : 'Adjuntar foto de documento o leer código QR'}
-                  </Text>
-                </View>
-                <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
-              </TouchableOpacity>
+                  {/* CLIENT OPTION 4: EXPEDIENTE PDF CON QR */}
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setReportModalVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                      <MaterialIcons name="qr-code" size={24} color="#ef4444" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Expediente PDF con QR</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Genera el informe técnico avalado por Hermanos Lynch
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+
+                  {/* CLIENT OPTION 5: CONTACTAR OPERADOR ASIGNADO */}
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setOperatorModalVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
+                      <MaterialIcons name="support-agent" size={24} color="#1a5cff" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Operador Técnico Asignado</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        {myMoto?.assignedOperatorName || 'Ing. Alejandro Rivas'} • WhatsApp directo
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setQuickOdoVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(10,132,255,0.15)' }]}>
+                      <MaterialIcons name="speed" size={24} color="#0A84FF" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>
+                        {isPlanta(myMoto) ? 'Actualizar Horómetro' : 'Actualizar Odómetro'}
+                      </Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Actual: {(myMoto?.currentHours || myMoto?.currentOdometer || 0).toLocaleString()} {isPlanta(myMoto) ? 'hrs' : 'km'}
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setQuickFuelVisible(true);
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(255,149,0,0.15)' }]}>
+                      <MaterialIcons name="local-gas-station" size={24} color="#FF9500" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Cargar Combustible</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Registra litros, gasto en USD y tanqueo
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setActiveTab('services');
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(175,82,222,0.15)' }]}>
+                      <MaterialIcons name="build" size={24} color="#AF52DE" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Registrar Servicio</Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        Aceite, frenos, repuestos y costos
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+
+                  <TouchableOpacity 
+                    onPress={() => {
+                      setQuickActionVisible(false);
+                      setActiveTab('wallet');
+                    }}
+                    style={[styles.quickOptionRow, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.quickIconBox, { backgroundColor: 'rgba(48,209,88,0.15)' }]}>
+                      <MaterialIcons name={isDesktop ? "upload-file" : "qr-code-scanner"} size={24} color="#30D158" />
+                    </View>
+                    <View style={{ flex: 1, marginLeft: 14 }}>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>
+                        {isDesktop ? 'Subir Documento o Carnet' : 'Escanear QR o Carnet'}
+                      </Text>
+                      <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                        {isDesktop ? 'Cargar archivo o foto de documento' : 'Adjuntar foto de documento o leer código QR'}
+                      </Text>
+                    </View>
+                    <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
+                  </TouchableOpacity>
+                </>
+              )}
             </View>
 
             <View style={{ height: 26 }} />
@@ -816,12 +892,39 @@ export const MainApp = () => {
         </View>
       </Modal>
 
+      {/* MODAL: FICHA TÉCNICA (MOBILE) */}
+      <TechnicalSheetModal
+        visible={specsModalVisible}
+        onClose={() => setSpecsModalVisible(false)}
+        myMoto={myMoto}
+        specs={specs}
+      />
+
+      {/* MODAL: ESTADÍSTICAS Y CALENDARIO (MOBILE) */}
+      <VehicleStatsAndCalendarModal
+        visible={statsModalVisible}
+        onClose={() => setStatsModalVisible(false)}
+      />
+
+      {/* MODAL: OPERADOR ASIGNADO (MOBILE) */}
+      <AssignedOperatorModal
+        visible={operatorModalVisible}
+        onClose={() => setOperatorModalVisible(false)}
+        myMoto={myMoto}
+      />
+
       {/* MODAL: REPORTE EJECUTIVO PDF (MOBILE) */}
       <VehicleReportModal
         visible={reportModalVisible}
         onClose={() => setReportModalVisible(false)}
         myMoto={myMoto}
         specs={specs}
+      />
+
+      {/* MODAL: AGENDAR CITA O REPORTAR INQUIETUD (MOBILE) */}
+      <ClientInquiryModal
+        visible={inquiryModalVisible}
+        onClose={() => setInquiryModalVisible(false)}
       />
 
     </View>
