@@ -97,10 +97,14 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
     () => fuelRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0),
     [fuelRecords]
   );
-  const totalFuelLiters = useMemo(
-    () => fuelRecords.length * 85 + (myMoto?.fuelTankCapacity ? myMoto.fuelTankCapacity * 2 : 240),
-    [fuelRecords, myMoto]
-  );
+  // Real fuel liters computed strictly from actual diesel records
+  const totalFuelLiters = useMemo(() => {
+    return fuelRecords.reduce((sum, r) => {
+      const match = r.notes?.match(/(\d+(\.\d+)?)/);
+      const liters = match ? parseFloat(match[1]) : 0;
+      return sum + (isNaN(liters) ? 0 : liters);
+    }, 0);
+  }, [fuelRecords]);
 
   // 10 Industrial Subsystems (Read-Only Telemetry for Client)
   const plantSubsystems = useMemo(() => {
@@ -136,7 +140,10 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
         wear = Math.min(100, Math.round(ratio * 100));
         hoursRemaining = Math.max(0, item.interval - usedInCycle);
       } else {
-        wear = myMoto?.isFromAgency ? 100 : 95;
+        // Horómetro inicial en 0 hrs: 100% de vida útil disponible
+        wear = 100;
+        hoursSince = 0;
+        hoursRemaining = item.interval;
       }
 
       return {
@@ -147,7 +154,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
         status: wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'REQUIERE REVISIÓN',
       };
     });
-  }, [records, currentHours, myMoto]);
+  }, [records, currentHours]);
 
   const filteredSubsystems = useMemo(() => {
     if (!searchQuery.trim()) return plantSubsystems;
@@ -158,7 +165,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
   }, [plantSubsystems, searchQuery]);
 
   const generalHealth = useMemo(() => {
-    if (plantSubsystems.length === 0) return 94;
+    if (plantSubsystems.length === 0) return 100;
     const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
     return Math.round(sum / plantSubsystems.length);
   }, [plantSubsystems]);
@@ -182,7 +189,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
   const accentCyan = '#00b4d8';
   const pillDarkBg = isDark ? '#1c202d' : '#e2e8f0';
 
-  const plantLocation = myMoto?.location || 'Sede Principal / Respaldo Crítico';
+  const plantLocation = myMoto?.location || 'Ubicación sin registrar';
 
   return (
     <View style={[styles.rootContainer, { backgroundColor: bgMain }]}>
@@ -497,7 +504,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
                 </Text>
 
                 <Text style={[styles.plantSerialLocation, { color: textSecondary, fontFamily: F.medium }]}>
-                  Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.plate || myMoto?.serialNumber || 'BPG-C35-001'}</Text> • Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{plantLocation}</Text>
+                  Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'Sin serial asignado'}</Text> • Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{plantLocation}</Text>
                 </Text>
 
                 {/* SPEC CHIPS */}
@@ -593,17 +600,19 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             <View style={styles.assignedOperatorHeader}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <View style={[styles.operatorAvatarBadge, { backgroundColor: accentBlue }]}>
-                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 18 }}>AR</Text>
+                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 16 }}>
+                    {myMoto?.assignedOperatorName ? myMoto.assignedOperatorName.split(' ').map((n: string) => n[0]).slice(0, 2).join('').toUpperCase() : 'HL'}
+                  </Text>
                 </View>
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                     <Text style={[styles.operatorNameHeading, { color: textPrimary, fontFamily: F.extrabold }]}>
-                      Ing. Alejandro Rivas Silva
+                      {myMoto?.assignedOperatorName || 'Operador por Asignar'}
                     </Text>
-                    <MaterialIcons name="verified" size={16} color="#22c55e" />
+                    <MaterialIcons name={myMoto?.assignedOperatorName ? 'verified' : 'schedule'} size={16} color={myMoto?.assignedOperatorName ? '#22c55e' : '#f59e0b'} />
                   </View>
                   <Text style={[styles.operatorTitleSub, { color: textSecondary, fontFamily: F.medium }]}>
-                    Operador Técnico Asignado a tu Planta • Carnet: <Text style={{ fontFamily: F.bold, color: accentCyan }}>HL-TECH-4098</Text>
+                    Operador Técnico Responsable • Carnet: <Text style={{ fontFamily: F.bold, color: accentCyan }}>{myMoto?.assignedOperatorId ? `HL-TECH-${myMoto.assignedOperatorId.slice(0, 4).toUpperCase()}` : 'En Proceso'}</Text>
                   </Text>
                 </View>
               </View>

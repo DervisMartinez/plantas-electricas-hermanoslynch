@@ -117,10 +117,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     [serviceRecords]
   );
   const totalCostUSD = totalFuelUSD + totalServicesUSD;
-  const totalFuelLiters = useMemo(
-    () => fuelRecords.length * 85 + (myMoto?.fuelTankCapacity ? myMoto.fuelTankCapacity * 2 : 240),
-    [fuelRecords, myMoto]
-  );
+  // Real fuel liters computed strictly from actual diesel records
+  const totalFuelLiters = useMemo(() => {
+    return fuelRecords.reduce((sum, r) => {
+      const match = r.notes?.match(/(\d+(\.\d+)?)/);
+      const liters = match ? parseFloat(match[1]) : 0;
+      return sum + (isNaN(liters) ? 0 : liters);
+    }, 0);
+  }, [fuelRecords]);
 
   // Industrial Subsystems Wear Analysis
   const plantSubsystems = useMemo(() => {
@@ -156,7 +160,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         wear = Math.min(100, Math.round(ratio * 100));
         hoursRemaining = Math.max(0, item.interval - usedInCycle);
       } else {
-        wear = myMoto?.isFromAgency ? 100 : 0;
+        // Horómetro inicial en 0 hrs: 100% de vida útil disponible
+        wear = 100;
+        hoursSince = 0;
+        hoursRemaining = item.interval;
       }
 
       return {
@@ -167,7 +174,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         status: wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO',
       };
     });
-  }, [records, currentHours, myMoto]);
+  }, [records, currentHours]);
 
   // Filtered subsystems based on search query
   const filteredSubsystems = useMemo(() => {
@@ -180,24 +187,155 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
   // Overall General Health
   const generalHealth = useMemo(() => {
-    if (plantSubsystems.length === 0) return 92;
+    if (plantSubsystems.length === 0) return 100;
     const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
     return Math.round(sum / plantSubsystems.length);
   }, [plantSubsystems]);
 
-  // Bar Chart Data (8 periods matching reference)
-  const barChartPeriods = [
-    { label: '1 AGO', hours: 68, active: false },
-    { label: '2 AGO', hours: 44, active: false },
-    { label: '3 AGO', hours: 95, active: true }, // Highlighted with floating tooltip
-    { label: '4 AGO', hours: 72, active: false },
-    { label: '5 AGO', hours: 86, active: false },
-    { label: '6 AGO', hours: 110, active: false },
-    { label: '7 AGO', hours: 125, active: false },
-    { label: '8 AGO', hours: 98, active: false },
-  ];
+  // Dynamic Real Generation Bar Chart Data (last 8 days ending today)
+  const barChartPeriods = useMemo(() => {
+    const periods = [];
+    const today = new Date();
+    
+    // Group records by day
+    const recordsByDay = new Map<string, number>();
+    records.forEach((r) => {
+      if (r.date) {
+        const d = new Date(r.date);
+        const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+        const hours = r.odometer || 0;
+        const current = recordsByDay.get(key) || 0;
+        recordsByDay.set(key, Math.max(current, hours));
+      }
+    });
 
-  const maxPeriodHours = 140;
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(today);
+      d.setDate(today.getDate() - i);
+      const dayNum = d.getDate();
+      const monthStr = d.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase().replace('.', '');
+      const label = `${dayNum} ${monthStr}`;
+      
+      const key = `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+      let dayHours = recordsByDay.get(key) || 0;
+      if (i === 0 && dayHours === 0 && currentHours > 0 && records.length <= 1) {
+        dayHours = currentHours;
+      }
+
+      periods.push({
+        label,
+        hours: dayHours,
+        active: i === 0,
+      });
+    }
+
+    return periods;
+  }, [records, currentHours]);
+
+  const maxPeriodHours = useMemo(() => {
+    const maxRecorded = Math.max(...barChartPeriods.map((p) => p.hours), 0);
+    if (maxRecorded === 0) return 20;
+    return Math.ceil((maxRecorded * 1.25) / 10) * 10;
+  }, [barChartPeriods]);
+
+  // 1. Horas metrics (real delta or status)
+  const hoursMetrics = useMemo(() => {
+    if (currentHours === 0) {
+      return {
+        badgeText: '0 hrs',
+        badgeColor: '#00b4d8',
+        badgeBg: 'rgba(0, 180, 216, 0.15)',
+        icon: 'timer' as const,
+        subtext: 'Horómetro inicial',
+      };
+    }
+    const hourRecords = records
+      .filter((r) => (r.odometer || 0) > 0)
+      .sort((a, b) => (b.odometer || 0) - (a.odometer || 0));
+    
+    if (hourRecords.length >= 2) {
+      const delta = (hourRecords[0].odometer || 0) - (hourRecords[1].odometer || 0);
+      if (delta > 0) {
+        return {
+          badgeText: `+${delta} hrs`,
+          badgeColor: '#22c55e',
+          badgeBg: 'rgba(34, 197, 94, 0.15)',
+          icon: 'north-east' as const,
+          subtext: 'vs registro anterior',
+        };
+      }
+    }
+    return {
+      badgeText: `${currentHours.toLocaleString()} hrs`,
+      badgeColor: '#22c55e',
+      badgeBg: 'rgba(34, 197, 94, 0.15)',
+      icon: 'check-circle' as const,
+      subtext: 'Generación acumulada',
+    };
+  }, [currentHours, records]);
+
+  // 2. Pending services metric (real calculated pending/critical from 10 subsystems)
+  const pendingPreventives = useMemo(() => {
+    return plantSubsystems.filter((s) => s.status === 'PREVENTIVO' || s.status === 'CRÍTICO').length;
+  }, [plantSubsystems]);
+
+  const serviceMetrics = useMemo(() => {
+    if (pendingPreventives > 0) {
+      return {
+        badgeText: `${pendingPreventives} en espera`,
+        badgeColor: '#ef4444',
+        badgeBg: 'rgba(239, 68, 68, 0.15)',
+        subtext: 'Preventivos requeridos',
+      };
+    }
+    return {
+      badgeText: 'Al día',
+      badgeColor: '#22c55e',
+      badgeBg: 'rgba(34, 197, 94, 0.15)',
+      subtext: '0 en espera',
+    };
+  }, [pendingPreventives]);
+
+  // 3. Fuel Metrics (real parsed total liters and logs)
+  const fuelMetrics = useMemo(() => {
+    if (fuelRecords.length === 0 || totalFuelLiters === 0) {
+      return {
+        badgeText: 'Sin cargas',
+        badgeColor: '#8e96aa',
+        badgeBg: 'rgba(142, 150, 170, 0.12)',
+        icon: 'local-gas-station' as const,
+        subtext: '0 L despachados',
+      };
+    }
+    return {
+      badgeText: `${fuelRecords.length} carga${fuelRecords.length > 1 ? 's' : ''}`,
+      badgeColor: '#22c55e',
+      badgeBg: 'rgba(34, 197, 94, 0.15)',
+      icon: 'check' as const,
+      subtext: `$${totalFuelUSD.toFixed(0)} USD invertidos`,
+    };
+  }, [fuelRecords.length, totalFuelLiters, totalFuelUSD]);
+
+  // 4. Subsystem Health Metrics
+  const healthMetrics = useMemo(() => {
+    const optimalCount = plantSubsystems.filter((s) => s.wear >= 60).length;
+    if (optimalCount === 10) {
+      return {
+        badgeText: '10/10 Óptimos',
+        badgeColor: '#22c55e',
+        badgeBg: 'rgba(34, 197, 94, 0.15)',
+        icon: 'verified' as const,
+        subtext: '10 subsistemas al 100%',
+      };
+    }
+    return {
+      badgeText: `${10 - optimalCount} por revisar`,
+      badgeColor: '#f59e0b',
+      badgeBg: 'rgba(245, 158, 11, 0.15)',
+      icon: 'warning' as const,
+      subtext: `${optimalCount}/10 óptimos`,
+    };
+  }, [plantSubsystems]);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -646,12 +784,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
 
                 <View style={styles.kpiBottomRow}>
-                  <View style={[styles.trendBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                    <MaterialIcons name="north-east" size={12} color="#22c55e" />
-                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>+ 5.4%</Text>
+                  <View style={[styles.trendBadge, { backgroundColor: hoursMetrics.badgeBg }]}>
+                    <MaterialIcons name={hoursMetrics.icon} size={12} color={hoursMetrics.badgeColor} />
+                    <Text style={{ fontFamily: F.bold, color: hoursMetrics.badgeColor, fontSize: 10 }}>
+                      {hoursMetrics.badgeText}
+                    </Text>
                   </View>
                   <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
-                    vs ciclo anterior
+                    {hoursMetrics.subtext}
                   </Text>
                 </View>
               </View>
@@ -676,11 +816,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
 
                 <View style={styles.kpiBottomRow}>
-                  <View style={[styles.trendBadge, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                    <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 10 }}>2 en espera</Text>
+                  <View style={[styles.trendBadge, { backgroundColor: serviceMetrics.badgeBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: serviceMetrics.badgeColor, fontSize: 10 }}>
+                      {serviceMetrics.badgeText}
+                    </Text>
                   </View>
                   <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
-                    Preventivos
+                    {serviceMetrics.subtext}
                   </Text>
                 </View>
               </View>
@@ -705,12 +847,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
 
                 <View style={styles.kpiBottomRow}>
-                  <View style={[styles.trendBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                    <MaterialIcons name="south-east" size={12} color="#22c55e" />
-                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>Óptimo</Text>
+                  <View style={[styles.trendBadge, { backgroundColor: fuelMetrics.badgeBg }]}>
+                    <MaterialIcons name={fuelMetrics.icon} size={12} color={fuelMetrics.badgeColor} />
+                    <Text style={{ fontFamily: F.bold, color: fuelMetrics.badgeColor, fontSize: 10 }}>
+                      {fuelMetrics.badgeText}
+                    </Text>
                   </View>
                   <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
-                    Despachados
+                    {fuelMetrics.subtext}
                   </Text>
                 </View>
               </View>
@@ -735,12 +879,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
 
                 <View style={styles.kpiBottomRow}>
-                  <View style={[styles.trendBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                    <MaterialIcons name="north-east" size={12} color="#22c55e" />
-                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>+ 4.0%</Text>
+                  <View style={[styles.trendBadge, { backgroundColor: healthMetrics.badgeBg }]}>
+                    <MaterialIcons name={healthMetrics.icon} size={12} color={healthMetrics.badgeColor} />
+                    <Text style={{ fontFamily: F.bold, color: healthMetrics.badgeColor, fontSize: 10 }}>
+                      {healthMetrics.badgeText}
+                    </Text>
                   </View>
                   <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
-                    10 subsistemas
+                    {healthMetrics.subtext}
                   </Text>
                 </View>
               </View>
@@ -769,12 +915,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
               {/* VERTICAL BAR CHART WITH ACTIVE TOOLTIP LIKE REFERENCE */}
               <View style={styles.barChartContainer}>
-                {/* Y-AXIS LABELS */}
+                {/* Y-AXIS LABELS DINÁMICOS SEGÚN DATOS REALES */}
                 <View style={styles.yAxisLabels}>
-                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>120h</Text>
-                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>90h</Text>
-                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>60h</Text>
-                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>30h</Text>
+                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>{maxPeriodHours}h</Text>
+                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>{Math.round(maxPeriodHours * 0.75)}h</Text>
+                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>{Math.round(maxPeriodHours * 0.5)}h</Text>
+                  <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>{Math.round(maxPeriodHours * 0.25)}h</Text>
                   <Text style={[styles.yAxisText, { color: textSecondary, fontFamily: F.semibold }]}>0h</Text>
                 </View>
 
@@ -782,7 +928,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 <View style={styles.barsRow}>
                   {barChartPeriods.map((period, index) => {
                     const isSelected = index === selectedBarIndex;
-                    const barHeightPercent = Math.min(100, Math.round((period.hours / maxPeriodHours) * 100));
+                    const barHeightPercent = maxPeriodHours > 0 
+                      ? Math.min(100, Math.round((period.hours / maxPeriodHours) * 100))
+                      : 0;
 
                     return (
                       <TouchableOpacity
@@ -791,7 +939,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                         style={styles.barColumnWrapper}
                         activeOpacity={0.8}
                       >
-                        {/* FLOATING TOOLTIP ON SELECTED BAR (LIKE REFERENCE $14.587) */}
+                        {/* FLOATING TOOLTIP ON SELECTED BAR */}
                         {isSelected && (
                           <View style={styles.floatingTooltipPill}>
                             <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 10 }}>
@@ -805,8 +953,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                             style={[
                               styles.barFill,
                               {
-                                height: `${barHeightPercent}%`,
-                                backgroundColor: isSelected ? '#1a5cff' : (isDark ? '#2563eb' : '#3b82f6'),
+                                height: `${Math.max(barHeightPercent, period.hours > 0 ? 6 : 3)}%`,
+                                backgroundColor: period.hours > 0
+                                  ? (isSelected ? '#1a5cff' : (isDark ? '#2563eb' : '#3b82f6'))
+                                  : (isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.06)'),
                                 opacity: isSelected ? 1 : 0.85,
                               },
                             ]}
@@ -857,7 +1007,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
 
                 <Text style={[styles.plantSerialLocation, { color: textSecondary, fontFamily: F.medium }]}>
-                  Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.plate || myMoto?.serialNumber || 'BPG-C35-001'}</Text> • Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.location || 'Sede Principal / Respaldo Crítico'}</Text>
+                  Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'Sin serial asignado'}</Text> • Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.location || 'Ubicación sin registrar'}</Text>
                 </Text>
 
                 {/* SPEC CHIPS */}
