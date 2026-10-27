@@ -9,6 +9,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  Alert,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { useMyMoto } from '../context/MotoContext';
@@ -18,7 +19,16 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { PLANTAS_CATALOG, CatalogVehicle } from '../../data/catalog';
 
 export const SetupScreen = () => {
-  const { saveMoto, setIsAddingMoto, isAddingMoto } = useMyMoto();
+  const { 
+    saveMoto, 
+    setIsAddingMoto, 
+    isAddingMoto, 
+    myMoto, 
+    motos, 
+    selectMoto, 
+    logout, 
+    isAdmin 
+  } = useMyMoto();
   const { colors, mode, toggleTheme } = useTheme();
 
   // Todos los campos inician vacíos para ser rellenados por el usuario u operador
@@ -74,6 +84,48 @@ export const SetupScreen = () => {
 
 
 
+  const handleCancelOrBack = () => {
+    // 1. Si estaba anexando una unidad desde el panel principal:
+    if (isAddingMoto) {
+      setIsAddingMoto(false);
+      return;
+    }
+
+    // 2. Si ya existen plantas en el sistema o bajo su perfil:
+    if (motos && motos.length > 0) {
+      if (!myMoto) {
+        selectMoto(motos[0].id);
+      }
+      setIsAddingMoto(false);
+      return;
+    }
+
+    // 3. Si es Administrador / Operador y quiere volver a la consola de control:
+    if (isAdmin) {
+      setIsAddingMoto(false);
+      return;
+    }
+
+    // 4. Si es un nuevo cliente sin plantas vinculadas que desea cancelar la operación:
+    if (Platform.OS === 'web') {
+      const confirmExit = window.confirm(
+        '¿Deseas cancelar la operación y volver a la pantalla de inicio de sesión?'
+      );
+      if (confirmExit) {
+        logout();
+      }
+    } else {
+      Alert.alert(
+        'Cancelar Operación',
+        '¿Deseas cancelar el registro de la planta y regresar?',
+        [
+          { text: 'Continuar Registrando', style: 'cancel' },
+          { text: 'Cancelar y Salir', style: 'destructive', onPress: logout },
+        ]
+      );
+    }
+  };
+
   const handleSave = () => {
     if (!brand || !model) {
       alert('Por favor completa la marca y modelo de la unidad.');
@@ -114,32 +166,33 @@ export const SetupScreen = () => {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
     >
       <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
-        {/* Barra superior con selector de tema */}
-        <TouchableOpacity
-          style={[styles.themeToggle, { backgroundColor: colors.surfaceContainerHigh }]}
-          onPress={toggleTheme}
-        >
-          <MaterialIcons name={mode === 'dark' ? 'light-mode' : 'dark-mode'} size={20} color={colors.primary} />
-        </TouchableOpacity>
-
-        {isAddingMoto && (
+        {/* Barra superior con botón de Regresar / Cancelar y selector de tema */}
+        <View style={styles.topToolbar}>
           <TouchableOpacity
-            onPress={() => setIsAddingMoto(false)}
+            onPress={handleCancelOrBack}
             style={[
-              styles.returnPillBtn,
+              styles.topReturnBtn,
               {
-                backgroundColor: mode === 'dark' ? 'rgba(65, 105, 225, 0.15)' : 'rgba(39, 95, 227, 0.1)',
-                borderColor: mode === 'dark' ? 'rgba(0, 227, 253, 0.4)' : '#275FE3',
+                backgroundColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.08)' : 'rgba(0, 0, 0, 0.05)',
+                borderColor: mode === 'dark' ? 'rgba(255, 255, 255, 0.16)' : 'rgba(0, 0, 0, 0.12)',
               },
             ]}
             activeOpacity={0.8}
           >
-            <MaterialIcons name="arrow-back" size={18} color={mode === 'dark' ? '#00e3fd' : '#275FE3'} />
-            <Text style={[styles.returnPillText, { color: colors.onSurface }]}>
-              Volver al Panel Principal
+            <MaterialIcons name="arrow-back" size={18} color={mode === 'dark' ? '#00e3fd' : colors.primary} />
+            <Text style={[styles.topReturnText, { color: colors.onSurface }]}>
+              Regresar / Cancelar Operación
             </Text>
           </TouchableOpacity>
-        )}
+
+          <TouchableOpacity
+            style={[styles.themeToggle, { backgroundColor: colors.surfaceContainerHigh }]}
+            onPress={toggleTheme}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name={mode === 'dark' ? 'light-mode' : 'dark-mode'} size={20} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
 
         {/* Header Institucional Hermanos Lynch */}
         <View style={styles.header}>
@@ -457,17 +510,36 @@ export const SetupScreen = () => {
             </View>
           )}
 
-          {/* Botón de Guardado */}
-          <TouchableOpacity
-            style={[styles.saveButton, { backgroundColor: colors.primary }]}
-            onPress={handleSave}
-            activeOpacity={0.85}
-          >
-            <MaterialIcons name="check" size={22} color="#fff" />
-            <Text style={styles.saveButtonText}>
-              {isPlantaSelected ? 'REGISTRAR PLANTA ELÉCTRICA' : 'REGISTRAR VEHÍCULO'}
-            </Text>
-          </TouchableOpacity>
+          {/* Barra de Acciones: Aprovechar el espacio con botón de Cancelar/Regresar y Registrar */}
+          <View style={styles.actionButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.cancelButton,
+                {
+                  backgroundColor: mode === 'dark' ? 'rgba(255, 69, 58, 0.12)' : 'rgba(255, 69, 58, 0.08)',
+                  borderColor: mode === 'dark' ? 'rgba(255, 69, 58, 0.4)' : 'rgba(255, 69, 58, 0.3)',
+                },
+              ]}
+              onPress={handleCancelOrBack}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="close" size={20} color="#ff453a" />
+              <Text style={styles.cancelButtonText}>
+                CANCELAR / REGRESAR
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.saveButton, { backgroundColor: colors.primary }]}
+              onPress={handleSave}
+              activeOpacity={0.85}
+            >
+              <MaterialIcons name="check" size={22} color="#fff" />
+              <Text style={styles.saveButtonText}>
+                {isPlantaSelected ? 'REGISTRAR PLANTA ELÉCTRICA' : 'REGISTRAR VEHÍCULO'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -486,15 +558,32 @@ const styles = StyleSheet.create({
     paddingBottom: 60,
   },
   themeToggle: {
-    position: 'absolute',
-    top: 10,
-    right: 16,
-    zIndex: 10,
     width: 40,
     height: 40,
     borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  topToolbar: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+    width: '100%',
+  },
+  topReturnBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 20,
+    borderWidth: 1,
+  },
+  topReturnText: {
+    fontSize: 12.5,
+    fontFamily: 'Montserrat_700Bold',
+    letterSpacing: 0.3,
   },
   returnPillBtn: {
     flexDirection: 'row',
@@ -686,14 +775,46 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     borderWidth: 1,
   },
-  saveButton: {
+  actionButtonsRow: {
     flexDirection: 'row',
-    height: 50,
+    alignItems: 'center',
+    gap: 14,
+    marginTop: 20,
+    width: '100%',
+    flexWrap: 'wrap',
+  },
+  cancelButton: {
+    flex: 1,
+    minWidth: 180,
+    height: 52,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+  },
+  cancelButtonText: {
+    color: '#ff453a',
+    fontSize: 13,
+    fontFamily: 'Montserrat_700Bold',
+    letterSpacing: 0.5,
+  },
+  saveButton: {
+    flex: 1.6,
+    minWidth: 220,
+    flexDirection: 'row',
+    height: 52,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    marginTop: 12,
+    paddingHorizontal: 16,
+    shadowColor: '#275FE3',
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 4,
   },
   saveButtonText: {
     color: '#fff',

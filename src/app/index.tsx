@@ -137,7 +137,7 @@ export default function HomeScreen() {
   }
 
   // 4. USUARIO SIN PLANTA REGISTRADA (O REGISTRANDO NUEVA UNIDAD): ONBOARDING DE PLANTA
-  if (!myMoto || isAddingMoto) {
+  if ((!myMoto && !isAdmin) || isAddingMoto) {
     return <SetupScreen />;
   }
 
