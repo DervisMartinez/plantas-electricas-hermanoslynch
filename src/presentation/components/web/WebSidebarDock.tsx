@@ -1,102 +1,11 @@
 import React from 'react';
-import { View, TouchableOpacity, StyleSheet, Platform, useWindowDimensions } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useTheme } from '../../context/ThemeContext';
 
-interface WebSidebarDockProps {
-  onOpenQuickOdo: () => void;
-  onOpenQuickFuel: () => void;
-  onOpenSpecs: () => void;
-  onOpenStats: () => void;
-}
-
-export const WebSidebarDock: React.FC<WebSidebarDockProps> = ({
-  onOpenQuickOdo,
-  onOpenQuickFuel,
-  onOpenSpecs,
-  onOpenStats,
-}) => {
-  const { colors, mode } = useTheme();
-  const { width } = useWindowDimensions();
-  const isDark = mode === 'dark';
-
-  // Only show the floating dock on wide displays (>= 1440px) to prevent overlapping content
-  if (width < 1440) {
-    return null;
-  }
-
-  return (
-    <View style={{ position: Platform.OS === 'web' ? ('fixed' as any) : 'absolute', left: 24, top: '50%', transform: [{ translateY: -100 }], zIndex: 90 }}>
-      <View style={[styles.dockContainer, { 
-        backgroundColor: isDark ? 'rgba(25, 28, 33, 0.75)' : 'rgba(255, 255, 255, 0.85)',
-        borderColor: isDark ? 'rgba(64, 72, 92, 0.4)' : 'rgba(0, 0, 0, 0.1)',
-        backdropFilter: 'blur(12px)',
-      } as any]}>
-
-        {/* ODOMETER */}
-        <TouchableOpacity 
-          style={styles.dockIcon} 
-          onPress={onOpenQuickOdo}
-          accessibilityLabel="Actualizar Odómetro"
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="speed" size={19} color="#4169E1" />
-        </TouchableOpacity>
-
-        {/* FUEL */}
-        <TouchableOpacity 
-          style={styles.dockIcon} 
-          onPress={onOpenQuickFuel}
-          accessibilityLabel="Registrar Combustible"
-          activeOpacity={0.7}
-        >
-          <MaterialCommunityIcons name="gas-station" size={19} color="#00e3fd" />
-        </TouchableOpacity>
-
-        {/* SPECS */}
-        <TouchableOpacity 
-          style={styles.dockIcon} 
-          onPress={onOpenSpecs}
-          accessibilityLabel="Ficha Técnica"
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="description" size={19} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-
-        {/* STATS */}
-        <TouchableOpacity 
-          style={styles.dockIcon} 
-          onPress={onOpenStats}
-          accessibilityLabel="Estadísticas y Calendario"
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="calendar-today" size={18} color={colors.onSurfaceVariant} />
-        </TouchableOpacity>
-
-      </View>
-    </View>
-  );
+/**
+ * WebSidebarDock:
+ * Deshabilitado para garantizar que ningún dock flotante colisione ni se sobreponga
+ * con las tarjetas de telemetría y desgaste del dashboard en ninguna resolución.
+ * Todos los accesos rápidos están integrados limpiamente en la cabecera superior y el Hero.
+ */
+export const WebSidebarDock: React.FC<any> = () => {
+  return null;
 };
-
-const styles = StyleSheet.create({
-  dockContainer: {
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    borderRadius: 24,
-    borderWidth: 1,
-    gap: 12,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  dockIcon: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-});

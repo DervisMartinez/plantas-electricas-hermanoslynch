@@ -4,7 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { useMyMoto } from '../../context/MotoContext';
 import { useTheme } from '../../context/ThemeContext';
 import { ComponentType, COMPONENT_NAMES, getVehicleComponents } from '../../../constants/telemetry';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 
 interface ServicesTabProps {
   initialComponent?: ComponentType;
@@ -15,7 +15,43 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ initialComponent }) =>
   const { colors } = useTheme();
 
   const isCurrentCar = isCar(myMoto);
-  const comps: ComponentType[] = getVehicleComponents(isCurrentCar);
+  const isVehiclePlanta = isPlanta(myMoto);
+
+  const plantComps: ComponentType[] = [
+    'oil',
+    'oil_filter',
+    'fuel_filter',
+    'air_filter',
+    'coolant',
+    'battery',
+    'accessory_belt',
+    'spark_plugs',
+    'fuel',
+    'other',
+  ];
+
+  const comps: ComponentType[] = isVehiclePlanta
+    ? plantComps
+    : getVehicleComponents(isCurrentCar);
+
+  const getCompName = (c: ComponentType) => {
+    if (isVehiclePlanta) {
+      switch (c) {
+        case 'oil': return 'Aceite Diésel (15W-40)';
+        case 'oil_filter': return 'Filtro de Aceite';
+        case 'fuel_filter': return 'Filtro Diésel / Trampa';
+        case 'air_filter': return 'Filtro de Aire Industrial';
+        case 'coolant': return 'Refrigerante / Radiador';
+        case 'battery': return 'Banco Baterías 24V';
+        case 'accessory_belt': return 'Correa Poli-V';
+        case 'spark_plugs': return 'Calibración Válvulas / Iny.';
+        case 'fuel': return 'Carga de Diésel';
+        case 'other': return 'Otro / Megado Alternador';
+        default: return COMPONENT_NAMES[c] || c;
+      }
+    }
+    return COMPONENT_NAMES[c] || c;
+  };
 
   const [selectedComp, setSelectedComp] = useState<ComponentType>(initialComponent || 'oil');
 
@@ -24,7 +60,7 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ initialComponent }) =>
       setSelectedComp(initialComponent);
     }
   }, [initialComponent]);
-  const [odoStr, setOdoStr] = useState(myMoto?.currentOdometer.toString() || '0');
+  const [odoStr, setOdoStr] = useState((myMoto?.currentHours || myMoto?.currentOdometer || 0).toString());
   const [costStr, setCostStr] = useState('');
   const [notes, setNotes] = useState('');
 
@@ -45,19 +81,23 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ initialComponent }) =>
 
   const handleSave = () => {
     const odo = parseInt(odoStr);
-    if (isNaN(odo)) { alert('Odómetro inválido'); return; }
+    if (isNaN(odo)) {
+      alert(isVehiclePlanta ? 'Horómetro de horas inválido' : 'Odómetro inválido');
+      return;
+    }
     
     addRecord({
       id: Math.random().toString(),
       type: selectedComp,
-      date: new Date().toISOString(), // Use ISO string for proper date math later
+      date: new Date().toISOString(),
       odometer: odo,
       costUSD: parseFloat(costStr) || 0,
-      notes: notes
+      notes: notes || (isVehiclePlanta ? `Mantenimiento preventivo de ${getCompName(selectedComp)}` : undefined)
     });
 
-    if (odo > myMoto.currentOdometer) {
-      updateMoto({ currentOdometer: odo });
+    const currentVal = myMoto.currentHours || myMoto.currentOdometer || 0;
+    if (odo > currentVal) {
+      updateMoto({ currentOdometer: odo, currentHours: odo });
     }
 
     alert('Servicio registrado exitosamente');
@@ -90,11 +130,13 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ initialComponent }) =>
         </View>
         <View style={{ flex: 1, gap: 8 }}>
           <View style={{ backgroundColor: colors.surfaceContainerLowest, padding: 12, borderRadius: 14 }}>
-            <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 10 }}>⛽ GASOLINA</Text>
+            <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 10 }}>
+              {isVehiclePlanta ? '⛽ DIÉSEL' : '⛽ GASOLINA'}
+            </Text>
             <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 14 }}>${gastoGasolina.toFixed(2)}</Text>
           </View>
           <View style={{ backgroundColor: colors.surfaceContainerLowest, padding: 12, borderRadius: 14 }}>
-            <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 10 }}>🔧 REPUESTOS</Text>
+            <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 10 }}>🔧 MANTENIMIENTO</Text>
             <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 14 }}>${gastoMantenimiento.toFixed(2)}</Text>
           </View>
         </View>
@@ -102,7 +144,9 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ initialComponent }) =>
 
       <View style={{ gap: 16 }}>
         <View>
-          <Text style={{ fontFamily: F.bold, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 8, textTransform: 'uppercase' }}>1. ¿Qué componente cambiaste?</Text>
+          <Text style={{ fontFamily: F.bold, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 8, textTransform: 'uppercase' }}>
+            {isVehiclePlanta ? '1. ¿Qué subsistema o componente atendiste?' : '1. ¿Qué componente cambiaste?'}
+          </Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
             {comps.map(c => (
               <TouchableOpacity 
@@ -114,14 +158,18 @@ export const ServicesTab: React.FC<ServicesTabProps> = ({ initialComponent }) =>
                   paddingVertical: 10, 
                   borderRadius: 20 
                 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: selectedComp === c ? colors.onPrimary : colors.onSurface }}>{COMPONENT_NAMES[c]}</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: selectedComp === c ? colors.onPrimary : colors.onSurface }}>
+                  {getCompName(c)}
+                </Text>
               </TouchableOpacity>
             ))}
           </ScrollView>
         </View>
 
         <View>
-          <Text style={{ fontFamily: F.bold, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 8, textTransform: 'uppercase' }}>2. Kilometraje (Odómetro) al momento del cambio</Text>
+          <Text style={{ fontFamily: F.bold, fontSize: 11, color: colors.onSurfaceVariant, marginBottom: 8, textTransform: 'uppercase' }}>
+            {isVehiclePlanta ? '2. Horas de Operación (Horómetro) al momento del servicio' : '2. Kilometraje (Odómetro) al momento del cambio'}
+          </Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: colors.surfaceContainer, borderRadius: 16, paddingHorizontal: 16, borderWidth: 0.5, borderColor: colors.outlineVariant }}>
             <MaterialIcons name="speed" size={20} color={colors.onSurfaceVariant} />
             <TextInput 

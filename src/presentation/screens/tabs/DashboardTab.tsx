@@ -7,12 +7,11 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { calculateWearPercentage, ComponentType } from '../../../constants/telemetry';
 import { getMotoSpecs } from '../../../data/specs';
 import { VEHICLE_CATALOG, MOTO_CATALOG } from '../../../data/catalog';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 import { TutorialModal } from '../../components/TutorialModal';
 import { TechnicalSheetModal } from '../../components/TechnicalSheetModal';
 import { VehicleStatsAndCalendarModal } from '../../components/VehicleStatsAndCalendarModal';
-import { EmergencyCrashModal } from '../../components/EmergencyCrashModal';
-import { MotoInspectionModal } from '../../components/MotoInspectionModal';
+import { AssignedOperatorModal } from '../../components/AssignedOperatorModal';
 import { VehicleReportModal } from '../../components/VehicleReportModal';
 import { useCrashDetection } from '../../hooks/useCrashDetection';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -94,9 +93,41 @@ export const DashboardTab = () => {
   };
 
   const isCurrentCar = isCar(myMoto);
+  const isCurrentPlanta = isPlanta(myMoto);
 
   const calcPercent = (type: ComponentType) => {
     if (!myMoto) return 0;
+
+    if (isCurrentPlanta) {
+      const currentHours = myMoto.currentHours || myMoto.currentOdometer || 0;
+      const typeRecords = records.filter(r => r.type === type);
+      const intervalMap: Partial<Record<ComponentType, number>> = {
+        oil: 250,
+        oil_filter: 250,
+        fuel_filter: 250,
+        air_filter: 500,
+        coolant: 1000,
+        battery: 2000,
+        accessory_belt: 1000,
+        spark_plugs: 1500,
+        other: 500,
+      };
+      const interval = intervalMap[type] || 250;
+
+      if (typeRecords.length === 0) {
+        if (currentHours > 0) {
+          const usedInCycle = currentHours % interval;
+          const ratio = Math.max(0, 1 - (usedInCycle / interval));
+          return Math.round(ratio * 100);
+        }
+        return myMoto.isFromAgency ? 100 : 0;
+      }
+      const lastServiceHours = Math.max(...typeRecords.map(r => r.odometer));
+      const hoursSince = Math.max(0, currentHours - lastServiceHours);
+      const ratio = Math.max(0, 1 - (hoursSince / interval));
+      return Math.max(0, Math.min(100, Math.round(ratio * 100)));
+    }
+
     const typeRecords = records.filter(r => r.type === type);
     if (typeRecords.length === 0 && !myMoto.isFromAgency) {
       return 0; // No data, not from agency -> requiere ajuste inicial
@@ -147,16 +178,22 @@ export const DashboardTab = () => {
   };
 
   const handleSaveOilSetup = () => {
-    if(!lastOilOdo || !myMoto) { alert('Ingresa un kilometraje válido'); return; }
+    if(!lastOilOdo || !myMoto) {
+      alert(isCurrentPlanta ? 'Ingresa un valor de horas válido' : 'Ingresa un kilometraje válido');
+      return;
+    }
+    const val = parseInt(lastOilOdo) || (myMoto.currentHours || myMoto.currentOdometer || 0);
     addRecord({
       id: Math.random().toString(),
       type: 'oil',
       date: new Date().toISOString(),
-      odometer: parseInt(lastOilOdo) || myMoto.currentOdometer,
+      odometer: val,
       costUSD: 0,
-      notes: 'Configuración Inicial - ' + oilType
+      notes: isCurrentPlanta
+        ? `Configuración Inicial: Aceite Diésel 15W-40 (${oilType}) a ${val} hrs`
+        : `Configuración Inicial - ${oilType}`
     });
-    alert('Aceite configurado');
+    alert(isCurrentPlanta ? 'Horas de lubricante configuradas' : 'Aceite configurado');
     setOilSetupVisible(false);
   };
 
@@ -260,7 +297,7 @@ export const DashboardTab = () => {
       <View style={[styles.header, { borderBottomColor: 'transparent', backgroundColor: 'transparent' }]}>
         <View style={styles.headerLeft}>
           <MaterialCommunityIcons name="engine" size={28} color="#00e3fd" />
-          <Text style={[styles.headerTitle, { color: '#FFFFFF', fontFamily: F.bold }]}>GARAGE</Text>
+          <Text style={[styles.headerTitle, { color: '#FFFFFF', fontFamily: F.bold, letterSpacing: 1 }]}>HERMANOS LYNCH</Text>
         </View>
         <View style={styles.headerRight}>
           {/* Botón SOS de Emergencia de Alto Contraste */}
@@ -425,7 +462,7 @@ export const DashboardTab = () => {
                   return (
                     <TouchableOpacity 
                       key={moto.id} 
-                      onPress={() => setInspectionVisible(true)}
+                      onPress={() => setTechSheetVisible(true)}
                       activeOpacity={0.9}
                       accessibilityLabel="Toca para inspeccionar tu vehículo en 3D"
                       style={{ width: slideWidth, height: 215, justifyContent: 'center', alignItems: 'center', position: 'relative' }}
@@ -524,11 +561,13 @@ export const DashboardTab = () => {
                 style={{ alignItems: 'flex-end', backgroundColor: colors.surfaceContainer, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 0.5, borderColor: colors.outlineVariant }}
               >
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Odómetro</Text>
+                  <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>
+                    {isCurrentPlanta ? 'Horómetro' : 'Odómetro'}
+                  </Text>
                   <MaterialIcons name="edit" size={11} color={colors.primary} />
                 </View>
                 <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 16 }}>
-                  {myMoto.currentOdometer} <Text style={{ fontSize: 11, color: colors.primary }}>km</Text>
+                  {(myMoto.currentHours || myMoto.currentOdometer).toLocaleString()} <Text style={{ fontSize: 11, color: colors.primary }}>{isCurrentPlanta ? 'hrs' : 'km'}</Text>
                 </Text>
               </TouchableOpacity>
             </View>
@@ -556,7 +595,11 @@ export const DashboardTab = () => {
                   Próximo Servicio Estimado
                 </Text>
                 <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 14, marginTop: 2 }}>
-                  {isCurrentCar ? 'En ~1,500 km • Cambio de Aceite 10W-30 / Filtro' : 'En ~1,250 km • Cambio de Aceite 4T'}
+                  {isCurrentPlanta
+                    ? 'En ~250 hrs • Cambio de Aceite Diésel 15W-40 & Filtros'
+                    : isCurrentCar
+                    ? 'En ~1,500 km • Cambio de Aceite 10W-30 / Filtro'
+                    : 'En ~1,250 km • Cambio de Aceite 4T'}
                 </Text>
               </View>
               <View style={{ backgroundColor: 'rgba(10,132,255,0.15)', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 }}>
@@ -943,15 +986,21 @@ export const DashboardTab = () => {
             <View style={styles.modalHeader}>
               <View style={{flexDirection:'row', alignItems:'center', gap: 8}}>
                 <MaterialIcons name='oil-barrel' size={24} color={colors.primary} />
-                <Text style={{color: colors.onSurface, fontFamily: F.bold, fontSize: 18}}>Último Cambio</Text>
+                <Text style={{color: colors.onSurface, fontFamily: F.bold, fontSize: 18}}>
+                  {isCurrentPlanta ? 'Último Mantenimiento de Aceite' : 'Último Cambio'}
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setOilSetupVisible(false)} style={[styles.closeBtn, { backgroundColor: colors.surfaceContainer }]}><MaterialIcons name='close' size={24} color={colors.onSurfaceVariant} /></TouchableOpacity>
             </View>
             <View>
-              <Text style={{color: colors.onSurfaceVariant, fontFamily: F.regular, fontSize: 13, marginBottom: 16}}>Para calcular la vida útil del aceite, ingresa el kilometraje que tenía la moto en el último cambio.</Text>
+              <Text style={{color: colors.onSurfaceVariant, fontFamily: F.regular, fontSize: 13, marginBottom: 16}}>
+                {isCurrentPlanta
+                  ? 'Para calcular la vida útil del aceite diésel 15W-40, ingresa las horas que tenía el horómetro en el último servicio.'
+                  : 'Para calcular la vida útil del aceite, ingresa el kilometraje que tenía la moto en el último cambio.'}
+              </Text>
               <View style={[styles.inputRow, { backgroundColor: colors.surface, marginBottom: 24 }]}>
-                <Text style={{color: colors.onSurfaceVariant, fontSize: 18}}>km</Text>
-                <TextInput style={[styles.modalInput, { color: colors.onSurface }]} placeholder={myMoto?.currentOdometer?.toString() || '0'} placeholderTextColor={colors.onSurfaceVariant} keyboardType='numeric' value={lastOilOdo} onChangeText={setLastOilOdo} />
+                <Text style={{color: colors.onSurfaceVariant, fontSize: 18}}>{isCurrentPlanta ? 'hrs' : 'km'}</Text>
+                <TextInput style={[styles.modalInput, { color: colors.onSurface }]} placeholder={(myMoto?.currentHours || myMoto?.currentOdometer)?.toString() || '0'} placeholderTextColor={colors.onSurfaceVariant} keyboardType='numeric' value={lastOilOdo} onChangeText={setLastOilOdo} />
               </View>
               <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={handleSaveOilSetup}><Text style={{color: colors.onPrimaryContainer, fontFamily: F.bold, fontSize: 16, letterSpacing: 1}}>GUARDAR CONFIGURACIÓN</Text></TouchableOpacity>
             </View>
@@ -971,17 +1020,34 @@ export const DashboardTab = () => {
             <View style={styles.modalHeader}>
               <View style={{flexDirection:'row', alignItems:'center', gap: 8}}>
                 <MaterialIcons name="speed" size={24} color={colors.primary} />
-                <Text style={{color: colors.onSurface, fontFamily: F.bold, fontSize: 18}}>Actualizar Odómetro</Text>
+                <Text style={{color: colors.onSurface, fontFamily: F.bold, fontSize: 18}}>
+                  {isCurrentPlanta ? 'Actualizar Horómetro' : 'Actualizar Odómetro'}
+                </Text>
               </View>
               <TouchableOpacity onPress={() => setOdoUpdateVisible(false)} style={[styles.closeBtn, { backgroundColor: colors.surfaceContainer }]}><MaterialIcons name="close" size={24} color={colors.onSurfaceVariant} /></TouchableOpacity>
             </View>
             <View>
-              <Text style={{color: colors.onSurfaceVariant, fontFamily: F.regular, fontSize: 13, marginBottom: 16}}>Actualiza el odómetro de tu moto para recalcular automáticamente el desgaste de todos los componentes.</Text>
+              <Text style={{color: colors.onSurfaceVariant, fontFamily: F.regular, fontSize: 13, marginBottom: 16}}>
+                {isCurrentPlanta
+                  ? 'Actualiza las horas de operación acumuladas de la planta para recalcular automáticamente el desgaste de todos los componentes.'
+                  : 'Actualiza el odómetro de tu moto para recalcular automáticamente el desgaste de todos los componentes.'}
+              </Text>
               <View style={[styles.inputRow, { backgroundColor: colors.surface, marginBottom: 24 }]}>
-                <Text style={{color: colors.onSurfaceVariant, fontSize: 18}}>km</Text>
-                <TextInput style={[styles.modalInput, { color: colors.onSurface }]} placeholder={myMoto?.currentOdometer?.toString() || "0"} placeholderTextColor={colors.onSurfaceVariant} keyboardType="numeric" value={newOdo} onChangeText={setNewOdo} />
+                <Text style={{color: colors.onSurfaceVariant, fontSize: 18}}>{isCurrentPlanta ? 'hrs' : 'km'}</Text>
+                <TextInput style={[styles.modalInput, { color: colors.onSurface }]} placeholder={(myMoto?.currentHours || myMoto?.currentOdometer)?.toString() || "0"} placeholderTextColor={colors.onSurfaceVariant} keyboardType="numeric" value={newOdo} onChangeText={setNewOdo} />
               </View>
-              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={() => { const odo = parseInt(newOdo); if (!odo || odo <= myMoto.currentOdometer) { alert('Ingresa un kilometraje mayor al actual'); return; } updateMoto({ currentOdometer: odo }); alert('Odómetro actualizado'); setOdoUpdateVisible(false); setNewOdo(''); }}><Text style={{color: colors.onPrimaryContainer, fontFamily: F.bold, fontSize: 16, letterSpacing: 1}}>ACTUALIZAR</Text></TouchableOpacity>
+              <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }]} onPress={() => {
+                const odo = parseInt(newOdo);
+                const currentVal = myMoto.currentHours || myMoto.currentOdometer || 0;
+                if (!odo || odo <= currentVal) {
+                  alert(isCurrentPlanta ? 'Ingresa un número de horas mayor al actual' : 'Ingresa un kilometraje mayor al actual');
+                  return;
+                }
+                updateMoto({ currentOdometer: odo, currentHours: odo });
+                alert(isCurrentPlanta ? `Horómetro actualizado a ${odo} horas` : `Odómetro actualizado a ${odo} km`);
+                setOdoUpdateVisible(false);
+                setNewOdo('');
+              }}><Text style={{color: colors.onPrimaryContainer, fontFamily: F.bold, fontSize: 16, letterSpacing: 1}}>ACTUALIZAR</Text></TouchableOpacity>
             </View>
           </View>
             </View>
@@ -1000,18 +1066,10 @@ export const DashboardTab = () => {
         onClose={() => setStatsCalVisible(false)} 
         initialTab={statsCalInitialTab}
       />
-      <EmergencyCrashModal
+      <AssignedOperatorModal
         visible={crashTriggered}
         onClose={dismissCrashAlert}
-        manualTrigger={isManualTrigger}
-      />
-      <MotoInspectionModal
-        visible={inspectionVisible}
-        onClose={() => setInspectionVisible(false)}
-        onOpenQuickService={(comp) => {
-          if (comp === 'oil') setOilSetupVisible(true);
-          else setModalVisible(true);
-        }}
+        myMoto={myMoto}
       />
       <VehicleReportModal
         visible={reportModalVisible}

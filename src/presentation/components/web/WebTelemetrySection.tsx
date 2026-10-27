@@ -5,7 +5,7 @@ import { useTheme } from '../../context/ThemeContext';
 import { useMyMoto } from '../../context/MotoContext';
 import { calculateWearPercentage, COMPONENT_NAMES, COMPONENT_LIFESPAN_KM, ComponentType } from '../../../constants/telemetry';
 import { getMotoSpecs } from '../../../data/specs';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 
 interface WebTelemetrySectionProps {
   onOpenSpecs: () => void;
@@ -25,6 +25,8 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
   const { width: windowWidth } = useWindowDimensions();
 
   const isDark = mode === 'dark';
+  const isVehiclePlanta = isPlanta(myMoto);
+  const isVehicleCar = isCar(myMoto);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -44,6 +46,7 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
     if (!myMoto) return [];
 
     const isVehicleCar = isCar(myMoto);
+    const isVehiclePlanta = isPlanta(myMoto);
 
     const getComponentData = (
       type: ComponentType,
@@ -54,6 +57,54 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
       recommendation: string
     ) => {
       const typeRecords = records.filter((r) => r.type === type);
+
+      if (isVehiclePlanta) {
+        const currentHours = myMoto.currentHours || myMoto.currentOdometer || 0;
+        if (typeRecords.length === 0) {
+          if (currentHours > 0) {
+            const usedInCycle = currentHours % defaultMaxKm;
+            const remaining = Math.max(0, 1 - (usedInCycle / defaultMaxKm));
+            const wear = Math.round(remaining * 100);
+            return {
+              id: type,
+              name: defaultName,
+              wear,
+              isConfigured: true,
+              maxKm: defaultMaxKm,
+              icon,
+              iconFamily,
+              recommendation,
+            };
+          } else {
+            return {
+              id: type,
+              name: defaultName,
+              wear: 0,
+              isConfigured: false,
+              maxKm: defaultMaxKm,
+              icon,
+              iconFamily,
+              recommendation,
+            };
+          }
+        } else {
+          const lastServiceHours = Math.max(...typeRecords.map((r) => r.odometer));
+          const hoursSince = Math.max(0, currentHours - lastServiceHours);
+          const remaining = Math.max(0, 1 - (hoursSince / defaultMaxKm));
+          const wear = Math.round(remaining * 100);
+          return {
+            id: type,
+            name: defaultName,
+            wear,
+            isConfigured: true,
+            maxKm: defaultMaxKm,
+            icon,
+            iconFamily,
+            recommendation,
+          };
+        }
+      }
+
       const isConfigured = typeRecords.length > 0 || !!myMoto.isFromAgency;
 
       if (!isConfigured) {
@@ -102,6 +153,46 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
         recommendation,
       };
     };
+
+    if (isVehiclePlanta) {
+      const oil = getComponentData(
+        'oil',
+        'Aceite Motor Diésel (15W-40)',
+        250,
+        'opacity',
+        'material',
+        specs?.oilTypeRecommended || 'SAE 15W-40 API CI-4/CK-4 (Cada 250 hrs)'
+      );
+
+      const fuel = getComponentData(
+        'fuel_filter' as ComponentType,
+        'Filtros (Aceite & Diésel)',
+        250,
+        'filter-alt',
+        'material',
+        'Filtro de lubricante y separador de agua (Cada 250 hrs)'
+      );
+
+      const air = getComponentData(
+        'air_filter' as ComponentType,
+        'Filtro de Aire Industrial',
+        500,
+        'air',
+        'material',
+        'Elemento primario de admisión de aire (Cada 500 hrs)'
+      );
+
+      const coolant = getComponentData(
+        'coolant' as ComponentType,
+        'Refrigerante & Batería 24V',
+        1000,
+        'severe-cold',
+        'material',
+        'Circuito de agua/radiador y cargador estático (Cada 1000 hrs)'
+      );
+
+      return [oil, fuel, air, coolant];
+    }
 
     const oil = getComponentData(
       'oil',
@@ -203,9 +294,13 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
                 Ajuste Inicial Requerido
               </Text>
               <Text style={[styles.unconfiguredBannerDesc, { color: colors.onSurfaceVariant }]}>
-                {myMoto.isFromAgency
-                  ? 'Vehículo de agencia: los ciclos arrancan desde 0 km.'
-                  : 'Ingresa el kilometraje de tus últimos servicios para que la telemetría calcule el desgaste exacto desde cero.'}
+                {isVehiclePlanta
+                  ? (myMoto.isFromAgency
+                      ? 'Planta nueva de fábrica: los ciclos inician desde 0 horas.'
+                      : 'Ingresa las horas de operación de tus últimos servicios para que la telemetría calcule el desgaste exacto.')
+                  : (myMoto.isFromAgency
+                      ? 'Vehículo de agencia: los ciclos arrancan desde 0 km.'
+                      : 'Ingresa el kilometraje de tus últimos servicios para que la telemetría calcule el desgaste exacto desde cero.')}
               </Text>
             </View>
           </View>
@@ -320,7 +415,7 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
                 </TouchableOpacity>
               ) : (
                 <Text style={[styles.wearSubDetail, { color: colors.onSurfaceVariant }]}>
-                  Ciclo nominal: {item.maxKm.toLocaleString()} km
+                  Ciclo nominal: {item.maxKm.toLocaleString()} {isVehiclePlanta ? 'horas' : 'km'}
                 </Text>
               )}
             </View>
@@ -359,30 +454,38 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
 
           <View style={styles.specsGrid}>
             <View style={styles.specMiniItem}>
-              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>CILINDRADA</Text>
+              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>
+                {isVehiclePlanta ? 'POTENCIA' : 'CILINDRADA'}
+              </Text>
               <Text style={[styles.specMiniValue, { color: colors.onSurface }]}>
-                {specs?.displacement || 'N/D'}
+                {isVehiclePlanta ? (specs?.hp || `${myMoto.powerKva || 35} kVA`) : (specs?.displacement || 'N/D')}
               </Text>
             </View>
 
             <View style={styles.specMiniItem}>
-              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>POTENCIA</Text>
+              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>
+                {isVehiclePlanta ? 'MOTOR DIÉSEL' : 'POTENCIA'}
+              </Text>
               <Text style={[styles.specMiniValue, { color: colors.onSurface }]}>
-                {specs?.hp || 'N/D'}
+                {isVehiclePlanta ? (specs?.displacement || myMoto.engineBrand || 'Cummins') : (specs?.hp || 'N/D')}
               </Text>
             </View>
 
             <View style={styles.specMiniItem}>
-              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>TANQUE</Text>
+              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>
+                {isVehiclePlanta ? 'TANQUE DIÉSEL' : 'TANQUE'}
+              </Text>
               <Text style={[styles.specMiniValue, { color: colors.onSurface }]}>
-                {specs?.fuelCapacity || 'N/D'}
+                {specs?.fuelCapacity || (isVehiclePlanta ? '180 Litros' : 'N/D')}
               </Text>
             </View>
 
             <View style={styles.specMiniItem}>
-              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>TRANSMISIÓN</Text>
+              <Text style={[styles.specMiniLabel, { color: colors.onSurfaceVariant }]}>
+                {isVehiclePlanta ? 'ALTERNADOR' : 'TRANSMISIÓN'}
+              </Text>
               <Text style={[styles.specMiniValue, { color: colors.onSurface }]}>
-                {specs?.transmission || 'Manual'}
+                {isVehiclePlanta ? (specs?.transmission || myMoto.alternatorBrand || 'Leroy Somer') : (specs?.transmission || 'Manual')}
               </Text>
             </View>
           </View>
@@ -400,7 +503,7 @@ export const WebTelemetrySection: React.FC<WebTelemetrySectionProps> = ({
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <MaterialIcons name="account-balance-wallet" size={18} color="#4169E1" />
               <Text style={[styles.overviewTitle, { color: colors.onSurface }]}>
-                Balance de Gastos del Vehículo
+                {isVehiclePlanta ? 'Balance Operativo de Planta Eléctrica' : 'Balance de Gastos del Vehículo'}
               </Text>
             </View>
           </View>

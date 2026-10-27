@@ -1,7 +1,7 @@
 // ARCHIVO GENERADO AUTOMÁTICAMENTE. NO EDITAR A MANO.
 // Para actualizar este catálogo, ejecuta: node scripts/generateCatalog.js
 
-export type VehicleType = 'moto' | 'car';
+export type VehicleType = 'planta' | 'moto' | 'car';
 
 export interface CatalogVehicle {
   id: string;
@@ -10,10 +10,52 @@ export interface CatalogVehicle {
   vehicleType?: VehicleType;
   category?: string;
   year?: number;
+  powerKva?: number;
+  powerKw?: number;
   imageRes: any;
+  description?: string;
 }
 
 export type CatalogMoto = CatalogVehicle;
+
+export const PLANTAS_CATALOG: CatalogVehicle[] = [
+  {
+    id: 'blue-power-c35',
+    brand: 'Blue Power Generation',
+    model: 'C35 (35 kVA / 28 kW)',
+    vehicleType: 'planta',
+    category: 'PLANTA ELÉCTRICA',
+    year: 2026,
+    powerKva: 35,
+    powerKw: 28,
+    imageRes: require('../../assets/images/plantas electricas/Blue power generation/C125-1-300x300-removebg-preview.png'),
+    description: 'Generador Diésel Standby 35 kVA / 28 kW, Motor Cummins 4B3.9G2, Alternador Leroy Somer TAL-A42-C, Panel ComAp IL-9.',
+  },
+  {
+    id: 'blue-power-c55',
+    brand: 'Blue Power Generation',
+    model: 'C55 (55 kVA / 44 kW)',
+    vehicleType: 'planta',
+    category: 'PLANTA ELÉCTRICA',
+    year: 2026,
+    powerKva: 55,
+    powerKw: 44,
+    imageRes: require('../../assets/images/plantas electricas/Blue power generation/C125-1-300x300-removebg-preview.png'),
+    description: 'Generador Diésel Standby 55 kVA / 44 kW, Motor Cummins 4BT3.9G2 Turbo, Alternador Leroy Somer TAL-A42-G, Panel ComAp AMF 20.',
+  },
+  {
+    id: 'blue-power-c125',
+    brand: 'Blue Power Generation',
+    model: 'C125 (125 kVA / 100 kW)',
+    vehicleType: 'planta',
+    category: 'PLANTA ELÉCTRICA',
+    year: 2026,
+    powerKva: 125,
+    powerKw: 100,
+    imageRes: require('../../assets/images/plantas electricas/Blue power generation/C125-1-300x300-removebg-preview.png'),
+    description: 'Generador Diésel Standby 125 kVA / 100 kW, Motor Cummins 6BT5.9G2 de 6 Cil. Turbo, Alternador Leroy Somer TAL-A44-D.',
+  },
+];
 
 export const MOTO_CATALOG: CatalogMoto[] = [
   {
@@ -104,7 +146,8 @@ export const CAR_CATALOG: CatalogVehicle[] = [
 ];
 
 export const VEHICLE_CATALOG: CatalogVehicle[] = [
-  ...MOTO_CATALOG.map(m => ({ ...m, vehicleType: 'moto' as VehicleType })),
+  ...PLANTAS_CATALOG,
   ...CAR_CATALOG,
+  ...MOTO_CATALOG.map(m => ({ ...m, vehicleType: 'moto' as VehicleType })),
 ];
 

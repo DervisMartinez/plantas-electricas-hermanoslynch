@@ -4,7 +4,7 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { MotoSpecs } from '../../data/specs';
 import { useTheme } from '../context/ThemeContext';
 import { MOTO_CATALOG, VEHICLE_CATALOG } from '../../data/catalog';
-import { isCar } from '../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../domain/entities/Moto';
 
 interface Props {
   visible: boolean;
@@ -19,6 +19,7 @@ export const TechnicalSheetModal: React.FC<Props> = ({ visible, onClose, myMoto,
   if (!myMoto || !specs) return null;
 
   const isVehicleCar = isCar(myMoto);
+  const isVehiclePlanta = isPlanta(myMoto);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -37,6 +38,22 @@ export const TechnicalSheetModal: React.FC<Props> = ({ visible, onClose, myMoto,
 
   const SpecItem = ({ label, value, icon, color = colors.onSurface }: { label: string; value?: string; icon: string; color?: string }) => {
     if (!value) return null;
+    const isLong = value.length > 35;
+    if (isLong) {
+      return (
+        <View style={[styles.specRow, { borderBottomColor: colors.outlineVariant, flexDirection: 'column', alignItems: 'flex-start', gap: 6 }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <MaterialIcons name={icon as any} size={17} color={colors.primary} style={{ marginRight: 8 }} />
+            <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 12.5 }}>
+              {label}
+            </Text>
+          </View>
+          <Text style={{ fontFamily: F.medium, color, fontSize: 13, lineHeight: 18, width: '100%' }}>
+            {value}
+          </Text>
+        </View>
+      );
+    }
     return (
       <View style={[styles.specRow, { borderBottomColor: colors.outlineVariant }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', width: '44%', paddingRight: 8 }}>
@@ -130,14 +147,18 @@ export const TechnicalSheetModal: React.FC<Props> = ({ visible, onClose, myMoto,
               <SpecItem label="Intervalo de Aceite" value={specs.maintenanceIntervalOil} icon="update" color="#FF9500" />
             </View>
 
-            {/* SECCIÓN 3: RUEDAS Y NEUMÁTICOS */}
-            <SectionHeader title="Ruedas & Neumáticos (PSI)" icon="tire" />
-            <View style={[styles.specGroupCard, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}>
-              <SpecItem label={isVehicleCar ? "Neumáticos Delanteros" : "Caucho Delantero"} value={specs.frontTireSize} icon="radio-button-checked" />
-              <SpecItem label="Presión Delantera" value={specs.frontTirePressure} icon="compress" color={colors.secondary} />
-              <SpecItem label={isVehicleCar ? "Neumáticos Traseros" : "Caucho Trasero"} value={specs.rearTireSize} icon="radio-button-checked" />
-              <SpecItem label="Presión Trasera" value={specs.rearTirePressure} icon="compress" color={colors.secondary} />
-            </View>
+            {/* SECCIÓN 3: RUEDAS Y NEUMÁTICOS (SOLO VEHÍCULOS) */}
+            {!isVehiclePlanta && (
+              <>
+                <SectionHeader title="Ruedas & Neumáticos (PSI)" icon="tire" />
+                <View style={[styles.specGroupCard, { backgroundColor: colors.surfaceContainer, borderColor: colors.outlineVariant }]}>
+                  <SpecItem label={isVehicleCar ? "Neumáticos Delanteros" : "Caucho Delantero"} value={specs.frontTireSize} icon="radio-button-checked" />
+                  <SpecItem label="Presión Delantera" value={specs.frontTirePressure} icon="compress" color={colors.secondary} />
+                  <SpecItem label={isVehicleCar ? "Neumáticos Traseros" : "Caucho Trasero"} value={specs.rearTireSize} icon="radio-button-checked" />
+                  <SpecItem label="Presión Trasera" value={specs.rearTirePressure} icon="compress" color={colors.secondary} />
+                </View>
+              </>
+            )}
 
             {/* SECCIÓN 4: TRANSMISIÓN Y CHASIS */}
             <SectionHeader title="Transmisión, Chasis & Frenos" icon={isVehicleCar ? "car-cog" : "motorbike"} />

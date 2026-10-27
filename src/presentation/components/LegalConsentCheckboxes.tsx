@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { LegalDocType } from './LegalDocModal';
@@ -23,7 +23,7 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
   showValidationErrors = false,
   disabled = false,
 }) => {
-  const { colors, mode } = useTheme();
+  const { mode } = useTheme();
   const isDark = mode === 'dark';
 
   const F = {
@@ -34,16 +34,16 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
   };
 
   const tokens = {
-    primary: isDark ? '#4169E1' : '#275FE3',
-    secondary: '#00e3fd',
-    tertiary: '#00ae78',
-    alert: '#ba1a1a',
-    surfaceCard: isDark ? '#191c21' : '#ffffff',
-    surfaceContainer: isDark ? '#1d2025' : '#ececf0',
-    outline: isDark ? '#40485c' : '#c4c6d0',
-    outlineError: '#ba1a1a',
-    textPrimary: isDark ? '#ffffff' : '#111319',
-    textSecondary: isDark ? '#a0a5b5' : '#575b66',
+    primary: isDark ? '#3B82F6' : '#2563EB',
+    secondary: isDark ? '#00e3fd' : '#0284C7',
+    tertiary: isDark ? '#10B981' : '#059669',
+    alert: '#EF4444',
+    surfaceCard: isDark ? 'rgba(15, 23, 42, 0.75)' : '#FFFFFF',
+    surfaceContainer: isDark ? 'rgba(30, 41, 59, 0.65)' : '#F1F5F9',
+    outline: isDark ? 'rgba(148, 163, 184, 0.28)' : '#CBD5E1',
+    outlineError: '#EF4444',
+    textPrimary: isDark ? '#FFFFFF' : '#0F172A',
+    textSecondary: isDark ? '#94A3B8' : '#475569',
   };
 
   const termsHasError = showValidationErrors && !termsAccepted;
@@ -53,7 +53,7 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
     <View style={styles.container}>
       {/* MENSAJE DE VALIDACIÓN SI FALTA ALGUNA CASILLA */}
       {(termsHasError || privacyHasError) && (
-        <View style={[styles.errorBanner, { backgroundColor: isDark ? 'rgba(186,26,26,0.2)' : 'rgba(186,26,26,0.1)' }]}>
+        <View style={[styles.errorBanner, { backgroundColor: isDark ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.1)' }]}>
           <MaterialIcons name="error-outline" size={16} color={tokens.alert} />
           <Text style={[styles.errorBannerText, { color: tokens.alert, fontFamily: F.bold }]}>
             Debes marcar ambas casillas por separado para continuar
@@ -91,11 +91,11 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
         </TouchableOpacity>
 
         <View style={styles.textContainer}>
-          <Text style={[styles.labelMain, { color: tokens.textPrimary, fontFamily: F.medium }]}>
+          <Text style={[styles.labelMain, { color: tokens.textPrimary, fontFamily: F.semibold }]}>
             He leído y acepto los{' '}
             <Text
               onPress={() => onOpenDoc('terms')}
-              style={[styles.linkText, { color: tokens.primary, fontFamily: F.bold }]}
+              style={[styles.linkText, { color: tokens.secondary, fontFamily: F.bold }]}
             >
               Términos y Condiciones
             </Text>
@@ -105,7 +105,7 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
             style={styles.openDocChip}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[styles.openDocText, { color: tokens.secondary, fontFamily: F.semibold }]}>
+            <Text style={[styles.openDocText, { color: tokens.secondary, fontFamily: F.bold }]}>
               Leer documento
             </Text>
             <MaterialIcons name="open-in-new" size={13} color={tokens.secondary} />
@@ -143,24 +143,24 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
         </TouchableOpacity>
 
         <View style={styles.textContainer}>
-          <Text style={[styles.labelMain, { color: tokens.textPrimary, fontFamily: F.medium }]}>
+          <Text style={[styles.labelMain, { color: tokens.textPrimary, fontFamily: F.semibold }]}>
             He leído y acepto la{' '}
             <Text
               onPress={() => onOpenDoc('privacy')}
-              style={[styles.linkText, { color: tokens.primary, fontFamily: F.bold }]}
+              style={[styles.linkText, { color: tokens.secondary, fontFamily: F.bold }]}
             >
               Política de Privacidad
             </Text>
           </Text>
-          <Text style={[styles.labelSub, { color: tokens.textSecondary, fontFamily: F.regular }]}>
-            Consiento el tratamiento de mis datos de perfil, vehiculares, salud (grupo sanguíneo) y geolocalización para emergencias.
+          <Text style={[styles.labelSub, { color: tokens.textSecondary, fontFamily: F.medium }]}>
+            Consiento el tratamiento de mis datos de perfil, ubicación y plantas eléctricas para telemetría y soporte técnico.
           </Text>
           <TouchableOpacity
             onPress={() => onOpenDoc('privacy')}
             style={styles.openDocChip}
             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           >
-            <Text style={[styles.openDocText, { color: tokens.secondary, fontFamily: F.semibold }]}>
+            <Text style={[styles.openDocText, { color: tokens.secondary, fontFamily: F.bold }]}>
               Leer documento
             </Text>
             <MaterialIcons name="open-in-new" size={13} color={tokens.secondary} />
@@ -169,14 +169,14 @@ export const LegalConsentCheckboxes: React.FC<Props> = ({
       </View>
 
       {/* AVISO DE COOKIES Y ALMACENAMIENTO LOCAL */}
-      <View style={[styles.cookiesNoticeCard, { backgroundColor: tokens.surfaceContainer }]}>
+      <View style={[styles.cookiesNoticeCard, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline }]}>
         <MaterialCommunityIcons name="cookie-outline" size={18} color={tokens.secondary} style={{ marginTop: 2 }} />
         <View style={{ flex: 1 }}>
-          <Text style={[styles.cookiesNoticeText, { color: tokens.textSecondary, fontFamily: F.regular }]}>
-            GARAGE emplea almacenamiento técnico estrictamente necesario (sesión y datos de la moto). Consulta nuestra{' '}
+          <Text style={[styles.cookiesNoticeText, { color: tokens.textSecondary, fontFamily: F.medium }]}>
+            Hermanos Lynch emplea almacenamiento técnico estrictamente necesario para sesión y telemetría de equipos. Consulta nuestra{' '}
             <Text
               onPress={() => onOpenDoc('cookies')}
-              style={[styles.linkTextUnderline, { color: tokens.primary, fontFamily: F.bold }]}
+              style={[styles.linkTextUnderline, { color: tokens.secondary, fontFamily: F.bold }]}
             >
               Política de Cookies
             </Text>
@@ -198,33 +198,33 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    paddingHorizontal: 12,
     paddingVertical: 8,
+    paddingHorizontal: 12,
     borderRadius: 10,
   },
   errorBannerText: {
-    fontSize: 11.5,
+    fontSize: 12,
     flex: 1,
   },
   checkboxRowCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     padding: 12,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    gap: 12,
   },
   touchableArea: {
+    paddingRight: 10,
     paddingTop: 2,
-    paddingRight: 2,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   checkboxBox: {
     width: 22,
     height: 22,
     borderRadius: 6,
-    borderWidth: 2,
-    alignItems: 'center',
+    borderWidth: 1.5,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   textContainer: {
     flex: 1,
@@ -235,34 +235,35 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   labelSub: {
-    fontSize: 10.5,
+    fontSize: 11,
     lineHeight: 15,
-    marginTop: 2,
   },
   linkText: {
     textDecorationLine: 'underline',
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   linkTextUnderline: {
     textDecorationLine: 'underline',
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   openDocChip: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     alignSelf: 'flex-start',
-    marginTop: 3,
+    marginTop: 2,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   openDocText: {
-    fontSize: 11,
-    letterSpacing: 0.2,
+    fontSize: 11.5,
   },
   cookiesNoticeCard: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 10,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
   },
   cookiesNoticeText: {
     fontSize: 11,

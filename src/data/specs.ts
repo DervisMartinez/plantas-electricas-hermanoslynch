@@ -33,6 +33,58 @@ export type VehicleSpecs = MotoSpecs;
 
 
 export const MOTO_SPECS_DB: Record<string, MotoSpecs> = {
+  'blue power-c35': {
+    engineType: 'Cummins 4B3.9G2 (4 Cilindros en línea, 3.9L)',
+    displacement: '3.900 cc (3.9 Litros)',
+    hp: '44 HP @ 1800 RPM | Potencia: 35 kVA / 28 kW Standby (31 kVA Prime)',
+    torque: 'Gobernador Electrónico 60 Hz / 1800 RPM',
+    transmission: 'Generación Directa con Alternador Leroy Somer TAL-A42-C (12 puntas, 3F)',
+    weight: '1.215 kg (Insonorizada) / 865 kg (Abierta)',
+    fuelCapacity: '180 Litros Canopy / 120 Litros Abierta (Consumo: 8.6 L/h @ 100% Prime)',
+    oilCapacity: '10.9 Litros (Cárter)',
+    oilTypeRecommended: 'SAE 15W-40 API CI-4 / CK-4 Diésel',
+    coolantCapacity: '7.2 Litros (Circuito Radiador 50/50)',
+    battery: '24V DC con cargador estático de flotación',
+    cooling: 'Radiador refrigerado por agua con ventilador impulsado por motor',
+    maintenanceIntervalOil: 'Cada 250 horas de operación o 6 meses',
+    dimensions: '2580 x 1040 x 1732 mm (Insonorizada)',
+    equipment: 'Controlador ComAp InteliLite IL-9 con AMF, Regulador AVR R120 (±1.0%), Parada de Emergencia, Breaker Principal 3P',
+  },
+  'blue power-c55': {
+    engineType: 'Cummins 4BT3.9G2 (4 Cilindros Turboalimentado, 3.9L)',
+    displacement: '3.900 cc (3.9 Litros Turbo)',
+    hp: '59 HP @ 1800 RPM | Potencia: 55 kVA / 44 kW Standby (50 kVA Prime)',
+    torque: 'Gobernador Electrónico 60 Hz / 1800 RPM',
+    transmission: 'Generación Directa con Alternador Leroy Somer TAL-A42-G (12 puntas, 3F)',
+    weight: '1.389 kg (Insonorizada) / 991 kg (Abierta)',
+    fuelCapacity: '180 Litros Canopy / 120 Litros Abierta (Consumo: 12.8 L/h @ 100% Prime)',
+    oilCapacity: '10.9 Litros (Cárter)',
+    oilTypeRecommended: 'SAE 15W-40 API CI-4 / CK-4 Diésel',
+    coolantCapacity: '7.2 Litros (Circuito Radiador 50/50)',
+    battery: '24V DC con cargador estático de flotación',
+    cooling: 'Radiador refrigerado por agua con ventilador impulsado por motor',
+    maintenanceIntervalOil: 'Cada 250 horas de operación o 6 meses',
+    dimensions: '2680 x 1100 x 1732 mm (Insonorizada)',
+    equipment: 'Controlador ComAp InteliLite AMF 20, Regulador AVR R120 (±1.0%), Parada de Emergencia, Breaker Principal 3P',
+  },
+  'blue power-c125': {
+    engineType: 'Cummins 6BT5.9G2 (6 Cilindros en línea Turbo, 5.9L)',
+    displacement: '5.900 cc (5.9 Litros)',
+    hp: '135 HP @ 1800 RPM | Potencia: 125 kVA / 100 kW Standby (115 kVA Prime)',
+    torque: 'Gobernador Electrónico 60 Hz / 1800 RPM',
+    transmission: 'Generación Directa con Alternador Leroy Somer TAL-A44-D (12 puntas, 3F)',
+    weight: '1.850 kg (Insonorizada)',
+    fuelCapacity: '250 Litros Canopy (Consumo: 26.8 L/h @ 100% Prime)',
+    oilCapacity: '16.4 Litros (Cárter)',
+    oilTypeRecommended: 'SAE 15W-40 API CI-4 / CK-4 Diésel',
+    coolantCapacity: '18.0 Litros (Circuito Radiador 50/50)',
+    battery: '24V DC con cargador estático de flotación',
+    cooling: 'Radiador de trabajo pesado para clima tropical',
+    maintenanceIntervalOil: 'Cada 250 horas de operación o 6 meses',
+    dimensions: '3100 x 1150 x 1850 mm',
+    equipment: 'Controlador ComAp InteliLite IL-9, Monitoreo Remoto RS485/Modbus, Breaker Principal 3P',
+  },
+
   'empire keeway-new horse 150': {
     engineType: 'Monocilíndrico 4T, OHV con árbol de levas inferior',
     displacement: '149 cc',
@@ -397,6 +449,17 @@ export const getMotoSpecs = (brand: string, model: string): MotoSpecs => {
 
   if (MOTO_SPECS_DB[exactKey]) {
     return MOTO_SPECS_DB[exactKey];
+  }
+
+    // Detect Blue Power Generation / Plantas electricas
+  if (cleanModel.includes('c35') || (cleanBrand.includes('blue power') && cleanModel.includes('35'))) {
+    return MOTO_SPECS_DB['blue power-c35'];
+  }
+  if (cleanModel.includes('c55') || (cleanBrand.includes('blue power') && cleanModel.includes('55'))) {
+    return MOTO_SPECS_DB['blue power-c55'];
+  }
+  if (cleanModel.includes('c125') || (cleanBrand.includes('blue power') && cleanModel.includes('125'))) {
+    return MOTO_SPECS_DB['blue power-c125'];
   }
 
   // Detect Optra or Chevrolet car

@@ -5,7 +5,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../../context/ThemeContext';
 import { useMyMoto } from '../../context/MotoContext';
 import { MOTO_CATALOG, VEHICLE_CATALOG } from '../../../data/catalog';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 import { calculateWearPercentage } from '../../../constants/telemetry';
 
 interface WebVehicleHeroProps {
@@ -317,10 +317,10 @@ export const WebVehicleHero: React.FC<WebVehicleHeroProps> = ({
               }
             ]}>
               <View style={[styles.telemetrySpecItem, { flex: 1 }]}>
-                <Text style={[styles.specLabel, { color: colors.onSurfaceVariant }]}>ODÓMETRO TOTAL</Text>
+                <Text style={[styles.specLabel, { color: colors.onSurfaceVariant }]}>{isPlanta(myMoto) ? 'HORÓMETRO TOTAL' : 'ODÓMETRO TOTAL'}</Text>
                 <Text style={[styles.specValueMain, { color: isDark ? '#ffffff' : '#111319', fontSize: isSmallPhone ? 18 : 22 }]}>
                   {myMoto.currentOdometer.toLocaleString()}{' '}
-                  <Text style={{ fontSize: isSmallPhone ? 13 : 15, color: '#00e3fd' }}>KM</Text>
+                  <Text style={{ fontSize: isSmallPhone ? 13 : 15, color: '#00e3fd' }}>{isPlanta(myMoto) ? 'HRS' : 'KM'}</Text>
                 </Text>
               </View>
 
@@ -397,7 +397,7 @@ export const WebVehicleHero: React.FC<WebVehicleHeroProps> = ({
               >
                 <MaterialIcons name="speed" size={17} color={isDark ? '#ffffff' : '#111319'} style={{ marginRight: 8 }} />
                 <Text style={[styles.primaryCtaText, { color: isDark ? '#ffffff' : '#111319' }]}>
-                  ACTUALIZAR KM
+                  {isPlanta(myMoto) ? 'ACTUALIZAR HORAS' : 'ACTUALIZAR KM'}
                 </Text>
               </TouchableOpacity>
 
@@ -414,7 +414,7 @@ export const WebVehicleHero: React.FC<WebVehicleHeroProps> = ({
                 activeOpacity={0.8}
               >
                 <MaterialCommunityIcons name="gas-station" size={17} color="#00e3fd" style={{ marginRight: 6 }} />
-                <Text style={styles.secondaryCtaText}>CARGAR GASOLINA</Text>
+                <Text style={styles.secondaryCtaText}>{isPlanta(myMoto) ? 'CARGAR DIÉSEL' : 'CARGAR GASOLINA'}</Text>
               </TouchableOpacity>
             </View>
 

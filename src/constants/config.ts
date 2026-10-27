@@ -27,8 +27,8 @@ const getEnvVar = (key: string, defaultValue: string = ''): string => {
 };
 
 export const ENV: AppConfig = {
-  SUPABASE_URL: getEnvVar('EXPO_PUBLIC_SUPABASE_URL', 'https://ayydkesfvsisemdrxnlt.supabase.co'),
-  SUPABASE_ANON_KEY: getEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'sb_publishable_cpxWbgkoiocEUVQiRCF0dg_pHeiyTxv'),
+  SUPABASE_URL: getEnvVar('EXPO_PUBLIC_SUPABASE_URL', 'https://hcvstcfyyhqqthozmdqb.supabase.co'),
+  SUPABASE_ANON_KEY: getEnvVar('EXPO_PUBLIC_SUPABASE_ANON_KEY', 'sb_publishable_zfPZiA3c3BrHKT8_2KC-uA__V-xYCIJ'),
   API_NINJAS_KEY: getEnvVar('EXPO_PUBLIC_API_NINJAS_KEY', 'pyqgTVacPOr8s0pmJK2bj20XT1AsJ6dRYASLFz4C'),
   FORMSUBMIT_URL: getEnvVar('EXPO_PUBLIC_FORMSUBMIT_URL', 'https://formsubmit.co/ajax'),
   FORMSUBMIT_TOKEN: getEnvVar('EXPO_PUBLIC_FORMSUBMIT_TOKEN', '475b5f6e87dd9abdfbc1ee2879359eba'),

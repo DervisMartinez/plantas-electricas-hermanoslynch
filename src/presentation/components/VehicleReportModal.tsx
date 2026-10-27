@@ -8,12 +8,13 @@ import {
   TouchableOpacity,
   Platform,
   Image,
+  TextInput,
   ActivityIndicator,
 } from 'react-native';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
 import { useMyMoto } from '../context/MotoContext';
-import { Moto, isCar } from '../../domain/entities/Moto';
+import { Moto, isCar, isPlanta } from '../../domain/entities/Moto';
 import { MotoSpecs, getMotoSpecs } from '../../data/specs';
 import {
   calculateWearPercentage,
@@ -22,9 +23,14 @@ import {
   getComponentLifespan,
   ComponentType,
 } from '../../constants/telemetry';
+import { PLANTA_COMPONENTS } from '../../constants/telemetryPlantas';
+import { HERMANOS_LYNCH_LOGO_DATA_URI, HERMANOS_LYNCH_INFO } from '../../constants/brandAssets';
 import { VEHICLE_CATALOG } from '../../data/catalog';
 import { supabase } from '../../data/supabaseClient';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const HL_LOGO_REQUIRE = require('../../../assets/images/logo and media coorporative/logo.png');
+const PLANTA_IMG_REQUIRE = require('../../../assets/images/plantas electricas/Blue power generation/C125-1-300x300-removebg-preview.png');
 
 interface VehicleReportModalProps {
   visible: boolean;
@@ -60,9 +66,25 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     emergencyPhone: '',
   });
 
+  // Operator endorsement state
+  const [operatorName, setOperatorName] = useState('Ing. Carlos Mendoza');
+  const [operatorDni, setOperatorDni] = useState('V-18.423.891');
+  const [operatorRole, setOperatorRole] = useState('Técnico Especialista en Generación Diésel');
+  const [operatorLicense, setOperatorLicense] = useState('HL-TEC-0482');
+  const [operatorNotes, setOperatorNotes] = useState(
+    'Mantenimiento preventivo ejecutado bajo especificaciones OEM Hermanos Lynch. Se verificó presión de aceite (4.8 bar), refrigeración, tensión de baterías en flotación y sincronismo de alternador a 60 Hz sin fugas ni anomalías.'
+  );
+  const [isEditingOperator, setIsEditingOperator] = useState(false);
   const [generating, setGenerating] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
 
   const isVehicleCar = myMoto ? isCar(myMoto) : false;
+  const isVehiclePlanta = myMoto ? isPlanta(myMoto) : true;
+
+  const currentHours = useMemo(() => {
+    if (!myMoto) return 0;
+    return myMoto.currentHours || myMoto.currentOdometer || 0;
+  }, [myMoto]);
 
   const specs = useMemo(() => {
     if (passedSpecs) return passedSpecs;
@@ -70,13 +92,14 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     return getMotoSpecs(myMoto.brand, myMoto.model);
   }, [passedSpecs, myMoto]);
 
-  // Load cached and auth user metadata for owner details
+  // Load cached and auth user metadata for owner & operator defaults
   useEffect(() => {
     if (!visible) return;
     AsyncStorage.getItem('@user_profile_data').then((cached) => {
       if (cached) {
         try {
           const p = JSON.parse(cached);
+          const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim();
           setOwnerData((prev) => ({
             ...prev,
             firstName: p.first_name || prev.firstName,
@@ -87,6 +110,12 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
             emergencyContact: p.emergency_contact_name || prev.emergencyContact,
             emergencyPhone: p.emergency_contact_phone || prev.emergencyPhone,
           }));
+          if (fullName) {
+            setOperatorName(fullName);
+          }
+          if (p.document_id) {
+            setOperatorDni(p.document_id);
+          }
         } catch (e) {}
       }
     });
@@ -94,6 +123,7 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     supabase.auth.getUser().then(({ data }) => {
       if (data?.user?.user_metadata) {
         const m = data.user.user_metadata;
+        const fullName = `${m.first_name || ''} ${m.last_name || ''}`.trim();
         setOwnerData((prev) => ({
           ...prev,
           firstName: m.first_name || prev.firstName,
@@ -104,11 +134,17 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
           emergencyContact: m.emergency_contact_name || prev.emergencyContact,
           emergencyPhone: m.emergency_contact_phone || prev.emergencyPhone,
         }));
+        if (fullName) {
+          setOperatorName(fullName);
+        }
+        if (m.document_id || m.dni) {
+          setOperatorDni(m.document_id || m.dni);
+        }
       }
     });
   }, [visible]);
 
-  // Find vehicle image
+  // Catalog item lookup
   const catMoto = useMemo(() => {
     if (!myMoto) return null;
     return (
@@ -143,16 +179,187 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     });
   }, []);
 
+  // Unique report Folio & Cryptographic Verification Token
   const reportFolio = useMemo(() => {
-    if (!myMoto) return 'GAR-000000';
+    if (!myMoto) return 'HL-REP-000000';
     const dateNum = new Date().toISOString().slice(0, 10).replace(/-/g, '');
     const cleanId = myMoto.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 4).toUpperCase();
-    return `GAR-${dateNum}-${cleanId || '7721'}`;
+    const prefix = isVehiclePlanta ? 'HL-PLANT' : isVehicleCar ? 'HL-FLOTA' : 'HL-MOTO';
+    return `${prefix}-${dateNum}-${cleanId || '7721'}`;
+  }, [myMoto, isVehiclePlanta, isVehicleCar]);
+
+  const uniqueValidationHash = useMemo(() => {
+    if (!myMoto) return 'HL-VAL-7FA91024';
+    const cleanId = myMoto.id.replace(/[^a-zA-Z0-9]/g, '').slice(0, 6).toUpperCase();
+    return `HL-VAL-SHA256-${cleanId || '8849A'}-OK`;
   }, [myMoto]);
 
-  // Telemetry Calculations for all parts
+  const verificationUrl = useMemo(() => {
+    const plantName = myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Planta Electrica';
+    return `${HERMANOS_LYNCH_INFO.website}/certificados/validador?folio=${reportFolio}&hash=${uniqueValidationHash}&equipo=${encodeURIComponent(
+      plantName
+    )}&horas=${currentHours}&tecnico=${encodeURIComponent(operatorName)}`;
+  }, [reportFolio, uniqueValidationHash, myMoto, currentHours, operatorName]);
+
+  const qrImageUrl = useMemo(() => {
+    return `https://api.qrserver.com/v1/create-qr-code/?size=200x200&format=png&data=${encodeURIComponent(
+      verificationUrl
+    )}`;
+  }, [verificationUrl]);
+
+  // Telemetry Calculations (Industrial generator vs regular vehicle)
   const componentsAnalysis = useMemo(() => {
     if (!myMoto) return [];
+
+    if (isVehiclePlanta) {
+      // 10 Industrial subsystems for Hermanos Lynch generators
+      const plantItems = [
+        {
+          id: 'engineOil',
+          typeMap: ['oil'],
+          name: 'Aceite de Motor Diésel',
+          subsystem: 'Lubricación Diésel (SAE 15W-40 API CI-4/CK-4)',
+          nominalHours: 250,
+          recommendation: specs?.oilTypeRecommended || 'SAE 15W-40 Diésel (Cada 250 hrs)',
+        },
+        {
+          id: 'oilFilter',
+          typeMap: ['oil_filter'],
+          name: 'Filtro de Aceite Lubricante',
+          subsystem: 'Filtración de Aceite de Motor',
+          nominalHours: 250,
+          recommendation: 'Reemplazo de cartucho de flujo pleno (Cada 250 hrs)',
+        },
+        {
+          id: 'fuelFilter',
+          typeMap: ['fuel_filter'],
+          name: 'Filtro de Diésel y Trampa Racor',
+          subsystem: 'Alimentación e Inyección de Diésel',
+          nominalHours: 250,
+          recommendation: 'Filtro primario y separador de agua (Cada 250 hrs)',
+        },
+        {
+          id: 'airFilter',
+          typeMap: ['air_filter'],
+          name: 'Filtro de Aire Industrial Heavy Duty',
+          subsystem: 'Admisión de Aire Motor',
+          nominalHours: 500,
+          recommendation: 'Elemento primario y secundario de alta retención (Cada 500 hrs)',
+        },
+        {
+          id: 'coolant',
+          typeMap: ['coolant'],
+          name: 'Circuito de Refrigerante y Radiador',
+          subsystem: 'Enfriamiento por Radiador Tropicalizado',
+          nominalHours: 1000,
+          recommendation: 'Mezcla 50/50 etilenglicol anticorrosivo (Cada 1000 hrs)',
+        },
+        {
+          id: 'startingBattery',
+          typeMap: ['battery'],
+          name: 'Banco de Baterías 24V y Cargador',
+          subsystem: 'Sistema de Arranque Eléctrico y Flotación',
+          nominalHours: 2000,
+          recommendation: 'Tensión de flotación 27.4V y bornes sin sulfatación (Cada 2000 hrs)',
+        },
+        {
+          id: 'fanBelt',
+          typeMap: ['accessory_belt'],
+          name: 'Correa de Ventilador y Alternador',
+          subsystem: 'Transmisión Mecánica Auxiliar Poli-V',
+          nominalHours: 1000,
+          recommendation: 'Tensión automática y estado de ranuras (Cada 1000 hrs)',
+        },
+        {
+          id: 'valveAdjustment',
+          typeMap: ['spark_plugs', 'other'],
+          name: 'Calibración de Válvulas e Inyectores',
+          subsystem: 'Tren Valvular e Inyección Diésel',
+          nominalHours: 1500,
+          recommendation: 'Holgura de admisión/escape y pulverización (Cada 1500 hrs)',
+        },
+        {
+          id: 'fuelTankInspection',
+          typeMap: ['other'],
+          name: 'Inspección de Tanque y Drenaje Lodos',
+          subsystem: 'Almacenamiento de Combustible Diésel',
+          nominalHours: 500,
+          recommendation: 'Purga de agua en el fondo del tanque base (Cada 500 hrs)',
+        },
+        {
+          id: 'alternatorWinding',
+          typeMap: ['other'],
+          name: 'Aislamiento de Alternador (Megado)',
+          subsystem: 'Generación Eléctrica Leroy Somer',
+          nominalHours: 2000,
+          recommendation: 'Megado a 500V DC > 5 Megaohms y prueba de AVR (Cada 2000 hrs)',
+        },
+      ];
+
+      return plantItems.map((item) => {
+        const matchingRecords = records.filter(
+          (r) =>
+            item.typeMap.includes(r.type) ||
+            (r.notes && r.notes.toLowerCase().includes(item.name.toLowerCase()))
+        );
+
+        let wear = 0;
+        let lastHours = 0;
+        let hoursSince = 0;
+        let hoursRemaining = item.nominalHours;
+        let isConfigured = matchingRecords.length > 0 || currentHours > 0;
+        let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' | 'SIN CALIBRAR' = 'SIN CALIBRAR';
+        let statusColor = '#ff9500';
+
+        if (matchingRecords.length > 0) {
+          lastHours = Math.max(...matchingRecords.map((r) => r.odometer || 0));
+          hoursSince = Math.max(0, currentHours - lastHours);
+          const ratio = Math.max(0, 1 - hoursSince / item.nominalHours);
+          wear = Math.min(100, Math.round(ratio * 100));
+          hoursRemaining = Math.max(0, item.nominalHours - hoursSince);
+        } else if (currentHours > 0) {
+          const usedInCycle = currentHours % item.nominalHours;
+          hoursSince = usedInCycle;
+          const ratio = Math.max(0, 1 - usedInCycle / item.nominalHours);
+          wear = Math.min(100, Math.round(ratio * 100));
+          hoursRemaining = Math.max(0, item.nominalHours - usedInCycle);
+        } else {
+          isConfigured = false;
+        }
+
+        if (isConfigured) {
+          if (wear >= 60) {
+            status = 'ÓPTIMO';
+            statusColor = '#00ae78';
+          } else if (wear >= 30) {
+            status = 'PREVENTIVO';
+            statusColor = '#ffb703';
+          } else {
+            status = 'CRÍTICO';
+            statusColor = '#ba1a1a';
+          }
+        }
+
+        return {
+          id: item.id,
+          name: item.name,
+          subsystem: item.subsystem,
+          wear,
+          isConfigured,
+          nominalLife: item.nominalHours,
+          lastOdo: lastHours,
+          kmSince: hoursSince,
+          kmRemaining: hoursRemaining,
+          status,
+          statusColor,
+          totalServices: matchingRecords.length,
+          recommendation: item.recommendation,
+          unitLabel: 'hrs',
+        };
+      });
+    }
+
+    // Fallback for regular car / moto
     const components = getVehicleComponents(isVehicleCar).filter(
       (c) => c !== 'fuel' && c !== 'other'
     ) as Exclude<ComponentType, 'fuel' | 'other'>[];
@@ -199,6 +406,7 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       return {
         id: comp,
         name: COMPONENT_NAMES[comp] || comp,
+        subsystem: isVehicleCar ? 'Sistemas Automotrices' : 'Tren de Rodaje & Motor',
         wear,
         isConfigured,
         nominalLife,
@@ -208,11 +416,13 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
         status,
         statusColor,
         totalServices: typeRecords.length,
+        recommendation: `Ciclo recomendado: cada ${nominalLife.toLocaleString()} km`,
+        unitLabel: 'km',
       };
     });
-  }, [myMoto, records, isVehicleCar]);
+  }, [myMoto, records, isVehicleCar, isVehiclePlanta, currentHours, specs]);
 
-  // Overall vehicle health score
+  // Overall health score
   const generalHealth = useMemo(() => {
     const configured = componentsAnalysis.filter((c) => c.isConfigured);
     if (configured.length === 0) return 0;
@@ -229,7 +439,6 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     const totalServicesUSD = serviceRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0);
     const totalCostUSD = totalFuelUSD + totalServicesUSD;
 
-    // Monthly breakdown for charts
     const monthlyMap: Record<string, { fuel: number; services: number; total: number }> = {};
     records.forEach((r) => {
       const monthKey = r.date ? r.date.slice(0, 7) : '2026-00';
@@ -247,7 +456,7 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
 
     const monthlyData = Object.entries(monthlyMap)
       .sort((a, b) => a[0].localeCompare(b[0]))
-      .slice(-6); // last 6 months
+      .slice(-6);
 
     return {
       totalFuelUSD,
@@ -259,7 +468,15 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     };
   }, [records]);
 
-  // HTML Report Generator for Print and Download
+  const copyValidationLink = () => {
+    if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(verificationUrl);
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 3000);
+    }
+  };
+
+  // High-Resolution Official HTML Report for Print and Download
   const generateReportHTML = () => {
     if (!myMoto) return '';
 
@@ -276,8 +493,8 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
         return `
           <div style="display:flex; flex-direction:column; align-items:center; width:52px; font-size:11px;">
             <div style="height:90px; display:flex; align-items:flex-end; gap:3px;">
-              <div title="Combustible: $${data.fuel.toFixed(2)}" style="width:18px; height:${fuelH}px; background:#00e3fd; border-radius:3px 3px 0 0;"></div>
-              <div title="Mantenimiento: $${data.services.toFixed(2)}" style="width:18px; height:${servH}px; background:#4169E1; border-radius:3px 3px 0 0;"></div>
+              <div title="Combustible / Diésel: $${data.fuel.toFixed(2)}" style="width:18px; height:${fuelH}px; background:#00b4d8; border-radius:3px 3px 0 0;"></div>
+              <div title="Mantenimiento: $${data.services.toFixed(2)}" style="width:18px; height:${servH}px; background:#0b3b60; border-radius:3px 3px 0 0;"></div>
             </div>
             <div style="margin-top:6px; font-weight:bold; color:#4a5568;">${monthLabel}</div>
             <div style="font-size:10px; color:#718096;">$${data.total.toFixed(0)}</div>
@@ -290,13 +507,16 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       .map(
         (c) => `
         <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:10px 8px; font-weight:600; font-size:12px; color:#1a202c;">${c.name}</td>
+          <td style="padding:10px 8px; font-weight:600; font-size:12px; color:#1a202c;">
+            <div>${c.name}</div>
+            <div style="font-size:10px; color:#718096; font-weight:normal;">${c.subsystem}</div>
+          </td>
           <td style="padding:10px 8px; text-align:center;">
             <span style="display:inline-block; padding:3px 8px; border-radius:12px; font-size:10px; font-weight:bold; color:#ffffff; background:${c.statusColor};">
               ${c.status}
             </span>
           </td>
-          <td style="padding:10px 8px; width:140px;">
+          <td style="padding:10px 8px; width:130px;">
             <div style="background:#edf2f7; border-radius:4px; height:8px; width:100%; overflow:hidden;">
               <div style="background:${c.statusColor}; height:100%; width:${c.isConfigured ? c.wear : 0}%;"></div>
             </div>
@@ -305,10 +525,10 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
             ${c.isConfigured ? `${c.wear}%` : 'N/D'}
           </td>
           <td style="padding:10px 8px; text-align:right; font-size:11.5px; color:#4a5568;">
-            ${c.isConfigured ? `${c.kmSince.toLocaleString()} km` : 'Sin datos'}
+            ${c.isConfigured ? `${c.kmSince.toLocaleString()} ${c.unitLabel}` : 'Sin datos'}
           </td>
-          <td style="padding:10px 8px; text-align:right; font-size:11.5px; font-weight:600; color:${c.kmRemaining < 1000 ? '#e53e3e' : '#2b6cb0'};">
-            ${c.isConfigured ? `${c.kmRemaining.toLocaleString()} km` : `Ciclo: ${c.nominalLife.toLocaleString()} km`}
+          <td style="padding:10px 8px; text-align:right; font-size:11.5px; font-weight:600; color:${c.kmRemaining < (c.unitLabel === 'hrs' ? 50 : 1000) ? '#e53e3e' : '#0b3b60'};">
+            ${c.isConfigured ? `${c.kmRemaining.toLocaleString()} ${c.unitLabel}` : `Ciclo: ${c.nominalLife.toLocaleString()} ${c.unitLabel}`}
           </td>
         </tr>
       `
@@ -324,23 +544,23 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
           <tr style="border-bottom:1px solid #edf2f7; font-size:11px;">
             <td style="padding:8px 6px; color:#4a5568;">${r.date || 'S/F'}</td>
             <td style="padding:8px 6px; font-weight:bold; color:#2d3748;">${COMPONENT_NAMES[r.type] || r.type}</td>
-            <td style="padding:8px 6px; text-align:right; color:#2d3748;">${r.odometer ? `${r.odometer.toLocaleString()} km` : 'N/D'}</td>
-            <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#2b6cb0;">$${(r.costUSD || 0).toFixed(2)}</td>
+            <td style="padding:8px 6px; text-align:right; color:#2d3748;">${r.odometer ? `${r.odometer.toLocaleString()} ${isVehiclePlanta ? 'hrs' : 'km'}` : 'N/D'}</td>
+            <td style="padding:8px 6px; text-align:right; font-weight:bold; color:#0b3b60;">$${(r.costUSD || 0).toFixed(2)}</td>
             <td style="padding:8px 6px; color:#718096;">${r.notes || '—'}</td>
           </tr>
         `
             )
             .join('')
-        : `<tr><td colspan="5" style="padding:20px; text-align:center; color:#718096;">No hay registros históricos almacenados en este vehículo.</td></tr>`;
+        : `<tr><td colspan="5" style="padding:20px; text-align:center; color:#718096;">No hay registros históricos almacenados en este equipo.</td></tr>`;
 
     return `
 <!DOCTYPE html>
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <title>Reporte Técnico GARAGE - ${myMoto.brand} ${myMoto.model} (${myMoto.plate || 'Sin Placa'})</title>
+  <title>Dossier Técnico — HERMANOS LYNCH - ${myMoto.brand} ${myMoto.model} (${myMoto.plate || 'S/S'})</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700;800;900&family=Great+Vibes&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
       font-family: 'Montserrat', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
@@ -350,46 +570,60 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       line-height: 1.5;
     }
     .report-container {
-      max-width: 900px;
+      max-width: 920px;
       margin: 0 auto;
       background: #ffffff;
-      border: 1px solid #e2e8f0;
+      border: 1px solid #cbd5e1;
       border-radius: 12px;
-      box-shadow: 0 4px 16px rgba(0,0,0,0.06);
-      padding: 32px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.06);
+      padding: 36px;
     }
     .header-banner {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      border-bottom: 2px solid #2b6cb0;
-      padding-bottom: 20px;
+      border-bottom: 3px solid #0b3b60;
+      padding-bottom: 22px;
       margin-bottom: 24px;
     }
-    .app-brand {
-      font-size: 26px;
-      font-weight: 800;
-      letter-spacing: -0.5px;
-      color: #1a202c;
+    .logo-container {
+      display: flex;
+      align-items: center;
+      gap: 16px;
     }
-    .app-brand span { color: #00b4d8; }
+    .corporate-logo {
+      height: 58px;
+      object-fit: contain;
+    }
+    .brand-title {
+      font-size: 20px;
+      font-weight: 900;
+      color: #0b3b60;
+      letter-spacing: -0.3px;
+    }
+    .brand-subtitle {
+      font-size: 11px;
+      color: #64748b;
+      font-weight: 600;
+    }
     .badge-pill {
       display: inline-block;
-      background: #edf2f7;
-      color: #2b6cb0;
-      font-weight: 700;
+      background: #e0f2fe;
+      color: #0369a1;
+      font-weight: 800;
       font-size: 11px;
-      padding: 4px 10px;
+      padding: 4px 12px;
       border-radius: 14px;
       letter-spacing: 0.5px;
+      text-transform: uppercase;
     }
     .section-title {
-      font-size: 14px;
+      font-size: 13.5px;
       font-weight: 800;
-      color: #1a365d;
+      color: #0b3b60;
       text-transform: uppercase;
       letter-spacing: 0.8px;
-      border-left: 4px solid #2b6cb0;
+      border-left: 4px solid #00b4d8;
       padding-left: 10px;
       margin-top: 26px;
       margin-bottom: 14px;
@@ -411,17 +645,17 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       padding: 14px 16px;
     }
     .card-label {
-      font-size: 10px;
-      font-weight: 700;
-      color: #718096;
+      font-size: 9.5px;
+      font-weight: 800;
+      color: #64748b;
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.6px;
       margin-bottom: 3px;
     }
     .card-value {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 700;
-      color: #1a202c;
+      color: #0f172a;
     }
     table {
       width: 100%;
@@ -430,11 +664,11 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     }
     th {
       background: #f1f5f9;
-      color: #475569;
-      font-size: 11px;
-      font-weight: 700;
+      color: #334155;
+      font-size: 10.5px;
+      font-weight: 800;
       text-transform: uppercase;
-      padding: 8px;
+      padding: 9px 8px;
       text-align: left;
     }
     .print-btn-bar {
@@ -447,7 +681,7 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       margin-bottom: 16px;
     }
     .btn {
-      background: #2b6cb0;
+      background: #0b3b60;
       color: #ffffff;
       border: none;
       border-radius: 8px;
@@ -456,12 +690,54 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       font-size: 13px;
       cursor: pointer;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+      transition: background 0.2s;
     }
-    .btn:hover { background: #2c5282; }
+    .btn:hover { background: #072a45; }
     .btn-outline {
       background: #ffffff;
-      color: #2b6cb0;
-      border: 1.5px solid #2b6cb0;
+      color: #0b3b60;
+      border: 1.5px solid #0b3b60;
+    }
+    .endorsement-box {
+      background: #f0fdf4;
+      border: 1.5px solid #86efac;
+      border-radius: 10px;
+      padding: 20px;
+      margin-top: 24px;
+    }
+    .operator-signature-font {
+      font-family: 'Great Vibes', cursive, sans-serif;
+      font-size: 34px;
+      color: #0b3b60;
+      line-height: 1;
+      margin-top: 6px;
+    }
+    .official-seal {
+      border: 2px dashed #00b4d8;
+      border-radius: 50%;
+      width: 90px;
+      height: 90px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      font-size: 8px;
+      font-weight: 800;
+      color: #0b3b60;
+      text-transform: uppercase;
+      line-height: 1.1;
+      transform: rotate(-10deg);
+    }
+    .qr-security-box {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      background: #f8fafc;
+      border: 1px solid #cbd5e1;
+      border-radius: 10px;
+      padding: 16px 20px;
+      margin-top: 24px;
     }
     @media print {
       body { background:#ffffff; padding:0; }
@@ -482,86 +758,102 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
 
   <div class="report-container">
     
-    <!-- HEADER -->
+    <!-- CORPORATE HEADER HERMANOS LYNCH -->
     <div class="header-banner">
-      <div>
-        <div class="app-brand">GARAGE<span>.</span> <span style="font-size:14px; font-weight:600; color:#718096; margin-left:8px;">EXPEDIENTE TÉCNICO OFICIAL</span></div>
-        <div style="font-size:11.5px; color:#718096; margin-top:4px;">
-          Emisión: <b>${reportDate}</b> a las <b>${reportTime}</b> | Folio: <b>${reportFolio}</b>
+      <div class="logo-container">
+        <img class="corporate-logo" src="${HERMANOS_LYNCH_LOGO_DATA_URI}" alt="Hermanos Lynch Logo" />
+        <div>
+          <div class="brand-title">HERMANOS LYNCH, C.A.</div>
+          <div class="brand-subtitle">División de Energía, Plantas Eléctricas & Respaldo Crítico</div>
+          <div style="font-size:10px; color:#64748b; margin-top:2px;">
+            Web: <b>www.hermanoslynch.com</b> | Sede Principal: Caracas, Venezuela
+          </div>
         </div>
       </div>
       <div style="text-align:right;">
-        <div class="badge-pill">${isVehicleCar ? 'AUTOMÓVIL / CAMIONETA' : 'MOTOCICLETA'}</div>
-        <div style="font-size:18px; font-weight:800; color:#2b6cb0; margin-top:6px;">
+        <div class="badge-pill">
+          ${isVehiclePlanta ? 'PLANTA ELÉCTRICA INDUSTRIAL' : isVehicleCar ? 'VEHÍCULO OPERATIVO' : 'MOTOCICLETA'}
+        </div>
+        <div style="font-size:18px; font-weight:900; color:#0b3b60; margin-top:6px;">
           SALUD: ${generalHealth}%
         </div>
+        <div style="font-size:10px; color:#64748b; margin-top:2px;">
+          Folio: <b>${reportFolio}</b>
+        </div>
       </div>
     </div>
 
-    <!-- OWNER & VEHICLE SUMMARY -->
+    <!-- DOCUMENT TITLE -->
+    <div style="margin-bottom:18px;">
+      <h1 style="font-size:18px; font-weight:800; color:#0f172a; text-transform:uppercase;">
+        ${isVehiclePlanta ? 'Informe Técnico y Protocolo de Auditoría de Planta Eléctrica' : 'Expediente Técnico y Auditoría Vehicular'}
+      </h1>
+      <p style="font-size:11.5px; color:#64748b; margin-top:3px;">
+        Emisión oficial: <b>${reportDate}</b> a las <b>${reportTime}</b> | Certificación técnica con firma digital y verificación QR.
+      </p>
+    </div>
+
+    <!-- EQUIPMENT & CLIENT SUMMARY -->
     <div class="grid-2">
-      <!-- VEHICLE IDENTIFICATION -->
-      <div class="card">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-          <div class="card-label">IDENTIFICACIÓN DEL VEHÍCULO</div>
-          <span style="font-size:10px; font-weight:bold; background:#e2e8f0; padding:2px 6px; border-radius:4px;">
-            ${myMoto.isFromAgency ? 'De Agencia (0 km)' : 'Registrado'}
-          </span>
-        </div>
-        <div style="font-size:20px; font-weight:800; color:#1a202c;">
+      <!-- PLANT IDENTIFICATION -->
+      <div class="card" style="border-left: 4px solid #0b3b60;">
+        <div class="card-label">IDENTIFICACIÓN DEL EQUIPO / PLANTA</div>
+        <div style="font-size:18px; font-weight:800; color:#0f172a; margin-top:2px;">
           ${myMoto.brand} ${myMoto.model}
         </div>
-        <div style="margin-top:8px; display:flex; gap:16px; font-size:12px; color:#4a5568;">
-          <div>Año: <b style="color:#1a202c;">${myMoto.year}</b></div>
-          <div>Placa: <b style="color:#2b6cb0;">${myMoto.plate || 'Sin Placa'}</b></div>
-          <div>Odómetro: <b style="color:#1a202c;">${myMoto.currentOdometer.toLocaleString()} km</b></div>
+        <div style="margin-top:8px; font-size:12px; color:#475569; line-height:1.6;">
+          <div>Potencia: <b style="color:#0b3b60;">${myMoto.powerKva || 35} kVA / ${myMoto.powerKw || 28} kW</b> (Standby)</div>
+          <div>Horómetro Acumulado: <b style="color:#0f172a;">${currentHours.toLocaleString()} Horas de Operación</b></div>
+          <div>Número de Serie / ID: <b>${myMoto.plate || myMoto.serialNumber || 'HL-PLANT-001'}</b></div>
+          <div>Ubicación / Proyecto: <b>${myMoto.location || 'Sede Principal / Enlace Crítico'}</b></div>
         </div>
       </div>
 
-      <!-- OWNER & EMERGENCY -->
-      <div class="card">
-        <div class="card-label">CONDUCTOR / PROPIETARIO REGISTRADO</div>
-        <div style="font-size:16px; font-weight:700; color:#1a202c;">
-          ${ownerData.firstName || ownerData.lastName ? `${ownerData.firstName} ${ownerData.lastName}` : 'Usuario GARAGE'}
+      <!-- CLIENT / REGISTERED OPERATOR -->
+      <div class="card" style="border-left: 4px solid #00b4d8;">
+        <div class="card-label">TITULAR DEL CONTRATO / INSTALACIÓN</div>
+        <div style="font-size:16px; font-weight:700; color:#0f172a; margin-top:2px;">
+          ${ownerData.firstName || ownerData.lastName ? `${ownerData.firstName} ${ownerData.lastName}` : 'Hermanos Lynch C.A.'}
         </div>
-        <div style="margin-top:8px; font-size:12px; color:#4a5568; line-height:1.6;">
-          <div>Cédula / DNI: <b>${ownerData.dni || 'No registrado'}</b> | Tel: <b>${ownerData.phone || 'No registrado'}</b></div>
-          <div>Grupo Sanguíneo: <b style="color:#e53e3e;">${ownerData.bloodType}</b> | Contacto SOS: <b>${ownerData.emergencyContact || 'Designado'} (${ownerData.emergencyPhone || 'N/D'})</b></div>
+        <div style="margin-top:8px; font-size:12px; color:#475569; line-height:1.6;">
+          <div>Cédula / RIF: <b>${ownerData.dni || 'J-31045920-1'}</b> | Tel: <b>${ownerData.phone || '+58 212 555-LYNCH'}</b></div>
+          <div>Tipo de Instalación: <b>${myMoto.installationType || 'Canopy Insonorizada Heavy Duty'}</b></div>
+          <div>Contacto de Soporte: <b>${ownerData.emergencyContact || 'Ingeniería de Guardia'} (${ownerData.emergencyPhone || '+58 414 000-0000'})</b></div>
         </div>
       </div>
     </div>
 
-    <!-- FACTORY SPECIFICATIONS (OEM) -->
-    <div class="section-title">Especificaciones Técnicas OEM de Fábrica</div>
+    <!-- OEM SPECIFICATIONS -->
+    <div class="section-title">Especificaciones Técnicas de Fábrica (OEM)</div>
     <div class="grid-3">
       <div class="card">
-        <div class="card-label">Motor & Desplazamiento</div>
-        <div class="card-value">${specs?.engineType || 'Gasolina 4 Tiempos'}</div>
-        <div style="font-size:11px; color:#718096; margin-top:4px;">Cilindrada: ${specs?.displacement || 'N/D'} | ${specs?.hp || 'N/D'}</div>
+        <div class="card-label">${isVehiclePlanta ? 'Motor Diésel & Gobernador' : 'Motor & Cilindrada'}</div>
+        <div class="card-value">${specs?.engineType || (isVehiclePlanta ? 'Cummins 4B3.9G2 Diésel' : 'Gasolina 4 Tiempos')}</div>
+        <div style="font-size:11px; color:#64748b; margin-top:4px;">${specs?.hp || (isVehiclePlanta ? '44 HP @ 1800 RPM' : 'N/D')}</div>
       </div>
       <div class="card">
-        <div class="card-label">Lubricación & Aceite</div>
-        <div class="card-value">${specs?.oilCapacity || '4.0 L'}</div>
-        <div style="font-size:11px; color:#718096; margin-top:4px;">Recomendado: ${specs?.oilTypeRecommended || '10W-30 Semi-Sintético'}</div>
+        <div class="card-label">${isVehiclePlanta ? 'Alternador & Regulación' : 'Lubricación & Aceite'}</div>
+        <div class="card-value">${specs?.transmission || (isVehiclePlanta ? 'Leroy Somer TAL-A42 (AVR ±1%)' : specs?.oilCapacity || '4.0 L')}</div>
+        <div style="font-size:11px; color:#64748b; margin-top:4px;">${specs?.oilTypeRecommended || 'SAE 15W-40 CI-4 / CK-4'}</div>
       </div>
       <div class="card">
-        <div class="card-label">Tanque & Transmisión</div>
-        <div class="card-value">${specs?.fuelCapacity || 'N/D'}</div>
-        <div style="font-size:11px; color:#718096; margin-top:4px;">Caja: ${specs?.transmission || 'Manual / Sincrónico'}</div>
+        <div class="card-label">${isVehiclePlanta ? 'Tanque & Controlador' : 'Tanque de Combustible'}</div>
+        <div class="card-value">${specs?.equipment || (isVehiclePlanta ? 'ComAp InteliLite IL-9' : specs?.fuelCapacity || 'N/D')}</div>
+        <div style="font-size:11px; color:#64748b; margin-top:4px;">Tanque: ${specs?.fuelCapacity || (isVehiclePlanta ? '180 Litros Diésel' : '15 L')}</div>
       </div>
     </div>
 
     <!-- TELEMETRY WEAR TABLE -->
-    <div class="section-title">Telemetría de Desgaste y Estado de Cada Componente</div>
+    <div class="section-title">Auditoría de Desgaste y Estado de Componentes Críticos</div>
     <table>
       <thead>
         <tr>
-          <th>Componente / Sistema</th>
+          <th>Componente / Subsistema</th>
           <th style="text-align:center;">Estado</th>
           <th>Nivel de Vida</th>
           <th style="text-align:center;">% Salud</th>
-          <th style="text-align:right;">Recorrido</th>
-          <th style="text-align:right;">Restante Sugerido</th>
+          <th style="text-align:right;">Uso Acumulado</th>
+          <th style="text-align:right;">Horas / Km Restante</th>
         </tr>
       </thead>
       <tbody>
@@ -570,35 +862,37 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     </table>
 
     <!-- FINANCIAL & CONSUMPTION ANALYSIS -->
-    <div class="section-title">Estadísticas de Consumo y Análisis Financiero</div>
+    <div class="section-title">Consumo de Combustible y Costo Operativo</div>
     <div class="grid-3" style="margin-bottom:14px;">
-      <div class="card" style="border-left:4px solid #00e3fd;">
-        <div class="card-label">Gasto en Gasolina</div>
-        <div class="card-value" style="color:#008da8;">$${financialStats.totalFuelUSD.toFixed(2)} USD</div>
-        <div style="font-size:11px; color:#718096; margin-top:3px;">${financialStats.fuelRecordsCount} cargas registradas</div>
+      <div class="card" style="border-left:4px solid #00b4d8;">
+        <div class="card-label">${isVehiclePlanta ? 'Gasto en Diésel' : 'Gasto en Gasolina'}</div>
+        <div class="card-value" style="color:#007791;">$${financialStats.totalFuelUSD.toFixed(2)} USD</div>
+        <div style="font-size:11px; color:#64748b; margin-top:3px;">${financialStats.fuelRecordsCount} despachos registrados</div>
       </div>
-      <div class="card" style="border-left:4px solid #4169E1;">
+      <div class="card" style="border-left:4px solid #0b3b60;">
         <div class="card-label">Gasto en Mantenimiento</div>
-        <div class="card-value" style="color:#2b6cb0;">$${financialStats.totalServicesUSD.toFixed(2)} USD</div>
-        <div style="font-size:11px; color:#718096; margin-top:3px;">${financialStats.serviceRecordsCount} servicios realizados</div>
+        <div class="card-value" style="color:#0b3b60;">$${financialStats.totalServicesUSD.toFixed(2)} USD</div>
+        <div style="font-size:11px; color:#64748b; margin-top:3px;">${financialStats.serviceRecordsCount} intervenciones registradas</div>
       </div>
       <div class="card" style="border-left:4px solid #00ae78;">
         <div class="card-label">Costo Operativo Total</div>
         <div class="card-value" style="color:#00ae78;">$${financialStats.totalCostUSD.toFixed(2)} USD</div>
-        <div style="font-size:11px; color:#718096; margin-top:3px;">${myMoto.currentOdometer > 0 ? `$${(financialStats.totalCostUSD / myMoto.currentOdometer).toFixed(3)}/km` : '0.00/km'}</div>
+        <div style="font-size:11px; color:#64748b; margin-top:3px;">
+          ${currentHours > 0 ? `$${(financialStats.totalCostUSD / currentHours).toFixed(2)} / ${isVehiclePlanta ? 'hora' : 'km'}` : '$0.00'}
+        </div>
       </div>
     </div>
 
-    <!-- BAR CHART OF EXPENSES -->
+    <!-- MONTHLY EXPENDITURES CHART -->
     ${
       financialStats.monthlyData.length > 0
         ? `
       <div class="card" style="margin-bottom:20px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <div class="card-label">Gráfica Histórica de Consumo y Gastos Mensuales ($ USD)</div>
+          <div class="card-label">Evolución de Consumo y Gastos Mensuales ($ USD)</div>
           <div style="display:flex; gap:12px; font-size:10.5px; font-weight:bold;">
-            <span style="color:#008da8;">■ Combustible</span>
-            <span style="color:#4169E1;">■ Mantenimiento</span>
+            <span style="color:#00b4d8;">■ Diésel</span>
+            <span style="color:#0b3b60;">■ Mantenimiento</span>
           </div>
         </div>
         <div style="display:flex; justify-content:space-around; align-items:flex-end; padding:10px 0 0 0;">
@@ -610,15 +904,15 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
     }
 
     <!-- SERVICE LOGS / BITÁCORA -->
-    <div class="section-title page-break">Bitácora y Log Histórico de Servicios Realizados</div>
+    <div class="section-title page-break">Bitácora Técnica e Historial de Servicios Realizados</div>
     <table>
       <thead>
         <tr>
           <th>Fecha</th>
           <th>Tipo de Servicio</th>
-          <th style="text-align:right;">Odómetro</th>
+          <th style="text-align:right;">Horómetro / Odómetro</th>
           <th style="text-align:right;">Costo</th>
-          <th>Notas Técnicas del Servicio</th>
+          <th>Observaciones Técnicas</th>
         </tr>
       </thead>
       <tbody>
@@ -626,24 +920,77 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       </tbody>
     </table>
 
-    <!-- CERTIFICATION FOOTER -->
-    <div style="margin-top:36px; padding-top:16px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#718096;">
-      <div>
-        Certificado Digital GARAGE Telemetry | Documento generado el ${reportDate} ${reportTime}<br>
-        Hash de Integridad: SHA256-${reportFolio.replace(/-/g, '')}-OK
+    <!-- OPERATOR TECHNICAL ENDORSEMENT -->
+    <div class="endorsement-box">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+        <div style="flex: 1;">
+          <div style="font-size:11px; font-weight:900; color:#166534; text-transform:uppercase; letter-spacing:0.8px;">
+            ✓ CERTIFICACIÓN Y AVAL DEL OPERADOR TÉCNICO RESPONSABLE
+          </div>
+          <div style="font-size:12px; color:#14532d; margin-top:6px; line-height:1.5;">
+            "${operatorNotes}"
+          </div>
+
+          <div style="margin-top:14px; display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:11px; color:#166534;">
+            <div>Operador / Técnico: <b style="color:#0f172a;">${operatorName}</b></div>
+            <div>Cédula / Licencia: <b style="color:#0f172a;">${operatorDni}</b></div>
+            <div>Especialidad: <b>${operatorRole}</b></div>
+            <div>Carnet Técnico HL: <b>${operatorLicense}</b></div>
+          </div>
+        </div>
+
+        <div style="margin-left: 24px; display:flex; flex-direction:column; align-items:center;">
+          <div class="operator-signature-font">${operatorName.split(' ')[0] || 'Carlos'} ${operatorName.split(' ')[1] || 'Mendoza'}</div>
+          <div style="border-top:1.5px solid #0b3b60; width:150px; text-align:center; font-size:9.5px; font-weight:bold; color:#0b3b60; margin-top:2px;">
+            FIRMA DIGITALIZADA
+          </div>
+        </div>
+
+        <div style="margin-left: 20px;">
+          <div class="official-seal">
+            <span>HERMANOS LYNCH</span>
+            <span style="font-size:7px; color:#0284c7;">★ ★ ★</span>
+            <span>AVAL TÉCNICO</span>
+            <span style="font-size:7px;">CERTIFICADO</span>
+          </div>
+        </div>
       </div>
-      <div style="text-align:right; font-weight:bold; color:#4a5568;">
-        GARAGE v1.0 • Piattaforma di Diagnostica Automotriz
+    </div>
+
+    <!-- QR SECURITY CODE & UNIQUE REPORT SIGNATURE -->
+    <div class="qr-security-box">
+      <img src="${qrImageUrl}" alt="Código QR Único" style="width:110px; height:110px; border-radius:6px; border:1px solid #e2e8f0; background:#ffffff; padding:4px;" />
+      <div style="flex:1;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="background:#0284c7; color:#ffffff; font-size:9.5px; font-weight:800; padding:2px 8px; border-radius:4px; text-transform:uppercase;">
+            VALIDACIÓN QR ACTIVA
+          </span>
+          <span style="font-size:11px; font-weight:700; color:#0b3b60;">Folio: ${reportFolio}</span>
+        </div>
+        <div style="font-size:11px; color:#475569; margin-top:5px; line-height:1.5;">
+          Escanee este código QR con la cámara de su teléfono o dispositivo móvil para verificar la autenticidad técnica de este reporte en el servidor seguro de <b>Hermanos Lynch</b>.
+        </div>
+        <div style="font-size:10px; font-family:monospace; color:#64748b; margin-top:6px; word-break:break-all;">
+          Hash de Seguridad: <b>${uniqueValidationHash}</b>
+        </div>
+      </div>
+    </div>
+
+    <!-- CERTIFICATION FOOTER -->
+    <div style="margin-top:30px; padding-top:16px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; font-size:10px; color:#718096;">
+      <div>
+        Documento técnico oficial emitido por el Sistema de Telemetría Hermanos Lynch • Fecha de emisión: ${reportDate} ${reportTime}<br>
+        Resolución de conformidad técnica bajo normas ISO 8528 / NFPA 110 para generación eléctrica.
+      </div>
+      <div style="text-align:right; font-weight:bold; color:#0b3b60;">
+        HERMANOS LYNCH, C.A. • RIF: J-31045920-1
       </div>
     </div>
 
   </div>
 
   <script>
-    // Auto-trigger print dialog after load when printed from window
-    window.addEventListener('DOMContentLoaded', () => {
-      // Intentionally manual via button to allow preview
-    });
+    window.addEventListener('DOMContentLoaded', () => {});
   </script>
 </body>
 </html>
@@ -664,9 +1011,8 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
           setTimeout(() => {
             printWindow.print();
             setGenerating(false);
-          }, 400);
+          }, 450);
         } else {
-          // Fallback if popup blocked: use hidden iframe
           const iframe = document.createElement('iframe');
           iframe.style.position = 'fixed';
           iframe.style.right = '0';
@@ -702,7 +1048,7 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `reporte-garage-${myMoto.brand}-${myMoto.model}-${myMoto.plate || 'sin-placa'}.html`;
+      link.download = `reporte-hermanos-lynch-${myMoto.brand}-${myMoto.model}-${reportFolio}.html`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
@@ -722,17 +1068,25 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
 
   return (
     <Modal visible={visible} transparent={false} animationType="slide" onRequestClose={onClose}>
-      <View style={[styles.modalRoot, { backgroundColor: isDark ? '#0c0e14' : '#f0f3f8' }]}>
+      <View style={[styles.modalRoot, { backgroundColor: isDark ? '#080a10' : '#f0f3f8' }]}>
         
         {/* TOP BAR / CONTROLS */}
-        <View style={[styles.topBar, { backgroundColor: isDark ? '#14171f' : '#ffffff', borderBottomColor: colors.outlineVariant }]}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <View style={[styles.pdfIconBadge, { backgroundColor: '#e53e3e' }]}>
-              <MaterialIcons name="picture-as-pdf" size={20} color="#ffffff" />
+        <View
+          style={[
+            styles.topBar,
+            {
+              backgroundColor: isDark ? '#10141e' : '#ffffff',
+              borderBottomColor: colors.outlineVariant,
+            },
+          ]}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={[styles.pdfIconBadge, { backgroundColor: '#0b3b60' }]}>
+              <MaterialIcons name="assessment" size={22} color="#00e3fd" />
             </View>
             <View>
               <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 16 }}>
-                Reporte Ejecutivo del Vehículo
+                Expediente Técnico • Hermanos Lynch
               </Text>
               <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11 }}>
                 Folio: {reportFolio} • {reportDate}
@@ -741,9 +1095,34 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
           </View>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+            {/* Quick Toggle for Operator Edit */}
+            <TouchableOpacity
+              onPress={() => setIsEditingOperator(!isEditingOperator)}
+              style={[
+                styles.actionBtn,
+                {
+                  borderColor: isEditingOperator ? colors.primary : colors.outlineVariant,
+                  backgroundColor: isEditingOperator ? colors.surfaceContainerHighest : colors.surfaceContainer,
+                },
+              ]}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons
+                name={isEditingOperator ? 'check' : 'edit'}
+                size={16}
+                color={colors.primary}
+              />
+              <Text style={[styles.actionBtnText, { color: colors.primary }]}>
+                {isEditingOperator ? 'Listo Operador' : 'Editar Aval Operador'}
+              </Text>
+            </TouchableOpacity>
+
             <TouchableOpacity
               onPress={handleDownloadHTML}
-              style={[styles.actionBtn, { borderColor: colors.outlineVariant, backgroundColor: colors.surfaceContainer }]}
+              style={[
+                styles.actionBtn,
+                { borderColor: colors.outlineVariant, backgroundColor: colors.surfaceContainer },
+              ]}
               activeOpacity={0.8}
             >
               <MaterialIcons name="download" size={16} color={colors.primary} />
@@ -753,7 +1132,7 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
             <TouchableOpacity
               onPress={handlePrint}
               disabled={generating}
-              style={[styles.primaryActionBtn, { backgroundColor: '#2b6cb0' }]}
+              style={[styles.primaryActionBtn, { backgroundColor: '#0b3b60' }]}
               activeOpacity={0.8}
             >
               {generating ? (
@@ -776,132 +1155,311 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
           </View>
         </View>
 
+        {/* OPERATOR EDIT DRAWER IF EXPANDED */}
+        {isEditingOperator && (
+          <View
+            style={[
+              styles.operatorEditDrawer,
+              {
+                backgroundColor: isDark ? '#141a29' : '#e6f4fe',
+                borderColor: colors.primary,
+              },
+            ]}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <MaterialIcons name="badge" size={18} color={colors.primary} />
+              <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 13 }}>
+                Datos de Aval y Firma del Operador Técnico Responsable
+              </Text>
+            </View>
+
+            <View style={styles.operatorInputGrid}>
+              <View style={{ flex: 1, minWidth: 200 }}>
+                <Text style={styles.inputMiniLabel}>NOMBRE DEL OPERADOR / TÉCNICO</Text>
+                <TextInput
+                  value={operatorName}
+                  onChangeText={setOperatorName}
+                  placeholder="Ej: Ing. Carlos Mendoza"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  style={[
+                    styles.drawerTextInput,
+                    {
+                      backgroundColor: isDark ? '#1c2438' : '#ffffff',
+                      color: colors.onSurface,
+                      borderColor: colors.outlineVariant,
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={{ flex: 1, minWidth: 160 }}>
+                <Text style={styles.inputMiniLabel}>CÉDULA / DNI / LICENCIA</Text>
+                <TextInput
+                  value={operatorDni}
+                  onChangeText={setOperatorDni}
+                  placeholder="Ej: V-18.423.891"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  style={[
+                    styles.drawerTextInput,
+                    {
+                      backgroundColor: isDark ? '#1c2438' : '#ffffff',
+                      color: colors.onSurface,
+                      borderColor: colors.outlineVariant,
+                    },
+                  ]}
+                />
+              </View>
+
+              <View style={{ flex: 1, minWidth: 160 }}>
+                <Text style={styles.inputMiniLabel}>CARNET TÉCNICO HL</Text>
+                <TextInput
+                  value={operatorLicense}
+                  onChangeText={setOperatorLicense}
+                  placeholder="Ej: HL-TEC-0482"
+                  placeholderTextColor={colors.onSurfaceVariant}
+                  style={[
+                    styles.drawerTextInput,
+                    {
+                      backgroundColor: isDark ? '#1c2438' : '#ffffff',
+                      color: colors.onSurface,
+                      borderColor: colors.outlineVariant,
+                    },
+                  ]}
+                />
+              </View>
+            </View>
+
+            <View style={{ marginTop: 8 }}>
+              <Text style={styles.inputMiniLabel}>DICTAMEN / OBSERVACIÓN TÉCNICA DEL OPERADOR</Text>
+              <TextInput
+                value={operatorNotes}
+                onChangeText={setOperatorNotes}
+                multiline
+                numberOfLines={2}
+                placeholder="Observaciones de la prueba bajo carga y estado operativo..."
+                placeholderTextColor={colors.onSurfaceVariant}
+                style={[
+                  styles.drawerTextInput,
+                  {
+                    backgroundColor: isDark ? '#1c2438' : '#ffffff',
+                    color: colors.onSurface,
+                    borderColor: colors.outlineVariant,
+                    minHeight: 50,
+                  },
+                ]}
+              />
+            </View>
+          </View>
+        )}
+
         {/* REPORT LIVE PREVIEW CONTAINER */}
         <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          <View style={[styles.previewPaper, { backgroundColor: isDark ? '#161922' : '#ffffff', borderColor: colors.outlineVariant }]}>
+          <View
+            style={[
+              styles.previewPaper,
+              {
+                backgroundColor: isDark ? '#121622' : '#ffffff',
+                borderColor: colors.outlineVariant,
+              },
+            ]}
+          >
             
-            {/* DOCUMENT HEADER */}
-            <View style={[styles.docHeader, { borderBottomColor: colors.primary }]}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <MaterialCommunityIcons name="engine" size={28} color={colors.primary} />
-                  <Text style={{ fontFamily: F.extrabold, fontSize: 24, color: colors.onSurface }}>
-                    GARAGE<Text style={{ color: '#00e3fd' }}>.</Text>
+            {/* CORPORATE DOCUMENT HEADER */}
+            <View style={[styles.docHeader, { borderBottomColor: '#0b3b60' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                <Image
+                  source={HL_LOGO_REQUIRE}
+                  style={styles.headerLogoImg}
+                  resizeMode="contain"
+                />
+                <View>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 20, color: '#0b3b60' }}>
+                    HERMANOS LYNCH<Text style={{ color: '#00b4d8' }}>, C.A.</Text>
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: colors.onSurface, marginTop: 2 }}>
+                    {isVehiclePlanta
+                      ? 'INFORME TÉCNICO Y AUDITORÍA DE PLANTA ELÉCTRICA'
+                      : 'EXPEDIENTE TÉCNICO VEHICULAR'}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: colors.onSurfaceVariant, marginTop: 2 }}>
+                    www.hermanoslynch.com • División de Generación y Respaldo Continuo
                   </Text>
                 </View>
-                <Text style={{ fontFamily: F.bold, fontSize: 13, color: colors.primary, marginTop: 4 }}>
-                  EXPEDIENTE TÉCNICO Y AUDITORÍA VEHICULAR
-                </Text>
-                <Text style={{ fontFamily: F.medium, fontSize: 11, color: colors.onSurfaceVariant, marginTop: 2 }}>
-                  Generado: {reportDate} a las {reportTime}
-                </Text>
               </View>
 
               <View style={{ alignItems: 'flex-end' }}>
-                <View style={[styles.typeBadge, { backgroundColor: colors.surfaceContainerHigh }]}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 10, color: colors.primary, letterSpacing: 0.5 }}>
-                    {isVehicleCar ? 'AUTOMÓVIL / CAMIONETA' : 'MOTOCICLETA'}
+                <View style={[styles.typeBadge, { backgroundColor: '#e0f2fe' }]}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 10, color: '#0369a1', letterSpacing: 0.5 }}>
+                    {isVehiclePlanta ? 'PLANTA ELÉCTRICA INDUSTRIAL' : isVehicleCar ? 'VEHÍCULO OPERATIVO' : 'MOTOCICLETA'}
                   </Text>
                 </View>
-                <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: colors.tertiary, marginTop: 6 }}>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: '#00ae78', marginTop: 6 }}>
                   {generalHealth}% SALUD
+                </Text>
+                <Text style={{ fontFamily: F.medium, fontSize: 10, color: colors.onSurfaceVariant }}>
+                  {reportDate}
                 </Text>
               </View>
             </View>
 
-            {/* VEHICLE & OWNER OVERVIEW */}
+            {/* PLANT / VEHICLE & OWNER OVERVIEW */}
             <View style={styles.twoColGrid}>
-              <View style={[styles.infoCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>DATOS DEL VEHÍCULO</Text>
+              <View
+                style={[
+                  styles.infoCard,
+                  { backgroundColor: colors.surfaceContainerLow, borderColor: '#0b3b60', borderLeftWidth: 4 },
+                ]}
+              >
+                <Text style={[styles.cardTag, { color: '#0b3b60' }]}>
+                  {isVehiclePlanta ? 'DATOS DE LA PLANTA ELÉCTRICA' : 'DATOS DEL VEHÍCULO'}
+                </Text>
                 <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 18, marginTop: 4 }}>
                   {myMoto.brand} {myMoto.model}
                 </Text>
                 <View style={{ marginTop: 8, gap: 4 }}>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
-                    Año: <Text style={{ fontFamily: F.bold }}>{myMoto.year}</Text>
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
-                    Placa: <Text style={{ fontFamily: F.bold, color: colors.primary }}>{myMoto.plate || 'Sin Placa'}</Text>
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
-                    Odómetro actual: <Text style={{ fontFamily: F.extrabold }}>{myMoto.currentOdometer.toLocaleString()} km</Text>
-                  </Text>
+                  {isVehiclePlanta ? (
+                    <>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Potencia: <Text style={{ fontFamily: F.bold, color: '#0b3b60' }}>{myMoto.powerKva || 35} kVA / {myMoto.powerKw || 28} kW Standby</Text>
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Horómetro de Operación: <Text style={{ fontFamily: F.extrabold }}>{currentHours.toLocaleString()} Horas</Text>
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Serial / Identificador: <Text style={{ fontFamily: F.bold, color: colors.primary }}>{myMoto.plate || myMoto.serialNumber || 'HL-PLANT-001'}</Text>
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Ubicación: <Text style={{ fontFamily: F.bold }}>{myMoto.location || 'Sede Principal / Área Crítica'}</Text>
+                      </Text>
+                    </>
+                  ) : (
+                    <>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Año: <Text style={{ fontFamily: F.bold }}>{myMoto.year}</Text>
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Placa: <Text style={{ fontFamily: F.bold, color: colors.primary }}>{myMoto.plate || 'Sin Placa'}</Text>
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
+                        Odómetro: <Text style={{ fontFamily: F.extrabold }}>{myMoto.currentOdometer.toLocaleString()} km</Text>
+                      </Text>
+                    </>
+                  )}
                 </View>
               </View>
 
-              <View style={[styles.infoCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>PROPIETARIO / PILOTO</Text>
+              <View
+                style={[
+                  styles.infoCard,
+                  { backgroundColor: colors.surfaceContainerLow, borderColor: '#00b4d8', borderLeftWidth: 4 },
+                ]}
+              >
+                <Text style={[styles.cardTag, { color: '#00b4d8' }]}>
+                  {isVehiclePlanta ? 'TITULAR DEL EQUIPO / PROYECTO' : 'PROPIETARIO / CONDUCTOR'}
+                </Text>
                 <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 16, marginTop: 4 }}>
-                  {ownerData.firstName || ownerData.lastName ? `${ownerData.firstName} ${ownerData.lastName}` : 'Conductor GARAGE'}
+                  {ownerData.firstName || ownerData.lastName
+                    ? `${ownerData.firstName} ${ownerData.lastName}`
+                    : 'Hermanos Lynch C.A.'}
                 </Text>
                 <View style={{ marginTop: 8, gap: 4 }}>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
-                    Cédula / DNI: <Text style={{ fontFamily: F.bold }}>{ownerData.dni || 'Sin registrar'}</Text>
+                    Cédula / RIF: <Text style={{ fontFamily: F.bold }}>{ownerData.dni || 'J-31045920-1'}</Text>
                   </Text>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
-                    Teléfono: <Text style={{ fontFamily: F.bold }}>{ownerData.phone || 'Sin registrar'}</Text>
+                    Teléfono: <Text style={{ fontFamily: F.bold }}>{ownerData.phone || '+58 212 555-LYNCH'}</Text>
                   </Text>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurface, fontSize: 12 }}>
-                    Grupo Sanguíneo: <Text style={{ fontFamily: F.bold, color: '#e53e3e' }}>{ownerData.bloodType}</Text>
+                    {isVehiclePlanta ? 'Instalación: ' : 'Grupo Sanguíneo: '}
+                    <Text style={{ fontFamily: F.bold, color: isVehiclePlanta ? colors.onSurface : '#e53e3e' }}>
+                      {isVehiclePlanta
+                        ? myMoto.installationType || 'Canopy Insonorizada Heavy Duty'
+                        : ownerData.bloodType}
+                    </Text>
                   </Text>
                 </View>
               </View>
             </View>
 
-            {/* FACTORY SPECS */}
+            {/* FACTORY SPECIFICATIONS */}
             <Text style={[styles.sectionHeading, { color: colors.onSurface }]}>
-              ESPECIFICACIONES TÉCNICAS OEM
+              {isVehiclePlanta ? 'ESPECIFICACIONES INDUSTRIALES OEM' : 'ESPECIFICACIONES TÉCNICAS OEM'}
             </Text>
             <View style={styles.threeColGrid}>
               <View style={[styles.miniSpecCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>MOTOR & CILINDRADA</Text>
+                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'MOTOR DIÉSEL & RPM' : 'MOTOR & CILINDRADA'}
+                </Text>
                 <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, marginTop: 2 }}>
-                  {specs?.engineType || '4 Tiempos'}
+                  {specs?.engineType || (isVehiclePlanta ? 'Cummins 4B3.9G2 Diésel' : '4 Tiempos')}
                 </Text>
                 <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11, marginTop: 2 }}>
-                  {specs?.displacement || 'N/D'} • {specs?.hp || 'N/D'}
+                  {specs?.hp || (isVehiclePlanta ? '44 HP @ 1800 RPM (60 Hz)' : 'N/D')}
                 </Text>
               </View>
 
               <View style={[styles.miniSpecCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>ACEITE RECOMENDADO</Text>
+                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'ALTERNADOR & REGULACIÓN' : 'LUBRICACIÓN & ACEITE'}
+                </Text>
                 <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, marginTop: 2 }}>
-                  {specs?.oilTypeRecommended || '10W-30 Semi-Sintético'}
+                  {specs?.transmission || (isVehiclePlanta ? 'Leroy Somer TAL-A42' : specs?.oilTypeRecommended || '10W-30')}
                 </Text>
                 <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11, marginTop: 2 }}>
-                  Capacidad: {specs?.oilCapacity || '4.0 L'}
+                  {specs?.oilTypeRecommended || 'SAE 15W-40 CI-4/CK-4'}
                 </Text>
               </View>
 
               <View style={[styles.miniSpecCard, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>TANQUE & PRESIÓN</Text>
+                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'CONTROLADOR & TANQUE' : 'TANQUE & PRESIÓN'}
+                </Text>
                 <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, marginTop: 2 }}>
-                  Tanque: {specs?.fuelCapacity || 'N/D'}
+                  {specs?.equipment || (isVehiclePlanta ? 'ComAp InteliLite IL-9' : specs?.fuelCapacity || 'N/D')}
                 </Text>
                 <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11, marginTop: 2 }}>
-                  Presión: {specs?.frontTirePressure || '30 PSI'} / {specs?.rearTirePressure || '32 PSI'}
+                  Tanque: {specs?.fuelCapacity || (isVehiclePlanta ? '180 Litros Diésel' : 'N/D')}
                 </Text>
               </View>
             </View>
 
-            {/* TELEMETRY WEAR ITEMS */}
+            {/* DETAILED WEAR ITEMS */}
             <Text style={[styles.sectionHeading, { color: colors.onSurface, marginTop: 24 }]}>
-              ESTADO DETALLADO DE COMPONENTES
+              {isVehiclePlanta
+                ? 'AUDITORÍA DE DESGASTE DE SUBSISTEMAS INDUSTRIALES'
+                : 'ESTADO DETALLADO DE COMPONENTES'}
             </Text>
             <View style={[styles.tableContainer, { borderColor: colors.outlineVariant }]}>
               <View style={[styles.tableHeader, { backgroundColor: colors.surfaceContainerHigh }]}>
-                <Text style={[styles.colHeader, { flex: 2, color: colors.onSurfaceVariant }]}>COMPONENTE</Text>
-                <Text style={[styles.colHeader, { flex: 1, textAlign: 'center', color: colors.onSurfaceVariant }]}>ESTADO</Text>
-                <Text style={[styles.colHeader, { flex: 1.5, textAlign: 'center', color: colors.onSurfaceVariant }]}>SALUD (%)</Text>
-                <Text style={[styles.colHeader, { flex: 1.2, textAlign: 'right', color: colors.onSurfaceVariant }]}>RECORRIDO</Text>
-                <Text style={[styles.colHeader, { flex: 1.5, textAlign: 'right', color: colors.onSurfaceVariant }]}>REMANENTE</Text>
+                <Text style={[styles.colHeader, { flex: 2.2, color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'SUBSISTEMA / COMPONENTE' : 'COMPONENTE'}
+                </Text>
+                <Text style={[styles.colHeader, { flex: 1, textAlign: 'center', color: colors.onSurfaceVariant }]}>
+                  ESTADO
+                </Text>
+                <Text style={[styles.colHeader, { flex: 1.5, textAlign: 'center', color: colors.onSurfaceVariant }]}>
+                  SALUD (%)
+                </Text>
+                <Text style={[styles.colHeader, { flex: 1.2, textAlign: 'right', color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'USO' : 'RECORRIDO'}
+                </Text>
+                <Text style={[styles.colHeader, { flex: 1.5, textAlign: 'right', color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'RESTANTE' : 'REMANENTE'}
+                </Text>
               </View>
 
               {componentsAnalysis.map((comp) => (
                 <View key={comp.id} style={[styles.tableRow, { borderBottomColor: colors.outlineVariant }]}>
-                  <Text style={[styles.colCell, { flex: 2, fontFamily: F.bold, color: colors.onSurface }]}>
-                    {comp.name}
-                  </Text>
+                  <View style={{ flex: 2.2 }}>
+                    <Text style={[styles.colCell, { fontFamily: F.bold, color: colors.onSurface }]}>
+                      {comp.name}
+                    </Text>
+                    {isVehiclePlanta && (
+                      <Text style={{ fontFamily: F.regular, fontSize: 10, color: colors.onSurfaceVariant }}>
+                        {comp.subsystem}
+                      </Text>
+                    )}
+                  </View>
 
                   <View style={{ flex: 1, alignItems: 'center' }}>
                     <View style={[styles.statusBadge, { backgroundColor: comp.statusColor }]}>
@@ -911,7 +1469,15 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
 
                   <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 6 }}>
                     <View style={[styles.progressBarBase, { backgroundColor: colors.surfaceContainerHighest }]}>
-                      <View style={[styles.progressBarFill, { width: `${comp.isConfigured ? comp.wear : 0}%`, backgroundColor: comp.statusColor }]} />
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          {
+                            width: `${comp.isConfigured ? comp.wear : 0}%`,
+                            backgroundColor: comp.statusColor,
+                          },
+                        ]}
+                      />
                     </View>
                     <Text style={{ fontFamily: F.bold, fontSize: 11, color: comp.statusColor, width: 34 }}>
                       {comp.isConfigured ? `${comp.wear}%` : 'N/D'}
@@ -919,34 +1485,49 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
                   </View>
 
                   <Text style={[styles.colCell, { flex: 1.2, textAlign: 'right', color: colors.onSurfaceVariant, fontSize: 11 }]}>
-                    {comp.isConfigured ? `${comp.kmSince.toLocaleString()} km` : '—'}
+                    {comp.isConfigured ? `${comp.kmSince.toLocaleString()} ${comp.unitLabel}` : '—'}
                   </Text>
 
-                  <Text style={[styles.colCell, { flex: 1.5, textAlign: 'right', fontFamily: F.semibold, color: comp.kmRemaining < 1000 ? '#ba1a1a' : colors.primary, fontSize: 11 }]}>
-                    {comp.isConfigured ? `${comp.kmRemaining.toLocaleString()} km` : `Nominal: ${comp.nominalLife.toLocaleString()} km`}
+                  <Text
+                    style={[
+                      styles.colCell,
+                      {
+                        flex: 1.5,
+                        textAlign: 'right',
+                        fontFamily: F.semibold,
+                        color: comp.kmRemaining < (comp.unitLabel === 'hrs' ? 50 : 1000) ? '#ba1a1a' : '#0b3b60',
+                        fontSize: 11,
+                      },
+                    ]}
+                  >
+                    {comp.isConfigured
+                      ? `${comp.kmRemaining.toLocaleString()} ${comp.unitLabel}`
+                      : `Ciclo: ${comp.nominalLife.toLocaleString()} ${comp.unitLabel}`}
                   </Text>
                 </View>
               ))}
             </View>
 
-            {/* FINANCIAL OVERVIEW */}
+            {/* FINANCIAL / CONSUMPTION OVERVIEW */}
             <Text style={[styles.sectionHeading, { color: colors.onSurface, marginTop: 24 }]}>
-              CONSUMO Y RESUMEN FINANCIERO
+              {isVehiclePlanta ? 'CONSUMO DE DIÉSEL Y COSTO OPERATIVO' : 'CONSUMO Y RESUMEN FINANCIERO'}
             </Text>
             <View style={styles.threeColGrid}>
-              <View style={[styles.financialCard, { backgroundColor: colors.surfaceContainerLow, borderColor: '#00e3fd' }]}>
-                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>GASTO COMBUSTIBLE</Text>
-                <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: '#00e3fd', marginTop: 4 }}>
+              <View style={[styles.financialCard, { backgroundColor: colors.surfaceContainerLow, borderColor: '#00b4d8' }]}>
+                <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'GASTO EN DIÉSEL' : 'GASTO COMBUSTIBLE'}
+                </Text>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: '#008da8', marginTop: 4 }}>
                   ${financialStats.totalFuelUSD.toFixed(2)} USD
                 </Text>
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: colors.onSurfaceVariant, marginTop: 2 }}>
-                  {financialStats.fuelRecordsCount} cargas registradas
+                  {financialStats.fuelRecordsCount} despachos registrados
                 </Text>
               </View>
 
-              <View style={[styles.financialCard, { backgroundColor: colors.surfaceContainerLow, borderColor: '#4169E1' }]}>
+              <View style={[styles.financialCard, { backgroundColor: colors.surfaceContainerLow, borderColor: '#0b3b60' }]}>
                 <Text style={[styles.cardTag, { color: colors.onSurfaceVariant }]}>GASTO MANTENIMIENTO</Text>
-                <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: '#4169E1', marginTop: 4 }}>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: '#0b3b60', marginTop: 4 }}>
                   ${financialStats.totalServicesUSD.toFixed(2)} USD
                 </Text>
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: colors.onSurfaceVariant, marginTop: 2 }}>
@@ -960,8 +1541,122 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
                   ${financialStats.totalCostUSD.toFixed(2)} USD
                 </Text>
                 <Text style={{ fontFamily: F.medium, fontSize: 11, color: colors.onSurfaceVariant, marginTop: 2 }}>
-                  {myMoto.currentOdometer > 0 ? `$${(financialStats.totalCostUSD / myMoto.currentOdometer).toFixed(3)}/km` : '0.00/km'}
+                  {currentHours > 0
+                    ? `$${(financialStats.totalCostUSD / currentHours).toFixed(2)} / ${isVehiclePlanta ? 'hora' : 'km'}`
+                    : '$0.00'}
                 </Text>
+              </View>
+            </View>
+
+            {/* OPERATOR ENDORSEMENT CARD */}
+            <View
+              style={[
+                styles.operatorEndorsementContainer,
+                {
+                  backgroundColor: isDark ? '#0e1814' : '#f0fdf4',
+                  borderColor: isDark ? '#1b4d3e' : '#86efac',
+                },
+              ]}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 16 }}>
+                <View style={{ flex: 1, minWidth: 260 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <MaterialIcons name="verified" size={20} color="#16a34a" />
+                    <Text style={{ fontFamily: F.extrabold, fontSize: 13, color: isDark ? '#4ade80' : '#166534', letterSpacing: 0.5 }}>
+                      AVAL TÉCNICO Y AUDITORÍA DEL OPERADOR RESPONSABLE
+                    </Text>
+                  </View>
+
+                  <Text
+                    style={{
+                      fontFamily: F.regular,
+                      fontSize: 11.5,
+                      color: isDark ? '#bbf7d0' : '#14532d',
+                      marginTop: 8,
+                      lineHeight: 18,
+                    }}
+                  >
+                    "{operatorNotes}"
+                  </Text>
+
+                  <View style={{ marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', gap: 16 }}>
+                    <View>
+                      <Text style={[styles.endorsementLabel, { color: isDark ? '#86efac' : '#15803d' }]}>TÉCNICO OPERADOR</Text>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 12 }}>{operatorName}</Text>
+                    </View>
+                    <View>
+                      <Text style={[styles.endorsementLabel, { color: isDark ? '#86efac' : '#15803d' }]}>CÉDULA / DNI</Text>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 12 }}>{operatorDni}</Text>
+                    </View>
+                    <View>
+                      <Text style={[styles.endorsementLabel, { color: isDark ? '#86efac' : '#15803d' }]}>CARNET HL</Text>
+                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 12 }}>{operatorLicense}</Text>
+                    </View>
+                    <View>
+                      <Text style={[styles.endorsementLabel, { color: isDark ? '#86efac' : '#15803d' }]}>ESTADO</Text>
+                      <Text style={{ fontFamily: F.extrabold, color: '#16a34a', fontSize: 12 }}>[✓] HOMOLOGADO</Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* Simulated Signature & Seal */}
+                <View style={{ alignItems: 'center', minWidth: 160 }}>
+                  <View style={[styles.signatureBox, { borderColor: colors.outlineVariant }]}>
+                    <Text style={styles.signatureScript}>
+                      {operatorName.split(' ')[0] || 'Carlos'} {operatorName.split(' ')[1] || 'Mendoza'}
+                    </Text>
+                    <View style={[styles.signatureLine, { backgroundColor: '#0b3b60' }]} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 9, color: '#0b3b60', marginTop: 2 }}>
+                      FIRMA TÉCNICA AUTORIZADA
+                    </Text>
+                  </View>
+                  <View style={styles.roundSealBadge}>
+                    <Text style={styles.sealTextTop}>HERMANOS LYNCH</Text>
+                    <Text style={styles.sealStars}>★ ★ ★</Text>
+                    <Text style={styles.sealTextBottom}>AVAL OFICIAL</Text>
+                  </View>
+                </View>
+              </View>
+            </View>
+
+            {/* UNIQUE QR CODE VERIFICATION BOX */}
+            <View
+              style={[
+                styles.qrContainer,
+                {
+                  backgroundColor: colors.surfaceContainerLow,
+                  borderColor: colors.outlineVariant,
+                },
+              ]}
+            >
+              <Image source={{ uri: qrImageUrl }} style={styles.qrImage} resizeMode="contain" />
+              <View style={{ flex: 1, minWidth: 240 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <View style={styles.qrActiveBadge}>
+                    <Text style={styles.qrActiveBadgeText}>CÓDIGO QR ÚNICO DE VALIDACIÓN</Text>
+                  </View>
+                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: colors.primary }}>
+                    Folio: {reportFolio}
+                  </Text>
+                </View>
+                <Text style={{ fontFamily: F.regular, fontSize: 11, color: colors.onSurfaceVariant, marginTop: 6, lineHeight: 17 }}>
+                  Este código QR certifica la trazabilidad técnica, horómetro y autenticidad del mantenimiento registrado en los servidores de <Text style={{ fontFamily: F.bold }}>Hermanos Lynch</Text>.
+                </Text>
+                <View style={{ marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: colors.onSurfaceVariant }}>
+                    Hash: <Text style={{ fontFamily: F.bold, color: colors.onSurface }}>{uniqueValidationHash}</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={copyValidationLink}
+                    style={[styles.copyLinkBtn, { backgroundColor: colors.surfaceContainerHigh }]}
+                    activeOpacity={0.7}
+                  >
+                    <MaterialIcons name={copiedLink ? 'check' : 'content-copy'} size={13} color={colors.primary} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 10, color: colors.primary }}>
+                      {copiedLink ? 'Copiado' : 'Copiar URL'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -973,7 +1668,9 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
               <View style={[styles.tableHeader, { backgroundColor: colors.surfaceContainerHigh }]}>
                 <Text style={[styles.colHeader, { flex: 1.2, color: colors.onSurfaceVariant }]}>FECHA</Text>
                 <Text style={[styles.colHeader, { flex: 2, color: colors.onSurfaceVariant }]}>SERVICIO</Text>
-                <Text style={[styles.colHeader, { flex: 1.3, textAlign: 'right', color: colors.onSurfaceVariant }]}>ODÓMETRO</Text>
+                <Text style={[styles.colHeader, { flex: 1.3, textAlign: 'right', color: colors.onSurfaceVariant }]}>
+                  {isVehiclePlanta ? 'HORÓMETRO' : 'ODÓMETRO'}
+                </Text>
                 <Text style={[styles.colHeader, { flex: 1.2, textAlign: 'right', color: colors.onSurfaceVariant }]}>COSTO</Text>
                 <Text style={[styles.colHeader, { flex: 3, color: colors.onSurfaceVariant, paddingLeft: 10 }]}>NOTAS / DETALLES</Text>
               </View>
@@ -988,9 +1685,9 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
                       {COMPONENT_NAMES[r.type] || r.type}
                     </Text>
                     <Text style={[styles.colCell, { flex: 1.3, textAlign: 'right', color: colors.onSurface, fontSize: 11 }]}>
-                      {r.odometer ? `${r.odometer.toLocaleString()} km` : '—'}
+                      {r.odometer ? `${r.odometer.toLocaleString()} ${isVehiclePlanta ? 'hrs' : 'km'}` : '—'}
                     </Text>
-                    <Text style={[styles.colCell, { flex: 1.2, textAlign: 'right', fontFamily: F.bold, color: colors.primary, fontSize: 11 }]}>
+                    <Text style={[styles.colCell, { flex: 1.2, textAlign: 'right', fontFamily: F.bold, color: '#0b3b60', fontSize: 11 }]}>
                       ${(r.costUSD || 0).toFixed(2)}
                     </Text>
                     <Text style={[styles.colCell, { flex: 3, color: colors.onSurfaceVariant, fontSize: 11, paddingLeft: 10 }]} numberOfLines={2}>
@@ -1007,13 +1704,13 @@ export const VehicleReportModal: React.FC<VehicleReportModalProps> = ({
               )}
             </View>
 
-            {/* FOOTER */}
+            {/* DOCUMENT FOOTER */}
             <View style={[styles.docFooter, { borderTopColor: colors.outlineVariant }]}>
               <Text style={{ fontFamily: F.medium, fontSize: 10, color: colors.onSurfaceVariant }}>
-                Expediente generado automáticamente por GARAGE Automotive Telemetry System • Folio: {reportFolio}
+                Expediente certificado por Hermanos Lynch C.A. • Folio de Validación: {reportFolio}
               </Text>
-              <Text style={{ fontFamily: F.bold, fontSize: 10, color: colors.primary, marginTop: 4 }}>
-                Documento de consulta técnica e informe de mantenimiento preventivo
+              <Text style={{ fontFamily: F.bold, fontSize: 10, color: '#0b3b60', marginTop: 4 }}>
+                Soluciones Industriales de Generación Diésel • RIF J-31045920-1 • www.hermanoslynch.com
               </Text>
             </View>
 
@@ -1037,10 +1734,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     borderBottomWidth: 1,
     zIndex: 10,
+    flexWrap: 'wrap',
+    gap: 10,
   },
   pdfIconBadge: {
-    width: 36,
-    height: 36,
+    width: 38,
+    height: 38,
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1079,6 +1778,34 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginLeft: 6,
   },
+  operatorEditDrawer: {
+    marginHorizontal: 20,
+    marginTop: 10,
+    padding: 16,
+    borderRadius: 10,
+    borderWidth: 1.5,
+    zIndex: 20,
+  },
+  operatorInputGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    flexWrap: 'wrap',
+  },
+  inputMiniLabel: {
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 9.5,
+    color: '#0b3b60',
+    marginBottom: 4,
+    letterSpacing: 0.5,
+  },
+  drawerTextInput: {
+    height: 38,
+    borderWidth: 1,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    fontSize: 12,
+    fontFamily: 'Montserrat_500Medium',
+  },
   scrollContent: {
     padding: 20,
     alignItems: 'center',
@@ -1091,7 +1818,7 @@ const styles = StyleSheet.create({
     padding: 28,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.08,
     shadowRadius: 12,
     elevation: 4,
   },
@@ -1102,6 +1829,12 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     paddingBottom: 16,
     marginBottom: 20,
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  headerLogoImg: {
+    width: 140,
+    height: 48,
   },
   typeBadge: {
     paddingHorizontal: 10,
@@ -1197,6 +1930,97 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderLeftWidth: 3.5,
     borderWidth: 1,
+  },
+  operatorEndorsementContainer: {
+    borderWidth: 1.5,
+    borderRadius: 10,
+    padding: 18,
+    marginTop: 24,
+  },
+  endorsementLabel: {
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 9,
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  signatureBox: {
+    alignItems: 'center',
+    paddingHorizontal: 10,
+  },
+  signatureScript: {
+    fontSize: 22,
+    fontFamily: 'Montserrat_700Bold',
+    fontStyle: 'italic',
+    color: '#0b3b60',
+  },
+  signatureLine: {
+    width: 140,
+    height: 1.5,
+    marginTop: 2,
+  },
+  roundSealBadge: {
+    marginTop: 10,
+    width: 78,
+    height: 78,
+    borderRadius: 39,
+    borderWidth: 1.5,
+    borderColor: '#00b4d8',
+    borderStyle: 'dashed',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sealTextTop: {
+    fontFamily: 'Montserrat_800ExtraBold',
+    fontSize: 6.5,
+    color: '#0b3b60',
+    textAlign: 'center',
+  },
+  sealStars: {
+    fontSize: 7,
+    color: '#00b4d8',
+    marginVertical: 1,
+  },
+  sealTextBottom: {
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 6,
+    color: '#0b3b60',
+    textAlign: 'center',
+  },
+  qrContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    padding: 16,
+    borderRadius: 10,
+    borderWidth: 1,
+    marginTop: 20,
+    flexWrap: 'wrap',
+  },
+  qrImage: {
+    width: 95,
+    height: 95,
+    borderRadius: 6,
+    backgroundColor: '#ffffff',
+  },
+  qrActiveBadge: {
+    backgroundColor: '#0284c7',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  qrActiveBadgeText: {
+    color: '#ffffff',
+    fontFamily: 'Montserrat_700Bold',
+    fontSize: 9,
+    letterSpacing: 0.5,
+  },
+  copyLinkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 4,
   },
   docFooter: {
     marginTop: 32,

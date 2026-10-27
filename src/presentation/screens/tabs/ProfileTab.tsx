@@ -1,5 +1,5 @@
 // Run: npx expo install expo-image-picker
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   View, 
   Text, 
@@ -22,9 +22,9 @@ import * as ImagePicker from 'expo-image-picker';
 import { TutorialModal } from '../../components/TutorialModal';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LegalDocModal, LegalDocType } from '../../components/LegalDocModal';
-import { EmergencyCrashModal } from '../../components/EmergencyCrashModal';
+import { AssignedOperatorModal } from '../../components/AssignedOperatorModal';
 import { isWebPlatform } from '../../utils/platformMode';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 import { VehicleReportModal } from '../../components/VehicleReportModal';
 
 interface ProfileTabProps {
@@ -32,8 +32,22 @@ interface ProfileTabProps {
 }
 
 export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
-  const { myMoto, motos, selectMoto, deleteMoto, updateMoto, logout, setIsAddingMoto } = useMyMoto();
+  const { 
+    myMoto, 
+    motos, 
+    selectMoto, 
+    deleteMoto, 
+    updateMoto, 
+    logout, 
+    setIsAddingMoto, 
+    drivesCompanyVehicle, 
+    setDrivesCompanyVehicle,
+    userRole,
+    isAdmin
+  } = useMyMoto();
   const { colors, mode, isDark, toggleTheme } = useTheme();
+  
+  const isVehiclePlanta = isPlanta(myMoto);
   
   const [userData, setUserData] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
@@ -123,9 +137,18 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
 
   if (!myMoto) return null;
 
-  const displayName = firstName || 'Piloto';
+  const isOperatorOrAdmin = isAdmin || userRole === 'admin';
+  const displayName = firstName || (isOperatorOrAdmin ? 'Operador Técnico' : 'Titular de Planta');
   const displayLastName = lastName || '';
   const avatarUrl = localAvatarUri || userData?.user_metadata?.avatar_url;
+
+  const plantasBajoControl = useMemo(() => {
+    return (motos || []).filter((m) => isPlanta(m));
+  }, [motos]);
+
+  const vehiculosAsignados = useMemo(() => {
+    return (motos || []).filter((m) => isCar(m) || m.vehicleType === 'car');
+  }, [motos]);
 
   const pickImage = async () => {
     try {
@@ -281,15 +304,45 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
             <Text style={{ fontSize: 22, fontFamily: F.bold, color: colors.onSurface, marginTop: 12 }}>
               {displayName} {displayLastName}
             </Text>
-            <Text style={{ fontSize: 13, fontFamily: F.medium, color: colors.onSurfaceVariant, marginTop: 2 }}>
-              {userData?.email || 'Piloto Registrado'}
+
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor: isOperatorOrAdmin ? 'rgba(26, 92, 255, 0.15)' : 'rgba(0, 180, 216, 0.15)',
+              borderColor: isOperatorOrAdmin ? '#1a5cff' : '#00b4d8',
+              borderWidth: 1,
+              paddingHorizontal: 12,
+              paddingVertical: 4,
+              borderRadius: 14,
+              marginTop: 6
+            }}>
+              <MaterialIcons
+                name={isOperatorOrAdmin ? "verified-user" : "badge"}
+                size={14}
+                color={isOperatorOrAdmin ? "#1a5cff" : "#00b4d8"}
+              />
+              <Text style={{
+                fontFamily: F.bold,
+                fontSize: 11,
+                color: isOperatorOrAdmin ? (isDark ? '#60a5fa' : '#1a5cff') : (isDark ? '#38bdf8' : '#0284c7'),
+                letterSpacing: 0.5
+              }}>
+                {isOperatorOrAdmin ? 'OPERADOR TÉCNICO • HERMANOS LYNCH' : 'CLIENTE / TITULAR DE PLANTA'}
+              </Text>
+            </View>
+
+            <Text style={{ fontSize: 13, fontFamily: F.medium, color: colors.onSurfaceVariant, marginTop: 6 }}>
+              {userData?.email || (isOperatorOrAdmin ? 'operaciones@hermanoslynch.com' : 'cliente@empresa.com')}
             </Text>
           </View>
 
-          {/* SECCIÓN 1: DATOS PERSONALES DEL PILOTO */}
+          {/* SECCIÓN 1: DATOS PERSONALES DEL OPERADOR / RESPONSABLE */}
           <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>Datos Personales</Text>
+              <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>
+                {isOperatorOrAdmin ? 'Ficha Técnica del Operador' : 'Datos del Responsable de Planta'}
+              </Text>
               <MaterialIcons name="person-outline" size={20} color={colors.primary} />
             </View>
 
@@ -437,7 +490,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               ) : (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <MaterialIcons name="save" size={18} color={colors.onPrimary} />
-                  <Text style={{ fontFamily: F.bold, color: colors.onPrimary, fontSize: 14 }}>Guardar Datos del Piloto</Text>
+                  <Text style={{ fontFamily: F.bold, color: colors.onPrimary, fontSize: 14 }}>
+                    {isOperatorOrAdmin ? 'Guardar Ficha del Operador' : 'Guardar Datos del Perfil'}
+                  </Text>
                 </View>
               )}
             </TouchableOpacity>
@@ -462,27 +517,42 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               >
                 <MaterialIcons name="warning" size={18} color="#FF453A" />
                 <Text style={{ fontFamily: F.bold, color: '#FF453A', fontSize: 13, letterSpacing: 0.3 }}>
-                  Ver Protocolo de Emergencia SOS
+                  {isOperatorOrAdmin ? 'Ver Protocolo de Seguridad Industrial' : 'Ver Ficha del Operador Asignado'}
                 </Text>
               </TouchableOpacity>
             )}
           </View>
 
-          {/* MIS MOTOS */}
+          {/* SECCIÓN: PLANTAS ELÉCTRICAS BAJO CONTROL / SUPERVISIÓN */}
           <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>Mis Vehículos Registrados</Text>
-              <MaterialCommunityIcons name="engine" size={20} color={colors.primary} />
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <MaterialCommunityIcons name="generator-portable" size={22} color={colors.primary} />
+                <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>
+                  {isOperatorOrAdmin ? 'Plantas Eléctricas Bajo Mi Control' : 'Mis Plantas Eléctricas Registradas'}
+                </Text>
+              </View>
+              <View style={{ backgroundColor: isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(39, 95, 227, 0.1)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 10 }}>
+                  {isOperatorOrAdmin ? 'SUPERVISIÓN TÉCNICA' : 'TELEMETRÍA'}
+                </Text>
+              </View>
             </View>
+
+            <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 12, marginBottom: 14 }}>
+              {isOperatorOrAdmin
+                ? 'Grupos electrógenos bajo supervisión directa, mantenimiento preventivo y control de telemetría.'
+                : 'Plantas eléctricas vinculadas a tu cuenta con monitoreo de horas y servicio.'}
+            </Text>
+
             <ScrollView 
               horizontal 
               keyboardShouldPersistTaps="handled"
               showsHorizontalScrollIndicator={false} 
               contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
             >
-              {motos?.map((m) => {
+              {(plantasBajoControl.length > 0 ? plantasBajoControl : [myMoto]).map((m) => {
                 const isSelected = m.id === myMoto.id;
-                const vehicleIsCar = isCar(m);
                 return (
                   <TouchableOpacity 
                     key={m.id}
@@ -495,37 +565,38 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                       borderRadius: 16,
                       borderWidth: 1.5,
                       borderColor: isSelected ? colors.primary : (mode === 'dark' ? 'rgba(64, 72, 92, 0.4)' : colors.outlineVariant),
-                      minWidth: 175,
-                      maxWidth: 220,
+                      minWidth: 200,
+                      maxWidth: 240,
                       cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
-                    }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flex: 1, paddingRight: 4 }}>
-                        <MaterialIcons 
-                          name={vehicleIsCar ? "directions-car" : "two-wheeler"} 
-                          size={18} 
+                        <MaterialCommunityIcons 
+                          name="generator-portable" 
+                          size={20} 
                           color={isSelected ? colors.primary : colors.onSurfaceVariant} 
                         />
                         <Text style={{ fontFamily: F.bold, color: isSelected ? colors.primary : colors.onSurface, fontSize: 13, flex: 1 }} numberOfLines={1}>
                           {m.brand}
                         </Text>
                       </View>
-                      {motos.length > 1 && (
+                      {plantasBajoControl.length > 1 && (
                         <TouchableOpacity 
                           onPress={(e) => {
                             e?.stopPropagation?.();
                             confirmDeleteMoto(m.id, `${m.brand} ${m.model}`);
                           }} 
                           style={{ 
-                            padding: 6, 
-                            borderRadius: 8,
+                            padding: 5, 
+                            borderRadius: 6,
                             backgroundColor: mode === 'dark' ? 'rgba(255, 69, 58, 0.18)' : 'rgba(255, 69, 58, 0.12)',
                             cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined 
                           }}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                          accessibilityLabel="Eliminar vehículo"
+                          accessibilityLabel="Eliminar planta"
                         >
-                          <MaterialIcons name="delete-outline" size={17} color="#FF453A" />
+                          <MaterialIcons name="delete-outline" size={16} color="#FF453A" />
                         </TouchableOpacity>
                       )}
                       {isSelected && (
@@ -533,17 +604,24 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                       )}
                     </View>
                     
-                    <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 14 }} numberOfLines={1}>
+                    <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 15 }} numberOfLines={1}>
                       {m.model}
                     </Text>
+
+                    <Text style={{ fontFamily: F.medium, color: colors.primary, fontSize: 11.5, marginTop: 2 }}>
+                      {m.powerKva ? `${m.powerKva} kVA` : `${m.powerKw || 35} kW`} • {m.fuelType || 'Diesel'}
+                    </Text>
                     
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-                      <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11 }}>
-                        Año {m.year}
-                      </Text>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 10 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <MaterialCommunityIcons name="clock-outline" size={12} color={colors.onSurfaceVariant} />
+                        <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11 }}>
+                          {m.currentHours || m.currentOdometer || 0} hrs
+                        </Text>
+                      </View>
                       <View style={{ backgroundColor: mode === 'dark' ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.05)', paddingHorizontal: 6, paddingVertical: 2, borderRadius: 6 }}>
                         <Text style={{ fontFamily: F.bold, color: colors.secondary, fontSize: 10 }}>
-                          {m.plate || 'Sin placa'}
+                          {m.serialNumber || m.plate || `BPG-${m.model}`}
                         </Text>
                       </View>
                     </View>
@@ -561,33 +639,156 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                   borderWidth: 1.5,
                   borderStyle: 'dashed',
                   borderColor: mode === 'dark' ? '#00e3fd' : colors.primary,
-                  minWidth: 165,
+                  minWidth: 175,
                   justifyContent: 'center',
                   alignItems: 'center',
                   gap: 8,
                   cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
-                }}>
+                }}
+              >
                 <MaterialIcons name="add-circle" size={26} color={mode === 'dark' ? '#00e3fd' : colors.primary} />
                 <Text style={{ fontFamily: F.bold, color: mode === 'dark' ? '#00e3fd' : colors.primary, fontSize: 12, textAlign: 'center' }}>
-                  Anexar un nuevo vehículo
+                  {isOperatorOrAdmin ? 'Anexar planta bajo control' : 'Anexar una nueva planta'}
                 </Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
 
+          {/* SECCIÓN: VEHÍCULOS DE FLOTA ASIGNADOS (MÓVIL DE SOPORTE TÉCNICO) */}
+          {isOperatorOrAdmin && (
+            <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialIcons name="local-shipping" size={22} color={colors.primary} />
+                  <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>
+                    Vehículos Asignados de Flota
+                  </Text>
+                </View>
+                <View style={{ backgroundColor: 'rgba(37, 211, 102, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                  <Text style={{ fontFamily: F.bold, color: '#25D366', fontSize: 10 }}>MÓVIL DE SOPORTE</Text>
+                </View>
+              </View>
+
+              <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 12, marginBottom: 14 }}>
+                Unidades oficiales de Hermanos Lynch asignadas para inspección en campo, guardias técnicas y traslado de repuestos.
+              </Text>
+
+              {/* SWITCH DE CONDUCCIÓN DE VEHÍCULO CORPORATIVO */}
+              <View style={{
+                flexDirection: 'row',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                backgroundColor: colors.surfaceContainer,
+                padding: 12,
+                borderRadius: 14,
+                marginBottom: drivesCompanyVehicle ? 12 : 0
+              }}>
+                <View style={{ flex: 1, paddingRight: 10 }}>
+                  <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13 }}>
+                    Conduzco Unidad de Flota Oficial
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11.5, marginTop: 2 }}>
+                    {drivesCompanyVehicle 
+                      ? 'Guantera Digital (Wallet) activa para pólizas, RCV, trimestres y licencias.'
+                      : 'Activa si tienes una camioneta o vehículo de asistencia asignado en tu turno.'}
+                  </Text>
+                </View>
+                <TouchableOpacity
+                  onPress={() => setDrivesCompanyVehicle(!drivesCompanyVehicle)}
+                  style={{
+                    backgroundColor: drivesCompanyVehicle ? colors.primary : colors.surfaceContainerHigh,
+                    paddingHorizontal: 12,
+                    paddingVertical: 7,
+                    borderRadius: 12,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6
+                  }}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons 
+                    name={drivesCompanyVehicle ? "check-circle" : "radio-button-unchecked"} 
+                    size={16} 
+                    color={drivesCompanyVehicle ? "#FFF" : colors.onSurfaceVariant} 
+                  />
+                  <Text style={{ fontFamily: F.bold, color: drivesCompanyVehicle ? "#FFF" : colors.onSurfaceVariant, fontSize: 12 }}>
+                    {drivesCompanyVehicle ? 'Asignado' : 'Sin Móvil'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* TARJETA DEL VEHÍCULO DE FLOTA ASIGNADO */}
+              {drivesCompanyVehicle && (
+                <View style={{
+                  backgroundColor: colors.surfaceContainer,
+                  borderRadius: 16,
+                  padding: 16,
+                  borderWidth: 1,
+                  borderColor: colors.outlineVariant,
+                  gap: 12
+                }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                      <View style={{
+                        width: 42,
+                        height: 42,
+                        borderRadius: 12,
+                        backgroundColor: 'rgba(26, 92, 255, 0.15)',
+                        justifyContent: 'center',
+                        alignItems: 'center'
+                      }}>
+                        <MaterialIcons name="directions-car" size={24} color="#1a5cff" />
+                      </View>
+                      <View>
+                        <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 14 }}>
+                          Toyota Hilux 4x4 • Móvil de Asistencia
+                        </Text>
+                        <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11.5 }}>
+                          Vehículo Oficial Hermanos Lynch • Cuadrilla HL-04
+                        </Text>
+                      </View>
+                    </View>
+                    <View style={{ backgroundColor: 'rgba(26, 92, 255, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                      <Text style={{ fontFamily: F.bold, color: '#1a5cff', fontSize: 11 }}>A12B34C</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: colors.outlineVariant }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="speed" size={16} color={colors.primary} />
+                      <Text style={{ fontFamily: F.semibold, color: colors.onSurface, fontSize: 12 }}>
+                        Odómetro Flota: 48,250 km
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <MaterialIcons name="account-balance-wallet" size={16} color="#00e3fd" />
+                      <Text style={{ fontFamily: F.bold, color: '#00e3fd', fontSize: 11 }}>
+                        Wallet Activa
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+            </View>
+          )}
+
           {/* GENERADOR DE REPORTE TÉCNICO PDF */}
-          <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: '#e53e3e', borderWidth: 1.2 }]}>
+          <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: '#0b3b60', borderWidth: 1.2 }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <MaterialIcons name="picture-as-pdf" size={22} color="#e53e3e" />
-                <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>Expediente & Reporte PDF</Text>
+                <MaterialIcons name="picture-as-pdf" size={22} color="#00e3fd" />
+                <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>
+                  {isVehiclePlanta ? 'Expediente & Reporte Oficial de la Planta' : 'Expediente & Reporte PDF'}
+                </Text>
               </View>
-              <View style={{ backgroundColor: 'rgba(229, 62, 62, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
-                <Text style={{ fontFamily: F.bold, color: '#e53e3e', fontSize: 10 }}>OFICIAL</Text>
+              <View style={{ backgroundColor: 'rgba(0, 227, 253, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 10 }}>HERMANOS LYNCH</Text>
               </View>
             </View>
             <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 12, lineHeight: 18, marginBottom: 14 }}>
-              Genera un informe completo en PDF con especificaciones OEM, estado de cada pieza, gráficas de consumo/gasolina y bitácora de servicios.
+              {isVehiclePlanta
+                ? 'Genera el informe oficial en PDF con especificaciones OEM, telemetría de 10 subsistemas industriales, horómetro, aval del operador y código QR único.'
+                : 'Genera un informe completo en PDF con especificaciones OEM, estado de cada pieza, gráficas de consumo/gasolina y bitácora de servicios.'}
             </Text>
             <TouchableOpacity
               onPress={() => onOpenReport ? onOpenReport() : setShowReportModal(true)}
@@ -597,7 +798,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                 alignItems: 'center',
                 justifyContent: 'center',
                 gap: 8,
-                backgroundColor: '#e53e3e',
+                backgroundColor: '#0b3b60',
                 paddingVertical: 12,
                 borderRadius: 12,
                 cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
@@ -605,15 +806,17 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
             >
               <MaterialIcons name="print" size={18} color="#ffffff" />
               <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13, letterSpacing: 0.5 }}>
-                Generar Reporte PDF del Vehículo
+                {isVehiclePlanta ? 'Generar Expediente PDF de la Planta' : 'Generar Reporte PDF del Vehículo'}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* DETALLES DE LA MOTO ACTUAL */}
+          {/* DETALLES DE LA PLANTA O VEHÍCULO ACTUAL */}
           <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>Ajustes del Vehículo Activo</Text>
+              <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>
+                {isVehiclePlanta ? 'Ajustes de la Planta Activa' : 'Ajustes del Vehículo Activo'}
+              </Text>
               <MaterialIcons name="edit" size={20} color={colors.primary} />
             </View>
             
@@ -637,24 +840,31 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               </View>
               
               <View>
-                <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>N° DE PLACA</Text>
+                <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
+                  {isVehiclePlanta ? 'SERIAL / IDENTIFICADOR DE PLANTA' : 'N° DE PLACA'}
+                </Text>
                 <TextInput 
                   style={[styles.inputField, { backgroundColor: colors.surfaceContainer, color: colors.onSurface, borderColor: colors.outlineVariant, fontFamily: F.bold }]} 
                   value={myMoto.plate || ''}
-                  onChangeText={(t) => updateMoto({ plate: t })}
-                  placeholder="Ej. AB1C23D"
+                  onChangeText={(t) => updateMoto({ plate: t, serialNumber: t })}
+                  placeholder={isVehiclePlanta ? "Ej. BPG-C35-001 / Sede Principal" : "Ej. AB1C23D"}
                   placeholderTextColor={colors.onSurfaceVariant}
                   autoCapitalize="characters"
                 />
               </View>
               
               <View>
-                <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>KILOMETRAJE ACTUAL (Odómetro)</Text>
+                <Text style={[styles.inputLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
+                  {isVehiclePlanta ? 'HORAS DE OPERACIÓN (HORÓMETRO)' : 'KILOMETRAJE ACTUAL (Odómetro)'}
+                </Text>
                 <TextInput 
                   style={[styles.inputField, { backgroundColor: colors.surfaceContainer, color: colors.onSurface, borderColor: colors.outlineVariant, fontFamily: F.bold }]} 
-                  value={myMoto.currentOdometer?.toString() || ''}
-                  onChangeText={(t) => updateMoto({ currentOdometer: parseInt(t) || 0 })}
-                  placeholder="0"
+                  value={(myMoto.currentHours ?? myMoto.currentOdometer)?.toString() || ''}
+                  onChangeText={(t) => {
+                    const val = parseInt(t) || 0;
+                    updateMoto({ currentOdometer: val, currentHours: val });
+                  }}
+                  placeholder={isVehiclePlanta ? "0 horas" : "0"}
                   placeholderTextColor={colors.onSurfaceVariant}
                   keyboardType="numeric"
                 />
@@ -663,20 +873,24 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               <TouchableOpacity 
                 onPress={() => updateMoto({ isFromAgency: !myMoto.isFromAgency })}
                 style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: colors.surfaceContainer, padding: 14, borderRadius: 14, marginTop: 4 }}>
-                <Text style={{ fontFamily: F.semibold, color: colors.onSurface }}>Comprada de Agencia (0 Km)</Text>
+                <Text style={{ fontFamily: F.semibold, color: colors.onSurface }}>
+                  {isVehiclePlanta ? 'Equipo Nuevo de Fábrica (0 Horas de Uso)' : 'Comprada de Agencia (0 Km)'}
+                </Text>
                 <MaterialIcons name={myMoto.isFromAgency ? 'check-box' : 'check-box-outline-blank'} size={24} color={myMoto.isFromAgency ? colors.tertiary : colors.onSurfaceVariant} />
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* GUÍA & AYUDA */}
+          {/* GUÍA & MANUAL TÉCNICO */}
           <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
             <TouchableOpacity 
               onPress={() => setShowTutorial(true)}
               style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                 <MaterialIcons name="menu-book" size={20} color={colors.primary} />
-                <Text style={{ fontFamily: F.semibold, color: colors.onSurface }}>Tutorial y Guía del Conductor</Text>
+                <Text style={{ fontFamily: F.semibold, color: colors.onSurface }}>
+                  {isOperatorOrAdmin ? 'Manual de Operación & Protocolo Técnico HL' : 'Manual y Guía de Uso del Sistema'}
+                </Text>
               </View>
               <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />
             </TouchableOpacity>
@@ -775,10 +989,10 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
         initialDoc={selectedLegalDoc}
         onClose={() => setShowLegalModal(false)}
       />
-      <EmergencyCrashModal
+      <AssignedOperatorModal
         visible={showSOSModal}
         onClose={() => setShowSOSModal(false)}
-        manualTrigger={true}
+        myMoto={myMoto}
       />
       <VehicleReportModal
         visible={showReportModal}

@@ -8,6 +8,7 @@ import {
   KeyboardAvoidingView, 
   Platform, 
   ActivityIndicator, 
+  Image,
   ImageBackground, 
   ScrollView,
   useWindowDimensions 
@@ -18,15 +19,17 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useTheme } from '../context/ThemeContext';
 import { LegalConsentCheckboxes } from '../components/LegalConsentCheckboxes';
 import { LegalDocModal, LegalDocType } from '../components/LegalDocModal';
+import { ForgotPasswordModal, ForgotPasswordStep } from '../components/ForgotPasswordModal';
 import { recordLegalConsent } from '../../services/legalConsentService';
 
 interface Props {
   onBack?: () => void;
+  initialRecoveryMode?: boolean;
 }
 
-export const AuthScreen: React.FC<Props> = ({ onBack }) => {
+export const AuthScreen: React.FC<Props> = ({ onBack, initialRecoveryMode = false }) => {
   // Theme and responsive state
-  const { colors, mode, isDark } = useTheme();
+  const { mode, isDark, toggleTheme } = useTheme();
   const { width: windowWidth } = useWindowDimensions();
   const isDesktop = windowWidth >= 960;
   
@@ -41,9 +44,10 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   
-  // Form Fields - Step 2: Piloto
+  // Form Fields - Step 2: Datos
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [drivesCompanyVehicle, setDrivesCompanyVehicle] = useState(false);
 
   // Form Fields - Step 3: Región
   const [country, setCountry] = useState('');
@@ -56,6 +60,19 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
   const [showLegalModal, setShowLegalModal] = useState(false);
   const [selectedLegalDoc, setSelectedLegalDoc] = useState<LegalDocType>('terms');
 
+  // Supabase Auth Recovery State
+  const [showForgotPasswordModal, setShowForgotPasswordModal] = useState(initialRecoveryMode);
+  const [forgotPasswordStep, setForgotPasswordStep] = useState<ForgotPasswordStep>(
+    initialRecoveryMode ? 'reset' : 'request'
+  );
+
+  React.useEffect(() => {
+    if (initialRecoveryMode) {
+      setForgotPasswordStep('reset');
+      setShowForgotPasswordModal(true);
+    }
+  }, [initialRecoveryMode]);
+
   const F = {
     bold: 'Montserrat_700Bold',
     semibold: 'Montserrat_600SemiBold',
@@ -64,17 +81,60 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
     extrabold: 'Montserrat_800ExtraBold',
   };
 
-  // Tokens oficiales según DESIGN.md
-  const tokens = {
-    primary: isDark ? '#4169E1' : '#275FE3',
-    secondary: '#00e3fd',
-    tertiary: '#00ae78',
-    alert: '#ba1a1a',
-    surface: isDark ? '#111319' : '#f5f5f7',
-    surfaceCard: isDark ? '#191c21' : '#ffffff',
-    surfaceContainer: isDark ? '#1d2025' : '#ececf0',
-    surfaceHigh: isDark ? '#272a30' : '#e0e0e6',
-    outline: '#40485c',
+  // Paleta de tokens de alta legibilidad según modo claro/oscuro
+  const t = {
+    // Fondos degradados
+    bgGradient: isDark 
+      ? (['rgba(7, 13, 24, 0.82)', 'rgba(10, 16, 28, 0.94)', 'rgba(13, 17, 26, 0.99)'] as const)
+      : (['rgba(241, 245, 249, 0.75)', 'rgba(248, 250, 252, 0.92)', 'rgba(255, 255, 255, 0.98)'] as const),
+
+    // Tarjeta principal
+    cardBg: isDark ? 'rgba(20, 26, 40, 0.94)' : 'rgba(255, 255, 255, 0.97)',
+    cardBorder: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(203, 213, 225, 0.85)',
+    cardShadow: isDark ? '#000000' : '#64748B',
+
+    // Tipografía principal
+    textPrimary: isDark ? '#FFFFFF' : '#0F172A',
+    textSecondary: isDark ? '#94A3B8' : '#475569',
+    textMuted: isDark ? '#64748B' : '#94A3B8',
+
+    // Acentos de marca Hermanos Lynch
+    brandCyan: isDark ? '#00E3FD' : '#0284C7',
+    brandBlue: isDark ? '#3B82F6' : '#2563EB',
+    brandGreen: isDark ? '#10B981' : '#059669',
+    brandAlert: '#EF4444',
+
+    // Switcher segmentado
+    segmentBg: isDark ? 'rgba(15, 20, 32, 0.85)' : '#F1F5F9',
+    segmentBorder: isDark ? 'rgba(148, 163, 184, 0.22)' : '#E2E8F0',
+    segmentActiveBg: isDark ? '#2563EB' : '#007AFF',
+    segmentActiveText: '#FFFFFF',
+    segmentInactiveText: isDark ? '#94A3B8' : '#64748B',
+
+    // Entradas de formulario
+    inputLabel: isDark ? '#E2E8F0' : '#1E293B',
+    inputBg: isDark ? 'rgba(15, 23, 42, 0.82)' : '#F8FAFC',
+    inputBorder: isDark ? 'rgba(148, 163, 184, 0.28)' : '#CBD5E1',
+    inputText: isDark ? '#FFFFFF' : '#0F172A',
+    inputPlaceholder: isDark ? '#64748B' : '#94A3B8',
+
+    // Hero lateral (Desktop)
+    heroCardBg: isDark ? 'rgba(30, 41, 59, 0.70)' : 'rgba(255, 255, 255, 0.90)',
+    heroCardBorder: isDark ? 'rgba(255, 255, 255, 0.12)' : 'rgba(203, 213, 225, 0.85)',
+    heroCardText: isDark ? '#FFFFFF' : '#0F172A',
+
+    // Pasos de registro
+    stepInactiveBg: isDark ? 'rgba(51, 65, 85, 0.7)' : '#E2E8F0',
+    stepInactiveText: isDark ? '#94A3B8' : '#64748B',
+    stepActiveBg: isDark ? '#00E3FD' : '#007AFF',
+    stepCardBg: isDark ? 'rgba(15, 23, 42, 0.7)' : '#FFFFFF',
+    stepCardBorder: isDark ? 'rgba(148, 163, 184, 0.25)' : '#E2E8F0',
+
+    // Botones
+    btnPrimaryBg: isDark ? '#2563EB' : '#007AFF',
+    btnSecondaryBg: isDark ? 'rgba(30, 41, 59, 0.8)' : '#F1F5F9',
+    btnSecondaryBorder: isDark ? 'rgba(148, 163, 184, 0.3)' : '#CBD5E1',
+    btnSecondaryText: isDark ? '#FFFFFF' : '#0F172A',
   };
 
   // Validaciones de navegación de pasos en Registro
@@ -95,7 +155,7 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
       setRegisterStep(2);
     } else if (registerStep === 2) {
       if (!firstName || !lastName) {
-        alert('Ingresa tu nombre y apellido para tu carnet de piloto');
+        alert('Por favor ingresa tu nombre y apellido');
         return;
       }
       setRegisterStep(3);
@@ -159,6 +219,7 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
               last_name: lastName.trim(),
               country: country.trim(),
               state: state.trim(),
+              drives_company_vehicle: drivesCompanyVehicle,
               // Metadatos de auditoría legal
               legal_terms_accepted: true,
               legal_terms_accepted_at: consentRecord.termsAcceptedAt,
@@ -192,7 +253,7 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
           setIsLogin(true);
           setRegisterStep(1);
         } else {
-          alert('¡Bienvenido a tu Garaje!');
+          alert('¡Bienvenido a Hermanos Lynch!');
         }
       }
     } catch (error: any) {
@@ -206,11 +267,6 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
     }
   };
 
-  // Fondo con degradado ambiental motorsport
-  const bgTop = isDark ? 'rgba(7, 18, 38, 0.45)' : 'rgba(235, 243, 255, 0.40)';
-  const bgMid = isDark ? 'rgba(10, 16, 28, 0.92)' : 'rgba(255, 255, 255, 0.94)';
-  const bgBottom = isDark ? 'rgba(17, 19, 25, 0.99)' : 'rgba(245, 245, 247, 0.99)';
-
   return (
     <KeyboardAvoidingView 
       style={{ flex: 1 }} 
@@ -222,9 +278,54 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
         resizeMode="cover"
       >
         <LinearGradient
-          colors={[bgTop, bgMid, bgBottom]}
+          colors={t.bgGradient}
           style={{ flex: 1 }}
         >
+          {/* BOTÓN TOGGLE TEMA (CLARO / OSCURO) - EN CABECERA SUPERIOR */}
+          <View style={styles.topBarContainer}>
+            {onBack ? (
+              <TouchableOpacity
+                onPress={onBack}
+                style={[
+                  styles.navPillBtn,
+                  {
+                    backgroundColor: isDark ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255, 255, 255, 0.90)',
+                    borderColor: t.cardBorder,
+                  }
+                ]}
+                activeOpacity={0.75}
+              >
+                <MaterialIcons name="arrow-back" size={16} color={t.brandCyan} />
+                <Text style={{ fontFamily: F.bold, color: t.brandCyan, fontSize: 12 }}>
+                  Volver a Portada
+                </Text>
+              </TouchableOpacity>
+            ) : <View />}
+
+            <TouchableOpacity
+              onPress={toggleTheme}
+              style={[
+                styles.navPillBtn,
+                {
+                  backgroundColor: isDark ? 'rgba(30, 41, 59, 0.85)' : 'rgba(255, 255, 255, 0.92)',
+                  borderColor: t.cardBorder,
+                }
+              ]}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel={`Cambiar a modo ${isDark ? 'claro' : 'oscuro'}`}
+            >
+              <MaterialCommunityIcons 
+                name={isDark ? 'weather-sunny' : 'weather-night'} 
+                size={18} 
+                color={isDark ? '#FBBF24' : '#6366F1'} 
+              />
+              <Text style={{ fontFamily: F.bold, color: t.textPrimary, fontSize: 12.5, marginLeft: 6 }}>
+                {isDark ? 'Modo Claro' : 'Modo Oscuro'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           <ScrollView 
             style={{ flex: 1, width: '100%' }}
             contentContainerStyle={isDesktop ? styles.desktopScrollContent : styles.scrollContent} 
@@ -232,536 +333,634 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
             keyboardShouldPersistTaps="handled"
           >
             <View style={isDesktop ? styles.desktopSplitLayout : { width: '100%', alignItems: 'center' }}>
+              
+              {/* COLUMNA HERO IZQUIERDA (DESKTOP) */}
               {isDesktop && (
                 <View style={styles.desktopHeroColumn}>
-                  <View style={styles.brandHeroBadge}>
-                    <MaterialCommunityIcons name="engine" size={26} color="#00e3fd" />
-                    <Text style={styles.brandHeroBadgeText}>PRECISIÓN MOTORSPORT</Text>
+                  <View style={{ marginBottom: 20, flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <Image
+                      source={require('../../../assets/images/logo and media coorporative/logo-sin-nombre.png')}
+                      style={{ width: 68, height: 68 }}
+                      resizeMode="contain"
+                    />
+                    <View>
+                      <Text style={{ fontSize: 13, fontFamily: F.bold, color: t.brandCyan, letterSpacing: 1.5 }}>
+                        HERMANOS LYNCH
+                      </Text>
+                      <Text style={{ fontSize: 11.5, fontFamily: F.semibold, color: t.brandBlue }}>
+                        www.hermanoslynch.com
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={[styles.desktopMainHeading, { color: isDark ? '#ffffff' : '#111319' }]}>
-                    GARAGE
+
+                  <Text style={[styles.desktopMainHeading, { color: t.textPrimary }]}>
+                    PLANTAS ELÉCTRICAS
                   </Text>
-                  <Text style={[styles.desktopSubHeading, { color: '#00e3fd' }]}>
+                  
+                  <Text style={[styles.desktopSubHeading, { color: t.brandCyan }]}>
                     TELEMETRÍA & GESTIÓN EN LA NUBE
                   </Text>
-                  <Text style={[styles.desktopDesc, { color: colors.onSurfaceVariant }]}>
-                    Plataforma técnica de precisión para motociclistas. Monitorea desgaste de componentes, activa protocolos SOS automatizados con GPS y custodia tu wallet digital de documentos.
+
+                  <Text style={[styles.desktopDesc, { color: t.textSecondary }]}>
+                    Plataforma técnica de precisión para el control operativo, monitoreo continuo de horómetros y mantenimiento predictivo de generadores diésel Blue Power Generation (C35, C55, C125) y flotas corporativas.
                   </Text>
 
                   <View style={styles.heroFeatureList}>
-                    <View style={styles.heroFeatureRow}>
-                      <MaterialIcons name="speed" size={22} color="#00e3fd" />
-                      <Text style={[styles.heroFeatureText, { color: colors.onSurface }]}>
-                        Telemetría y ciclos de desgaste (aceite, frenos, cadena, cauchos)
-                      </Text>
-                    </View>
-                    <View style={styles.heroFeatureRow}>
-                      <MaterialIcons name="warning" size={22} color="#ffb4ab" />
-                      <Text style={[styles.heroFeatureText, { color: colors.onSurface }]}>
-                        Protocolo SOS con despacho automatizado de coordenadas
-                      </Text>
-                    </View>
-                    <View style={styles.heroFeatureRow}>
-                      <MaterialIcons name="account-balance-wallet" size={22} color="#4169E1" />
-                      <Text style={[styles.heroFeatureText, { color: colors.onSurface }]}>
-                        Digital Wallet para SOAT, Licencia y Carnet de circulación
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              )}
-
-              <View style={[styles.cardContainer, isDesktop && styles.desktopCardContainer]}>
-              
-              {/* BACK TO LANDING BUTTON */}
-              {onBack && (
-                <TouchableOpacity
-                  onPress={onBack}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 6,
-                    alignSelf: 'flex-start',
-                    marginBottom: 16,
-                    paddingHorizontal: 12,
-                    paddingVertical: 6,
-                    borderRadius: 16,
-                    backgroundColor: isDark ? 'rgba(0, 227, 253, 0.08)' : 'rgba(65, 105, 225, 0.08)',
-                    borderWidth: 0.8,
-                    borderColor: isDark ? 'rgba(0, 227, 253, 0.3)' : 'rgba(65, 105, 225, 0.25)',
-                  }}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons name="arrow-back" size={16} color={isDark ? '#00e3fd' : '#4169E1'} />
-                  <Text style={{ fontFamily: F.bold, color: isDark ? '#00e3fd' : '#4169E1', fontSize: 12 }}>
-                    Volver a Portada
-                  </Text>
-                </TouchableOpacity>
-              )}
-
-              {/* BRAND HEADER & LOGO */}
-              <View style={{ alignItems: 'center', marginBottom: 22 }}>
-                <View style={[styles.logoBadge, { backgroundColor: tokens.surfaceCard, borderColor: tokens.outline }]}>
-                  <MaterialCommunityIcons name="engine" size={40} color={tokens.secondary} />
-                </View>
-                <Text style={{ fontSize: 32, fontFamily: F.extrabold, color: colors.onSurface, letterSpacing: -0.6 }}>
-                  GARAGE
-                </Text>
-                <Text style={{ fontSize: 13, fontFamily: F.medium, color: colors.onSurfaceVariant, marginTop: 4, textAlign: 'center' }}>
-                  {isLogin ? 'Tu garaje inteligente en la nube' : 'Crea tu cuenta de piloto'}
-                </Text>
-              </View>
-
-              {/* SEGMENTED SWITCHER: INICIAR SESIÓN / REGISTRARSE (Estilo Pinterest Awsmd) */}
-              <View style={[styles.segmentedBar, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline }]}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setIsLogin(true);
-                    setRegisterStep(1);
-                  }}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.segmentButton,
-                    isLogin && [styles.segmentActive, { backgroundColor: tokens.primary }]
-                  ]}
-                >
-                  <Text style={[
-                    styles.segmentText,
-                    { fontFamily: F.bold, color: isLogin ? '#FFFFFF' : colors.onSurfaceVariant }
-                  ]}>
-                    INICIAR SESIÓN
-                  </Text>
-                </TouchableOpacity>
-
-                <TouchableOpacity
-                  onPress={() => setIsLogin(false)}
-                  activeOpacity={0.8}
-                  style={[
-                    styles.segmentButton,
-                    !isLogin && [styles.segmentActive, { backgroundColor: tokens.primary }]
-                  ]}
-                >
-                  <Text style={[
-                    styles.segmentText,
-                    { fontFamily: F.bold, color: !isLogin ? '#FFFFFF' : colors.onSurfaceVariant }
-                  ]}>
-                    REGISTRARSE
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* VISTA 1: INICIAR SESIÓN */}
-              {isLogin ? (
-                <View style={{ gap: 12, width: '100%' }}>
-                  <View>
-                    <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                      CORREO ELECTRÓNICO
-                    </Text>
-                    <TextInput 
-                      style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                      placeholder="piloto@correo.com" 
-                      placeholderTextColor={colors.onSurfaceVariant} 
-                      value={email} 
-                      onChangeText={setEmail} 
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                    />
-                  </View>
-
-                  <View>
-                    <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                      CONTRASEÑA
-                    </Text>
-                    <View style={[styles.input, { flexDirection: 'row', alignItems: 'center', backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, paddingHorizontal: 14 }]}>
-                      <TextInput 
-                        style={{ flex: 1, height: 48, color: colors.onSurface, fontFamily: F.medium, fontSize: 14 }} 
-                        placeholder="••••••••" 
-                        placeholderTextColor={colors.onSurfaceVariant} 
-                        value={password} 
-                        onChangeText={setPassword} 
-                        secureTextEntry={!showPassword}
-                        autoCapitalize="none"
-                        autoCorrect={false}
-                      />
-                      <TouchableOpacity 
-                        onPress={() => setShowPassword(!showPassword)}
-                        style={styles.eyeTouch}
-                      >
-                        <MaterialIcons 
-                          name={showPassword ? 'visibility-off' : 'visibility'} 
-                          size={22} 
-                          color={showPassword ? tokens.secondary : colors.onSurfaceVariant} 
-                        />
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
-                  {/* Botón Ingresar */}
-                  <TouchableOpacity 
-                    style={[styles.actionBtn, { backgroundColor: tokens.primary, marginTop: 8 }]} 
-                    onPress={handleAuth} 
-                    disabled={loading}
-                    activeOpacity={0.85}
-                  >
-                    {loading ? (
-                      <ActivityIndicator color="#FFFFFF" />
-                    ) : (
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <Text style={[styles.btnText, { color: '#FFFFFF', fontFamily: F.extrabold }]}>
-                          INGRESAR AL GARAJE
-                        </Text>
-                        <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+                    <View style={[styles.heroFeatureRow, { backgroundColor: t.heroCardBg, borderColor: t.heroCardBorder }]}>
+                      <View style={[styles.featureIconBadge, { backgroundColor: isDark ? 'rgba(0, 227, 253, 0.15)' : 'rgba(2, 132, 199, 0.12)' }]}>
+                        <MaterialIcons name="speed" size={22} color={t.brandCyan} />
                       </View>
-                    )}
+                      <Text style={[styles.heroFeatureText, { color: t.heroCardText, fontFamily: F.semibold }]}>
+                        Monitoreo de horómetro y ciclos de servicio (aceite 15W-40, filtros, refrigerante, batería 24V)
+                      </Text>
+                    </View>
+
+                    <View style={[styles.heroFeatureRow, { backgroundColor: t.heroCardBg, borderColor: t.heroCardBorder }]}>
+                      <View style={[styles.featureIconBadge, { backgroundColor: isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(5, 150, 105, 0.12)' }]}>
+                        <MaterialIcons name="bolt" size={22} color={t.brandGreen} />
+                      </View>
+                      <Text style={[styles.heroFeatureText, { color: t.heroCardText, fontFamily: F.semibold }]}>
+                        Gestión técnica de generadores diésel (Cummins, Leroy Somer, ComAp)
+                      </Text>
+                    </View>
+
+                    <View style={[styles.heroFeatureRow, { backgroundColor: t.heroCardBg, borderColor: t.heroCardBorder }]}>
+                      <View style={[styles.featureIconBadge, { backgroundColor: isDark ? 'rgba(59, 130, 246, 0.15)' : 'rgba(37, 99, 235, 0.12)' }]}>
+                        <MaterialIcons name="folder-shared" size={22} color={t.brandBlue} />
+                      </View>
+                      <Text style={[styles.heroFeatureText, { color: t.heroCardText, fontFamily: F.semibold }]}>
+                        Bóveda digital de manuales, diagramas eléctricos y bitácoras de servicio
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              )}
+
+              {/* COLUMNA DERECHA (TARJETA DE ACCESO / REGISTRO) */}
+              <View 
+                style={[
+                  styles.cardContainer, 
+                  isDesktop && styles.desktopCardContainer,
+                  { 
+                    backgroundColor: t.cardBg, 
+                    borderColor: t.cardBorder,
+                    shadowColor: t.cardShadow,
+                  }
+                ]}
+              >
+
+                {/* BRAND HEADER & LOGO */}
+                <View style={{ alignItems: 'center', marginBottom: 20 }}>
+                  <Image
+                    source={require('../../../assets/images/logo and media coorporative/logo-sin-nombre.png')}
+                    style={{ width: 72, height: 72, marginBottom: 8 }}
+                    resizeMode="contain"
+                  />
+                  <Text style={{ fontSize: 24, fontFamily: F.extrabold, color: t.textPrimary, letterSpacing: -0.4, textAlign: 'center' }}>
+                    HERMANOS LYNCH
+                  </Text>
+                  <Text style={{ fontSize: 13, fontFamily: F.semibold, color: t.textSecondary, marginTop: 4, textAlign: 'center' }}>
+                    {isLogin ? 'Control Telemático de Plantas Eléctricas' : 'Registro de Operador / Cliente'}
+                  </Text>
+                </View>
+
+                {/* SEGMENTED SWITCHER: INICIAR SESIÓN / REGISTRARSE */}
+                <View style={[styles.segmentedBar, { backgroundColor: t.segmentBg, borderColor: t.segmentBorder }]}>
+                  <TouchableOpacity
+                    onPress={() => {
+                      setIsLogin(true);
+                      setRegisterStep(1);
+                    }}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.segmentButton,
+                      isLogin && [styles.segmentActive, { backgroundColor: t.segmentActiveBg }]
+                    ]}
+                  >
+                    <Text style={[
+                      styles.segmentText,
+                      { fontFamily: F.bold, color: isLogin ? t.segmentActiveText : t.segmentInactiveText }
+                    ]}>
+                      INICIAR SESIÓN
+                    </Text>
                   </TouchableOpacity>
 
-                  {/* Enlaces Legales en Acceso */}
-                  <View style={{ marginTop: 14, alignItems: 'center', gap: 4 }}>
-                    <Text style={{ fontSize: 11, fontFamily: F.medium, color: colors.onSurfaceVariant, textAlign: 'center' }}>
-                      Al acceder a GARAGE, aceptas el marco legal aplicable:
+                  <TouchableOpacity
+                    onPress={() => setIsLogin(false)}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.segmentButton,
+                      !isLogin && [styles.segmentActive, { backgroundColor: t.segmentActiveBg }]
+                    ]}
+                  >
+                    <Text style={[
+                      styles.segmentText,
+                      { fontFamily: F.bold, color: !isLogin ? t.segmentActiveText : t.segmentInactiveText }
+                    ]}>
+                      REGISTRARSE
                     </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <TouchableOpacity onPress={() => { setSelectedLegalDoc('terms'); setShowLegalModal(true); }}>
-                        <Text style={{ fontSize: 11, fontFamily: F.bold, color: tokens.primary, textDecorationLine: 'underline' }}>
-                          Términos
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={{ fontSize: 11, color: colors.onSurfaceVariant }}>•</Text>
-                      <TouchableOpacity onPress={() => { setSelectedLegalDoc('privacy'); setShowLegalModal(true); }}>
-                        <Text style={{ fontSize: 11, fontFamily: F.bold, color: tokens.primary, textDecorationLine: 'underline' }}>
-                          Privacidad
-                        </Text>
-                      </TouchableOpacity>
-                      <Text style={{ fontSize: 11, color: colors.onSurfaceVariant }}>•</Text>
-                      <TouchableOpacity onPress={() => { setSelectedLegalDoc('cookies'); setShowLegalModal(true); }}>
-                        <Text style={{ fontSize: 11, fontFamily: F.bold, color: tokens.primary, textDecorationLine: 'underline' }}>
-                          Cookies
+                  </TouchableOpacity>
+                </View>
+
+                {/* VISTA 1: INICIAR SESIÓN */}
+                {isLogin ? (
+                  <View style={{ gap: 14, width: '100%' }}>
+                    <View>
+                      <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                        CORREO ELECTRÓNICO
+                      </Text>
+                      <TextInput 
+                        style={[
+                          styles.input, 
+                          { 
+                            backgroundColor: t.inputBg, 
+                            borderColor: t.inputBorder, 
+                            color: t.inputText, 
+                            fontFamily: F.medium 
+                          }
+                        ]} 
+                        placeholder="operador@correo.com" 
+                        placeholderTextColor={t.inputPlaceholder} 
+                        value={email} 
+                        onChangeText={setEmail} 
+                        autoCapitalize="none"
+                        keyboardType="email-address"
+                      />
+                    </View>
+
+                    <View>
+                      <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                        CONTRASEÑA
+                      </Text>
+                      <View 
+                        style={[
+                          styles.input, 
+                          { 
+                            flexDirection: 'row', 
+                            alignItems: 'center', 
+                            backgroundColor: t.inputBg, 
+                            borderColor: t.inputBorder, 
+                            paddingHorizontal: 14 
+                          }
+                        ]}
+                      >
+                        <TextInput 
+                          style={{ flex: 1, height: 48, color: t.inputText, fontFamily: F.medium, fontSize: 14 }} 
+                          placeholder="••••••••" 
+                          placeholderTextColor={t.inputPlaceholder} 
+                          value={password} 
+                          onChangeText={setPassword} 
+                          secureTextEntry={!showPassword}
+                          autoCapitalize="none"
+                          autoCorrect={false}
+                        />
+                        <TouchableOpacity 
+                          onPress={() => setShowPassword(!showPassword)}
+                          style={styles.eyeTouch}
+                          accessibilityLabel={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+                        >
+                          <MaterialIcons 
+                            name={showPassword ? 'visibility-off' : 'visibility'} 
+                            size={22} 
+                            color={showPassword ? t.brandCyan : t.textSecondary} 
+                          />
+                        </TouchableOpacity>
+                      </View>
+
+                      {/* ENLACE DE RECUPERACIÓN */}
+                      <TouchableOpacity
+                        onPress={() => {
+                          setForgotPasswordStep('request');
+                          setShowForgotPasswordModal(true);
+                        }}
+                        style={styles.forgotPasswordBtn}
+                        activeOpacity={0.7}
+                      >
+                        <MaterialIcons name="lock-reset" size={16} color={t.brandCyan} />
+                        <Text style={[styles.forgotPasswordText, { color: t.brandCyan, fontFamily: F.bold }]}>
+                          ¿Olvidaste tu contraseña?
                         </Text>
                       </TouchableOpacity>
                     </View>
-                  </View>
-                </View>
-              ) : (
-                
-                /* VISTA 2: REGISTRO PROGRESIVO POR PESTAÑAS (Awsmd Fluid Design) */
-                <View style={{ width: '100%' }}>
-                  
-                  {/* BARRA DE PESTAÑAS / PASOS (Step Indicator) */}
-                  <View style={styles.stepTabsRow}>
-                    
-                    {/* Paso 1: Acceso */}
+
+                    {/* Botón Ingresar */}
                     <TouchableOpacity 
-                      onPress={() => setRegisterStep(1)}
-                      style={[
-                        styles.stepTabItem, 
-                        registerStep === 1 && [styles.stepTabActive, { borderColor: tokens.primary }]
-                      ]}
+                      style={[styles.actionBtn, { backgroundColor: t.btnPrimaryBg, marginTop: 6 }]} 
+                      onPress={handleAuth} 
+                      disabled={loading}
+                      activeOpacity={0.85}
                     >
-                      <View style={[
-                        styles.stepCircle, 
-                        { backgroundColor: registerStep >= 1 ? tokens.primary : tokens.surfaceContainer }
-                      ]}>
-                        <Text style={{ fontFamily: F.extrabold, fontSize: 11, color: registerStep >= 1 ? '#FFFFFF' : colors.onSurfaceVariant }}>
-                          1
-                        </Text>
-                      </View>
-                      <Text style={[
-                        styles.stepTabText, 
-                        { fontFamily: F.bold, color: registerStep === 1 ? colors.onSurface : colors.onSurfaceVariant }
-                      ]}>
-                        Acceso
-                      </Text>
+                      {loading ? (
+                        <ActivityIndicator color="#FFFFFF" />
+                      ) : (
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                          <Text style={[styles.btnText, { color: '#FFFFFF', fontFamily: F.extrabold }]}>
+                            INGRESAR AL SISTEMA
+                          </Text>
+                          <MaterialIcons name="arrow-forward" size={18} color="#FFFFFF" />
+                        </View>
+                      )}
                     </TouchableOpacity>
 
-                    <View style={[styles.stepConnector, { backgroundColor: registerStep > 1 ? tokens.primary : tokens.outline }]} />
-
-                    {/* Paso 2: Piloto */}
-                    <TouchableOpacity 
-                      onPress={() => {
-                        if (email && password.length >= 6) setRegisterStep(2);
-                      }}
-                      style={[
-                        styles.stepTabItem, 
-                        registerStep === 2 && [styles.stepTabActive, { borderColor: tokens.primary }]
-                      ]}
-                    >
-                      <View style={[
-                        styles.stepCircle, 
-                        { backgroundColor: registerStep >= 2 ? tokens.primary : tokens.surfaceContainer }
-                      ]}>
-                        <Text style={{ fontFamily: F.extrabold, fontSize: 11, color: registerStep >= 2 ? '#FFFFFF' : colors.onSurfaceVariant }}>
-                          2
-                        </Text>
-                      </View>
-                      <Text style={[
-                        styles.stepTabText, 
-                        { fontFamily: F.bold, color: registerStep === 2 ? colors.onSurface : colors.onSurfaceVariant }
-                      ]}>
-                        Piloto
+                    {/* Enlaces Legales en Acceso */}
+                    <View style={{ marginTop: 12, alignItems: 'center', gap: 6 }}>
+                      <Text style={{ fontSize: 11.5, fontFamily: F.medium, color: t.textSecondary, textAlign: 'center' }}>
+                        Al acceder a Hermanos Lynch, aceptas el marco legal aplicable:
                       </Text>
-                    </TouchableOpacity>
-
-                    <View style={[styles.stepConnector, { backgroundColor: registerStep > 2 ? tokens.primary : tokens.outline }]} />
-
-                    {/* Paso 3: Región */}
-                    <TouchableOpacity 
-                      onPress={() => {
-                        if (email && password.length >= 6 && firstName && lastName) setRegisterStep(3);
-                      }}
-                      style={[
-                        styles.stepTabItem, 
-                        registerStep === 3 && [styles.stepTabActive, { borderColor: tokens.primary }]
-                      ]}
-                    >
-                      <View style={[
-                        styles.stepCircle, 
-                        { backgroundColor: registerStep >= 3 ? tokens.primary : tokens.surfaceContainer }
-                      ]}>
-                        <Text style={{ fontFamily: F.extrabold, fontSize: 11, color: registerStep >= 3 ? '#FFFFFF' : colors.onSurfaceVariant }}>
-                          3
-                        </Text>
-                      </View>
-                      <Text style={[
-                        styles.stepTabText, 
-                        { fontFamily: F.bold, color: registerStep === 3 ? colors.onSurface : colors.onSurfaceVariant }
-                      ]}>
-                        Región
-                      </Text>
-                    </TouchableOpacity>
-
-                  </View>
-
-                  {/* CONTENEDOR FLUIDO DEL PASO ACTUAL */}
-                  <View style={[styles.fluidCardStep, { backgroundColor: tokens.surfaceCard, borderColor: tokens.outline }]}>
-                    
-                    {/* PASO 1: ACCESO & CREDENCIALES */}
-                    {registerStep === 1 && (
-                      <View style={{ gap: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <MaterialIcons name="security" size={18} color={tokens.secondary} />
-                          <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, textTransform: 'uppercase' }}>
-                            Paso 1: Seguridad & Credenciales
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <TouchableOpacity onPress={() => { setSelectedLegalDoc('terms'); setShowLegalModal(true); }}>
+                          <Text style={{ fontSize: 11.5, fontFamily: F.bold, color: t.brandCyan, textDecorationLine: 'underline' }}>
+                            Términos
                           </Text>
-                        </View>
-
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            CORREO ELECTRÓNICO
+                        </TouchableOpacity>
+                        <Text style={{ fontSize: 11, color: t.textSecondary }}>•</Text>
+                        <TouchableOpacity onPress={() => { setSelectedLegalDoc('privacy'); setShowLegalModal(true); }}>
+                          <Text style={{ fontSize: 11.5, fontFamily: F.bold, color: t.brandCyan, textDecorationLine: 'underline' }}>
+                            Privacidad
                           </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="piloto@correo.com" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={email} 
-                            onChangeText={setEmail} 
-                            autoCapitalize="none"
-                            keyboardType="email-address"
-                          />
-                        </View>
-
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            CONTRASEÑA (MÍN. 6 CARACTERES)
+                        </TouchableOpacity>
+                        <Text style={{ fontSize: 11, color: t.textSecondary }}>•</Text>
+                        <TouchableOpacity onPress={() => { setSelectedLegalDoc('cookies'); setShowLegalModal(true); }}>
+                          <Text style={{ fontSize: 11.5, fontFamily: F.bold, color: t.brandCyan, textDecorationLine: 'underline' }}>
+                            Cookies
                           </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="••••••••" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={password} 
-                            onChangeText={setPassword} 
-                            secureTextEntry={!showPassword}
-                            autoCapitalize="none"
-                          />
-                        </View>
-
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            CONFIRMAR CONTRASEÑA
-                          </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="••••••••" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={confirmPassword} 
-                            onChangeText={setConfirmPassword} 
-                            secureTextEntry={!showPassword}
-                            autoCapitalize="none"
-                          />
-                        </View>
-
-                        <TouchableOpacity 
-                          style={[styles.actionBtn, { backgroundColor: tokens.primary, marginTop: 8 }]} 
-                          onPress={handleNextStep}
-                          activeOpacity={0.85}
-                        >
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <Text style={[styles.btnText, { color: '#FFFFFF', fontFamily: F.extrabold }]}>
-                              CONTINUAR A DATOS DEL PILOTO
-                            </Text>
-                            <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
-                          </View>
                         </TouchableOpacity>
                       </View>
-                    )}
-
-                    {/* PASO 2: DATOS DEL PILOTO */}
-                    {registerStep === 2 && (
-                      <View style={{ gap: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <MaterialIcons name="person" size={18} color={tokens.secondary} />
-                          <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, textTransform: 'uppercase' }}>
-                            Paso 2: Carnet & Datos Personales
+                    </View>
+                  </View>
+                ) : (
+                  
+                  /* VISTA 2: REGISTRO PROGRESIVO POR PESTAÑAS (Acceso -> Datos -> Región) */
+                  <View style={{ width: '100%' }}>
+                    
+                    {/* BARRA DE PESTAÑAS / PASOS */}
+                    <View style={styles.stepTabsRow}>
+                      
+                      {/* Paso 1: Acceso */}
+                      <TouchableOpacity 
+                        onPress={() => setRegisterStep(1)}
+                        style={[
+                          styles.stepTabItem, 
+                          registerStep === 1 && [styles.stepTabActive, { borderColor: t.brandCyan }]
+                        ]}
+                      >
+                        <View style={[
+                          styles.stepCircle, 
+                          { backgroundColor: registerStep >= 1 ? t.brandCyan : t.stepInactiveBg }
+                        ]}>
+                          <Text style={{ fontFamily: F.extrabold, fontSize: 11, color: '#FFFFFF' }}>
+                            1
                           </Text>
                         </View>
+                        <Text style={[
+                          styles.stepTabText, 
+                          { fontFamily: F.bold, color: registerStep === 1 ? t.textPrimary : t.stepInactiveText }
+                        ]}>
+                          Acceso
+                        </Text>
+                      </TouchableOpacity>
 
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            NOMBRE(S)
+                      <View style={[styles.stepConnector, { backgroundColor: registerStep > 1 ? t.brandCyan : t.segmentBorder }]} />
+
+                      {/* Paso 2: Datos */}
+                      <TouchableOpacity 
+                        onPress={() => {
+                          if (email && password.length >= 6) setRegisterStep(2);
+                        }}
+                        style={[
+                          styles.stepTabItem, 
+                          registerStep === 2 && [styles.stepTabActive, { borderColor: t.brandCyan }]
+                        ]}
+                      >
+                        <View style={[
+                          styles.stepCircle, 
+                          { backgroundColor: registerStep >= 2 ? t.brandCyan : t.stepInactiveBg }
+                        ]}>
+                          <Text style={{ fontFamily: F.extrabold, fontSize: 11, color: registerStep >= 2 ? '#FFFFFF' : t.stepInactiveText }}>
+                            2
                           </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="Ej. Dervis" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={firstName} 
-                            onChangeText={setFirstName} 
-                          />
                         </View>
+                        <Text style={[
+                          styles.stepTabText, 
+                          { fontFamily: F.bold, color: registerStep === 2 ? t.textPrimary : t.stepInactiveText }
+                        ]}>
+                          Datos
+                        </Text>
+                      </TouchableOpacity>
 
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            APELLIDO(S)
+                      <View style={[styles.stepConnector, { backgroundColor: registerStep > 2 ? t.brandCyan : t.segmentBorder }]} />
+
+                      {/* Paso 3: Región */}
+                      <TouchableOpacity 
+                        onPress={() => {
+                          if (email && password.length >= 6 && firstName && lastName) setRegisterStep(3);
+                        }}
+                        style={[
+                          styles.stepTabItem, 
+                          registerStep === 3 && [styles.stepTabActive, { borderColor: t.brandCyan }]
+                        ]}
+                      >
+                        <View style={[
+                          styles.stepCircle, 
+                          { backgroundColor: registerStep >= 3 ? t.brandCyan : t.stepInactiveBg }
+                        ]}>
+                          <Text style={{ fontFamily: F.extrabold, fontSize: 11, color: registerStep >= 3 ? '#FFFFFF' : t.stepInactiveText }}>
+                            3
                           </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="Ej. Martinez" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={lastName} 
-                            onChangeText={setLastName} 
-                          />
                         </View>
+                        <Text style={[
+                          styles.stepTabText, 
+                          { fontFamily: F.bold, color: registerStep === 3 ? t.textPrimary : t.stepInactiveText }
+                        ]}>
+                          Región
+                        </Text>
+                      </TouchableOpacity>
 
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-                          <TouchableOpacity 
-                            style={[styles.secondaryActionBtn, { borderColor: tokens.outline, backgroundColor: tokens.surfaceContainer }]} 
-                            onPress={handlePrevStep}
-                            activeOpacity={0.8}
-                          >
-                            <MaterialIcons name="chevron-left" size={20} color={colors.onSurface} />
-                            <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13 }}>
-                              ATRÁS
+                    </View>
+
+                    {/* CONTENEDOR FLUIDO DEL PASO ACTUAL */}
+                    <View style={[styles.fluidCardStep, { backgroundColor: t.stepCardBg, borderColor: t.stepCardBorder }]}>
+                      
+                      {/* PASO 1: ACCESO & CREDENCIALES */}
+                      {registerStep === 1 && (
+                        <View style={{ gap: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <MaterialIcons name="security" size={18} color={t.brandCyan} />
+                            <Text style={{ fontFamily: F.bold, color: t.textPrimary, fontSize: 13, textTransform: 'uppercase' }}>
+                              Paso 1: Seguridad & Credenciales
                             </Text>
-                          </TouchableOpacity>
+                          </View>
+
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              CORREO ELECTRÓNICO
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="operador@correo.com" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={email} 
+                              onChangeText={setEmail} 
+                              autoCapitalize="none"
+                              keyboardType="email-address"
+                            />
+                          </View>
+
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              CONTRASEÑA (MÍN. 6 CARACTERES)
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="••••••••" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={password} 
+                              onChangeText={setPassword} 
+                              secureTextEntry={!showPassword}
+                              autoCapitalize="none"
+                            />
+                          </View>
+
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              CONFIRMAR CONTRASEÑA
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="••••••••" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={confirmPassword} 
+                              onChangeText={setConfirmPassword} 
+                              secureTextEntry={!showPassword}
+                              autoCapitalize="none"
+                            />
+                          </View>
 
                           <TouchableOpacity 
-                            style={[styles.actionBtn, { flex: 1, backgroundColor: tokens.primary }]} 
+                            style={[styles.actionBtn, { backgroundColor: t.btnPrimaryBg, marginTop: 8 }]} 
                             onPress={handleNextStep}
                             activeOpacity={0.85}
                           >
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <Text style={[styles.btnText, { color: '#FFFFFF', fontFamily: F.extrabold }]}>
-                                SIGUIENTE
+                                CONTINUAR A DATOS
                               </Text>
                               <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
                             </View>
                           </TouchableOpacity>
                         </View>
-                      </View>
-                    )}
+                      )}
 
-                    {/* PASO 3: REGIÓN & UBICACIÓN */}
-                    {registerStep === 3 && (
-                      <View style={{ gap: 12 }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <MaterialIcons name="place" size={18} color={tokens.secondary} />
-                          <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, textTransform: 'uppercase' }}>
-                            Paso 3: Región & Ubicación
-                          </Text>
-                        </View>
+                      {/* PASO 2: DATOS DEL OPERADOR / CLIENTE */}
+                      {registerStep === 2 && (
+                        <View style={{ gap: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <MaterialIcons name="person" size={18} color={t.brandCyan} />
+                            <Text style={{ fontFamily: F.bold, color: t.textPrimary, fontSize: 13, textTransform: 'uppercase' }}>
+                              Paso 2: Datos del Operador / Cliente
+                            </Text>
+                          </View>
 
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            PAÍS
-                          </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="Ej. Venezuela / Colombia / España" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={country} 
-                            onChangeText={setCountry} 
-                          />
-                        </View>
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              NOMBRE(S)
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="Ej. Dervis" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={firstName} 
+                              onChangeText={setFirstName} 
+                            />
+                          </View>
 
-                        <View>
-                          <Text style={[styles.fieldLabel, { color: colors.onSurfaceVariant, fontFamily: F.semibold }]}>
-                            ESTADO / PROVINCIA / CIUDAD
-                          </Text>
-                          <TextInput 
-                            style={[styles.input, { backgroundColor: tokens.surfaceContainer, borderColor: tokens.outline, color: colors.onSurface, fontFamily: F.medium }]} 
-                            placeholder="Ej. Carabobo, Valencia" 
-                            placeholderTextColor={colors.onSurfaceVariant} 
-                            value={state} 
-                            onChangeText={setState} 
-                          />
-                        </View>
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              APELLIDO(S)
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="Ej. Martinez" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={lastName} 
+                              onChangeText={setLastName} 
+                            />
+                          </View>
 
-                        {/* CASILLAS SEPARADAS OBLIGATORIAS: TÉRMINOS Y POLÍTICA DE PRIVACIDAD */}
-                        <LegalConsentCheckboxes
-                          termsAccepted={termsAccepted}
-                          onToggleTerms={() => {
-                            setTermsAccepted((prev) => !prev);
-                            if (!termsAccepted) setShowLegalErrors(false);
-                          }}
-                          privacyAccepted={privacyAccepted}
-                          onTogglePrivacy={() => {
-                            setPrivacyAccepted((prev) => !prev);
-                            if (!privacyAccepted) setShowLegalErrors(false);
-                          }}
-                          onOpenDoc={(doc) => {
-                            setSelectedLegalDoc(doc);
-                            setShowLegalModal(true);
-                          }}
-                          showValidationErrors={showLegalErrors}
-                          disabled={loading}
-                        />
-
-                        <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                          {/* PREGUNTA VEHÍCULO DE LA EMPRESA (Activa Wallet) */}
                           <TouchableOpacity 
-                            style={[styles.secondaryActionBtn, { borderColor: tokens.outline, backgroundColor: tokens.surfaceContainer }]} 
-                            onPress={handlePrevStep}
+                            style={[
+                              styles.companyVehicleCard, 
+                              { 
+                                backgroundColor: drivesCompanyVehicle 
+                                  ? (isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(2, 132, 199, 0.10)') 
+                                  : t.inputBg,
+                                borderColor: drivesCompanyVehicle ? t.brandCyan : t.inputBorder 
+                              }
+                            ]}
+                            onPress={() => setDrivesCompanyVehicle(!drivesCompanyVehicle)}
                             activeOpacity={0.8}
                           >
-                            <MaterialIcons name="chevron-left" size={20} color={colors.onSurface} />
-                            <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13 }}>
-                              ATRÁS
-                            </Text>
+                            <MaterialIcons 
+                              name={drivesCompanyVehicle ? "check-box" : "check-box-outline-blank"} 
+                              size={22} 
+                              color={drivesCompanyVehicle ? t.brandCyan : t.textSecondary} 
+                            />
+                            <View style={{ flex: 1, marginLeft: 10 }}>
+                              <Text style={[styles.companyVehicleTitle, { color: t.textPrimary, fontFamily: F.bold }]}>
+                                ¿Conduces algún vehículo de la empresa?
+                              </Text>
+                              <Text style={[styles.companyVehicleSubtitle, { color: t.textSecondary, fontFamily: F.medium }]}>
+                                {drivesCompanyVehicle 
+                                  ? 'Activará la Guantera Digital (Wallet) para licencias y pólizas del vehículo corporativo.'
+                                  : 'Solo operarás plantas eléctricas (la Guantera Digital permanecerá oculta).'}
+                              </Text>
+                            </View>
                           </TouchableOpacity>
 
-                          <TouchableOpacity 
-                            style={[styles.actionBtn, { flex: 1, backgroundColor: tokens.tertiary }]} 
-                            onPress={handleAuth}
-                            disabled={loading}
-                            activeOpacity={0.85}
-                          >
-                            {loading ? (
-                              <ActivityIndicator color="#FFFFFF" />
-                            ) : (
+                          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                            <TouchableOpacity 
+                              style={[styles.secondaryActionBtn, { borderColor: t.btnSecondaryBorder, backgroundColor: t.btnSecondaryBg }]} 
+                              onPress={handlePrevStep}
+                              activeOpacity={0.8}
+                            >
+                              <MaterialIcons name="chevron-left" size={20} color={t.btnSecondaryText} />
+                              <Text style={{ fontFamily: F.bold, color: t.btnSecondaryText, fontSize: 13 }}>
+                                ATRÁS
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                              style={[styles.actionBtn, { flex: 1, backgroundColor: t.btnPrimaryBg }]} 
+                              onPress={handleNextStep}
+                              activeOpacity={0.85}
+                            >
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
                                 <Text style={[styles.btnText, { color: '#FFFFFF', fontFamily: F.extrabold }]}>
-                                  CREAR CUENTA
+                                  SIGUIENTE
                                 </Text>
+                                <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
                               </View>
-                            )}
-                          </TouchableOpacity>
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                      </View>
-                    )}
+                      )}
 
+                      {/* PASO 3: REGIÓN & UBICACIÓN */}
+                      {registerStep === 3 && (
+                        <View style={{ gap: 12 }}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <MaterialIcons name="place" size={18} color={t.brandCyan} />
+                            <Text style={{ fontFamily: F.bold, color: t.textPrimary, fontSize: 13, textTransform: 'uppercase' }}>
+                              Paso 3: Región & Ubicación
+                            </Text>
+                          </View>
+
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              PAÍS
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="Ej. Venezuela / Colombia / España" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={country} 
+                              onChangeText={setCountry} 
+                            />
+                          </View>
+
+                          <View>
+                            <Text style={[styles.fieldLabel, { color: t.inputLabel, fontFamily: F.bold }]}>
+                              ESTADO / PROVINCIA / CIUDAD
+                            </Text>
+                            <TextInput 
+                              style={[
+                                styles.input, 
+                                { backgroundColor: t.inputBg, borderColor: t.inputBorder, color: t.inputText, fontFamily: F.medium }
+                              ]} 
+                              placeholder="Ej. Carabobo, Valencia" 
+                              placeholderTextColor={t.inputPlaceholder} 
+                              value={state} 
+                              onChangeText={setState} 
+                            />
+                          </View>
+
+                          {/* CASILLAS SEPARADAS OBLIGATORIAS */}
+                          <LegalConsentCheckboxes
+                            termsAccepted={termsAccepted}
+                            onToggleTerms={() => {
+                              setTermsAccepted((prev) => !prev);
+                              if (!termsAccepted) setShowLegalErrors(false);
+                            }}
+                            privacyAccepted={privacyAccepted}
+                            onTogglePrivacy={() => {
+                              setPrivacyAccepted((prev) => !prev);
+                              if (!privacyAccepted) setShowLegalErrors(false);
+                            }}
+                            onOpenDoc={(doc) => {
+                              setSelectedLegalDoc(doc);
+                              setShowLegalModal(true);
+                            }}
+                            showValidationErrors={showLegalErrors}
+                            disabled={loading}
+                          />
+
+                          <View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
+                            <TouchableOpacity 
+                              style={[styles.secondaryActionBtn, { borderColor: t.btnSecondaryBorder, backgroundColor: t.btnSecondaryBg }]} 
+                              onPress={handlePrevStep}
+                              activeOpacity={0.8}
+                            >
+                              <MaterialIcons name="chevron-left" size={20} color={t.btnSecondaryText} />
+                              <Text style={{ fontFamily: F.bold, color: t.btnSecondaryText, fontSize: 13 }}>
+                                ATRÁS
+                              </Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity 
+                              style={[styles.actionBtn, { flex: 1, backgroundColor: t.brandGreen }]} 
+                              onPress={handleAuth}
+                              disabled={loading}
+                              activeOpacity={0.85}
+                            >
+                              {loading ? (
+                                <ActivityIndicator color="#FFFFFF" />
+                              ) : (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                  <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
+                                  <Text style={[styles.btnText, { color: '#FFFFFF', fontFamily: F.extrabold }]}>
+                                    CREAR CUENTA
+                                  </Text>
+                                </View>
+                              )}
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      )}
+
+                    </View>
                   </View>
-                </View>
-              )}
+                )}
 
-            </View>
+              </View>
             </View>
           </ScrollView>
         </LinearGradient>
@@ -780,59 +979,82 @@ export const AuthScreen: React.FC<Props> = ({ onBack }) => {
           }
         }}
       />
+
+      {/* MODAL DE RECUPERACIÓN DE CONTRASEÑA SUPABASE */}
+      <ForgotPasswordModal
+        visible={showForgotPasswordModal}
+        initialEmail={email}
+        initialStep={forgotPasswordStep}
+        onClose={() => setShowForgotPasswordModal(false)}
+        onSuccess={() => {
+          setIsLogin(true);
+        }}
+      />
     </KeyboardAvoidingView>
   );
 };
 
 const styles = StyleSheet.create({
+  topBarContainer: {
+    width: '100%',
+    paddingHorizontal: 28,
+    paddingTop: Platform.OS === 'web' ? 20 : 48,
+    paddingBottom: 8,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    zIndex: 20,
+  },
+  navPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.12,
+    shadowRadius: 6,
+    elevation: 3,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
+  },
   desktopScrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 48,
-    paddingVertical: 48,
+    paddingVertical: 24,
   },
   desktopSplitLayout: {
     flexDirection: 'row',
     width: '100%',
-    maxWidth: 1100,
+    maxWidth: 1120,
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 48,
+    gap: 56,
   },
   desktopHeroColumn: {
-    flex: 1.2,
+    flex: 1.15,
     maxWidth: 540,
-    paddingRight: 20,
-  },
-  brandHeroBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  brandHeroBadgeText: {
-    color: '#00e3fd',
-    fontSize: 11,
-    fontFamily: 'Montserrat_700Bold',
-    letterSpacing: 2,
+    paddingRight: 16,
   },
   desktopMainHeading: {
-    fontSize: 48,
+    fontSize: 44,
     fontFamily: 'Montserrat_800ExtraBold',
     letterSpacing: -1,
-    lineHeight: 52,
-    marginBottom: 4,
+    lineHeight: 48,
+    marginBottom: 6,
   },
   desktopSubHeading: {
-    fontSize: 12.5,
+    fontSize: 13,
     fontFamily: 'Montserrat_700Bold',
     letterSpacing: 1.5,
     marginBottom: 16,
   },
   desktopDesc: {
     fontSize: 14,
-    fontFamily: 'Montserrat_400Regular',
+    fontFamily: 'Montserrat_500Medium',
     lineHeight: 22,
     marginBottom: 28,
   },
@@ -842,65 +1064,61 @@ const styles = StyleSheet.create({
   heroFeatureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
-    backgroundColor: 'rgba(29, 32, 37, 0.55)',
+    gap: 14,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 14,
-    borderWidth: 0.8,
-    borderColor: 'rgba(64, 72, 92, 0.35)',
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 2,
+  },
+  featureIconBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   heroFeatureText: {
-    fontSize: 12.5,
-    fontFamily: 'Montserrat_500Medium',
+    fontSize: 13,
     flex: 1,
+    lineHeight: 18,
   },
   desktopCardContainer: {
-    maxWidth: 440,
-    backgroundColor: 'rgba(25, 28, 33, 0.85)',
+    maxWidth: 450,
     borderRadius: 24,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: 'rgba(64, 72, 92, 0.45)',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
-    elevation: 8,
+    padding: 28,
+    borderWidth: 1.2,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 10,
   },
   scrollContent: {
     flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingHorizontal: 18,
-    paddingTop: 36,
+    paddingHorizontal: 20,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   cardContainer: {
     width: '100%',
-    maxWidth: 410,
+    maxWidth: 420,
     alignSelf: 'center',
-  },
-  logoBadge: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 14,
-    borderWidth: 0.8,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 10,
-    elevation: 6,
+    borderRadius: 22,
+    padding: 22,
+    borderWidth: 1,
   },
   segmentedBar: {
     flexDirection: 'row',
     borderRadius: 16,
     padding: 4,
-    borderWidth: 0.8,
-    marginBottom: 20,
+    borderWidth: 1,
+    marginBottom: 22,
   },
   segmentButton: {
     flex: 1,
@@ -908,21 +1126,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   segmentActive: {
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 3,
+    shadowRadius: 6,
+    elevation: 4,
   },
   segmentText: {
     fontSize: 12,
-    letterSpacing: 0.5,
+    letterSpacing: 0.6,
   },
   fieldLabel: {
-    fontSize: 10.5,
-    letterSpacing: 0.5,
+    fontSize: 11,
+    letterSpacing: 0.6,
     marginBottom: 6,
     textTransform: 'uppercase',
   },
@@ -940,23 +1159,26 @@ const styles = StyleSheet.create({
     height: 44,
     justifyContent: 'center',
     alignItems: 'center',
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   actionBtn: {
-    height: 52, // Mínimo 48px hit area
+    height: 52,
     borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
     elevation: 4,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   secondaryActionBtn: {
     height: 52,
-    paddingHorizontal: 16,
+    paddingHorizontal: 18,
     borderRadius: 16,
     borderWidth: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 4,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   btnText: {
     fontSize: 13.5,
@@ -976,9 +1198,10 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 8,
     borderRadius: 10,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
   },
   stepTabActive: {
-    backgroundColor: 'rgba(65, 105, 225, 0.12)',
+    backgroundColor: 'rgba(0, 227, 253, 0.10)',
   },
   stepCircle: {
     width: 22,
@@ -998,12 +1221,43 @@ const styles = StyleSheet.create({
   },
   fluidCardStep: {
     borderRadius: 20,
-    borderWidth: 0.8,
+    borderWidth: 1,
     padding: 18,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 4,
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  forgotPasswordBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-end',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
+  },
+  forgotPasswordText: {
+    fontSize: 12,
+    letterSpacing: 0.2,
+  },
+  companyVehicleCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginTop: 4,
+    cursor: Platform.OS === 'web' ? ('pointer' as any) : undefined,
+  },
+  companyVehicleTitle: {
+    fontSize: 12.5,
+  },
+  companyVehicleSubtitle: {
+    fontSize: 11,
+    lineHeight: 15,
+    marginTop: 2,
   },
 });

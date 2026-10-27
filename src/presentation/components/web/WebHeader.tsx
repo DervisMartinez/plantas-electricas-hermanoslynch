@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, Platform, Image, useWindowDimensions } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useMyMoto } from '../../context/MotoContext';
 import { supabase } from '../../../data/supabaseClient';
-import { isCar } from '../../../domain/entities/Moto';
+import { isCar, isPlanta } from '../../../domain/entities/Moto';
 
 interface WebHeaderProps {
   activeTab: 'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile';
@@ -23,21 +23,22 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
   onOpenReport,
 }) => {
   const { colors, mode, toggleTheme } = useTheme();
-  const { myMoto, motos, selectMoto, setIsAddingMoto } = useMyMoto();
+  const { myMoto, motos, selectMoto, setIsAddingMoto, drivesCompanyVehicle } = useMyMoto();
   const [motoMenuVisible, setMotoMenuVisible] = useState(false);
   const { width } = useWindowDimensions();
 
   // Clean responsive thresholds:
   // - showInlineTabs: Only on wide displays (>= 1500px) with ample room for 3 columns.
   // - showSubNav: On all laptop, tablet, and mobile displays (< 1500px) to guarantee ZERO overlap!
-  const isDesktopWide = width >= 1500;
-  const isDesktopCompact = width >= 1024 && width < 1500;
-  const isTablet = width >= 600 && width < 1024;
-  const showInlineTabs = width >= 1500;
-  const showSubNav = width < 1500;
+  const isDesktopWide = width >= 1340;
+  const isDesktopCompact = width >= 1080 && width < 1340;
+  const isTablet = width >= 600 && width < 1080;
+  const showInlineTabs = width >= 1180;
+  const showSubNav = width < 1180;
   const isSmallPhone = width < 520;
   const isTinyPhone = width < 360;
   const isCurrentCar = isCar(myMoto);
+  const isCurrentPlanta = isPlanta(myMoto);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -52,9 +53,9 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
   const navItems = [
     { 
       id: 'moto' as const, 
-      label: isDesktopWide ? (isCurrentCar ? 'VEHÍCULO' : 'VEHÍCULO') : (isCurrentCar ? 'Vehículo' : 'Vehículo'), 
-      icon: isCurrentCar ? 'directions-car' : 'engine', 
-      iconFamily: isCurrentCar ? ('material' as const) : ('community' as const) 
+      label: isDesktopWide ? (isCurrentPlanta ? 'PLANTA' : isCurrentCar ? 'VEHÍCULO' : 'MOTO') : (isCurrentPlanta ? 'Planta' : isCurrentCar ? 'Vehículo' : 'Moto'), 
+      icon: isCurrentPlanta ? 'generator-portable' : isCurrentCar ? 'directions-car' : 'engine', 
+      iconFamily: (isCurrentPlanta || !isCurrentCar) ? ('community' as const) : ('material' as const) 
     },
     { 
       id: 'specs' as const, 
@@ -121,22 +122,20 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
             activeOpacity={0.8}
             onPress={() => onSelectTab('moto')}
           >
-            <View style={[styles.logoBadge, isSmallPhone && { width: 28, height: 28, borderRadius: 14 }]}>
-              {isCurrentCar ? (
-                <MaterialIcons name="directions-car" size={isSmallPhone ? 15 : 18} color="#00e3fd" />
-              ) : (
-                <MaterialCommunityIcons name="engine" size={isSmallPhone ? 15 : 18} color="#00e3fd" />
-              )}
-            </View>
+            <Image
+              source={require('../../../../assets/images/logo and media coorporative/logo-sin-nombre.png')}
+              style={{ width: isSmallPhone ? 28 : 34, height: isSmallPhone ? 28 : 34, marginRight: 6 }}
+              resizeMode="contain"
+            />
             <Text style={[
               styles.brandText, 
               { 
                 color: isDark ? '#ffffff' : '#111319',
-                fontSize: isTinyPhone ? 15 : (isSmallPhone ? 17 : 21),
-                letterSpacing: isSmallPhone ? 1.2 : 2,
+                fontSize: isTinyPhone ? 14 : (isSmallPhone ? 15 : 18),
+                letterSpacing: 1.2,
               }
             ]}>
-              GARAGE
+              HERMANOS LYNCH
             </Text>
             <View style={[styles.brandAccentDot, isSmallPhone && { width: 5, height: 5, marginTop: 7, marginLeft: -3 }]} />
           </TouchableOpacity>
@@ -156,7 +155,7 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
                 activeOpacity={0.8}
               >
                 <MaterialIcons 
-                  name={isCurrentCar ? "directions-car" : "two-wheeler"} 
+                  name={isCurrentPlanta ? "bolt" : isCurrentCar ? "directions-car" : "two-wheeler"} 
                   size={isSmallPhone ? 13 : 15} 
                   color="#4169E1" 
                   style={{ marginRight: 3 }} 
@@ -216,7 +215,7 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
                               {m.brand} {m.model}
                             </Text>
                             <Text style={[styles.dropdownItemSub, { color: colors.onSurfaceVariant }]}>
-                              {m.currentOdometer.toLocaleString()} km {m.year ? `• Año ${m.year}` : ''}
+                              {isPlanta(m) ? `${(m.currentHours || m.currentOdometer).toLocaleString()} hrs` : `${m.currentOdometer.toLocaleString()} km`} {m.year ? `• Año ${m.year}` : ''}
                             </Text>
                           </View>
                           {isCurrent && (
@@ -227,7 +226,7 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
                     })}
                   </ScrollView>
                   
-                  {/* BOTÓN PROMINENTE: ANEXAR OTRO VEHÍCULO */}
+                  {/* BOTÓN PROMINENTE: ANEXAR OTRA PLANTA / VEHÍCULO */}
                   <TouchableOpacity
                     style={[styles.addNewMotoBtn, { 
                       backgroundColor: isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(0, 174, 120, 0.1)',
@@ -241,7 +240,9 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
                     activeOpacity={0.8}
                   >
                     <MaterialIcons name="add-circle" size={19} color="#00e3fd" />
-                    <Text style={styles.addNewMotoText}>Anexar un nuevo vehículo</Text>
+                    <Text style={styles.addNewMotoText}>
+                      {isCurrentPlanta ? 'Anexar una nueva planta / equipo' : 'Anexar un nuevo vehículo'}
+                    </Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -340,7 +341,7 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
               accessibilityLabel="Actualizar kilometraje"
             >
               <MaterialIcons name="speed" size={15} color="#ffffff" />
-              <Text style={styles.quickAddText}>+ KM</Text>
+              <Text style={styles.quickAddText}>{isCurrentPlanta ? '+ HORAS' : '+ KM'}</Text>
             </TouchableOpacity>
           )}
 
@@ -360,7 +361,7 @@ export const WebHeader: React.FC<WebHeaderProps> = ({
               accessibilityLabel="Registrar gasolina"
             >
               <MaterialCommunityIcons name="gas-station" size={15} color="#00e3fd" />
-              <Text style={styles.fuelText}>+ GAS</Text>
+              <Text style={styles.fuelText}>{isCurrentPlanta ? '+ DIÉSEL' : '+ GAS'}</Text>
             </TouchableOpacity>
           )}
 
@@ -592,8 +593,7 @@ const styles = StyleSheet.create({
     minWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 14,
-    overflow: 'hidden',
+    marginHorizontal: 6,
   },
   centerNavScroll: {
     alignItems: 'center',

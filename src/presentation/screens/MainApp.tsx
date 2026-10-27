@@ -27,6 +27,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 // Web Components inspired by Yamaha reference design
+import { BentoDashboardView } from '../components/web/BentoDashboardView';
+import { ClientDashboardView } from '../components/web/ClientDashboardView';
 import { WebHeader } from '../components/web/WebHeader';
 import { WebSidebarDock } from '../components/web/WebSidebarDock';
 import { WebVehicleHero } from '../components/web/WebVehicleHero';
@@ -35,20 +37,39 @@ import { WebTelemetrySection } from '../components/web/WebTelemetrySection';
 // Shared Modals
 import { TechnicalSheetModal } from '../components/TechnicalSheetModal';
 import { VehicleStatsAndCalendarModal } from '../components/VehicleStatsAndCalendarModal';
-import { EmergencyCrashModal } from '../components/EmergencyCrashModal';
-import { MotoInspectionModal } from '../components/MotoInspectionModal';
+import { AssignedOperatorModal } from '../components/AssignedOperatorModal';
 import { VehicleReportModal } from '../components/VehicleReportModal';
 import { getMotoSpecs } from '../../data/specs';
 import { isWebPlatform } from '../utils/platformMode';
 import { ComponentType } from '../../constants/telemetry';
+import { isPlanta } from '../../domain/entities/Moto';
 
 export const MainApp = () => {
   const { colors, mode } = useTheme();
-  const { myMoto, updateMoto, addRecord } = useMyMoto();
+  const { myMoto, updateMoto, addRecord, drivesCompanyVehicle, isAdmin, userRole, setUserRole } = useMyMoto();
   const [activeTab, setActiveTab] = useState<'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile'>('moto');
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['moto']));
   const [servicesInitialComp, setServicesInitialComp] = useState<ComponentType | undefined>(undefined);
+    React.useEffect(() => {
+    if (!drivesCompanyVehicle && activeTab === 'wallet') {
+      setActiveTab('moto');
+    }
+  }, [drivesCompanyVehicle, activeTab]);
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
+
+  const handleSelectTab = (tab: 'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile') => {
+    setVisitedTabs((prev) => {
+      if (prev.has(tab)) return prev;
+      const next = new Set(prev);
+      next.add(tab);
+      return next;
+    });
+    setActiveTab(tab);
+    if (isWebPlatform()) {
+      desktopScrollRef.current?.scrollTo({ y: 0, animated: false });
+    }
+  };
 
   // Desktop threshold: 920px
   const isDesktop = windowWidth >= 920;
@@ -64,8 +85,7 @@ export const MainApp = () => {
   // Modals for Desktop & Mobile
   const [specsModalVisible, setSpecsModalVisible] = useState(false);
   const [statsModalVisible, setStatsModalVisible] = useState(false);
-  const [sosModalVisible, setSosModalVisible] = useState(false);
-  const [inspectionModalVisible, setInspectionModalVisible] = useState(false);
+  const [operatorModalVisible, setOperatorModalVisible] = useState(false);
   const [reportModalVisible, setReportModalVisible] = useState(false);
 
   const desktopScrollRef = useRef<ScrollView>(null);
@@ -85,10 +105,10 @@ export const MainApp = () => {
 
   // 5 Main Tabs flanking the Central [+] Quick Add Button
   const tabs = [
-    { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: 'Vehículo' },
+    { id: 'moto' as const, icon: 'engine', iconFamily: 'community' as const, label: isPlanta(myMoto) ? 'Planta' : 'Vehículo' },
     { id: 'services' as const, icon: 'build', iconFamily: 'material' as const, label: 'Servicios' },
     { id: 'history' as const, icon: 'receipt-long', iconFamily: 'material' as const, label: 'Historial' },
-    { id: 'wallet' as const, icon: 'account-balance-wallet', iconFamily: 'material' as const, label: 'Wallet' },
+    ...(drivesCompanyVehicle ? [{ id: 'wallet' as const, icon: 'account-balance-wallet', iconFamily: 'material' as const, label: 'Wallet' }] : []),
     { id: 'profile' as const, icon: 'person', iconFamily: 'material' as const, label: 'Perfil' },
   ];
 
@@ -113,7 +133,7 @@ export const MainApp = () => {
   const plusScale = useRef(new Animated.Value(1)).current;
 
   const handleTabPress = (id: 'moto' | 'services' | 'wallet' | 'history' | 'profile', index: number) => {
-    setActiveTab(id);
+    handleSelectTab(id);
 
     // Spring elevate the active tab and lower inactive tabs (mobile)
     tabs.forEach((_, i) => {
@@ -147,14 +167,16 @@ export const MainApp = () => {
 
   const handleSaveQuickOdo = () => {
     const odo = parseInt(newOdoInput);
-    if (!odo || !myMoto || odo <= myMoto.currentOdometer) {
-      alert('Ingresa un kilometraje mayor al actual.');
+    const isPlantaEquip = isPlanta(myMoto);
+    const currentVal = myMoto ? (myMoto.currentHours || myMoto.currentOdometer || 0) : 0;
+    if (!odo || !myMoto || odo <= currentVal) {
+      alert(isPlantaEquip ? 'Ingresa un número de horas mayor al actual.' : 'Ingresa un kilometraje mayor al actual.');
       return;
     }
-    updateMoto({ currentOdometer: odo });
+    updateMoto({ currentOdometer: odo, currentHours: odo });
     setQuickOdoVisible(false);
     setNewOdoInput('');
-    alert(`Odómetro actualizado a ${odo} km.`);
+    alert(isPlantaEquip ? `Horómetro actualizado a ${odo} horas.` : `Odómetro actualizado a ${odo} km.`);
   };
 
   const handleSaveQuickFuel = () => {
@@ -193,94 +215,85 @@ export const MainApp = () => {
   if (isWeb) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface }}>
-        {/* RESPONSIVE WEB TOP HEADER (Adapts cleanly to desktop, tablet, and mobile browsers) */}
-        <WebHeader
-          activeTab={activeTab}
-          onSelectTab={setActiveTab}
-          onOpenQuickOdo={() => setQuickOdoVisible(true)}
-          onOpenQuickFuel={() => setQuickFuelVisible(true)}
-          onOpenReport={() => setReportModalVisible(true)}
-        />
+        {isAdmin ? (
+          /* ========================================================== */
+          /* 1. PANEL DE ADMINISTRADOR (GESTIÓN COMPLETA, BENTO & SERVICIOS) */
+          /* ========================================================== */
+          <BentoDashboardView
+            activeTab={activeTab}
+            onSelectTab={handleSelectTab}
+            onOpenQuickHours={() => setQuickOdoVisible(true)}
+            onOpenQuickFuel={() => setQuickFuelVisible(true)}
+            onOpenSpecs={() => handleSelectTab('specs')}
+            onOpenStats={() => setStatsModalVisible(true)}
+            onOpenReport={() => setReportModalVisible(true)}
+            onOpenServicesTab={(comp?: ComponentType) => {
+              setServicesInitialComp(comp || 'oil');
+              handleSelectTab('services');
+            }}
+          >
+            {visitedTabs.has('specs') && (
+              <View style={{ flex: 1, width: '100%', display: activeTab === 'specs' ? 'flex' : 'none' }}>
+                <SpecsTab onNavigateToServices={() => handleSelectTab('services')} />
+              </View>
+            )}
 
-        {/* DESKTOP SIDEBAR DOCK (VERTICAL SHORTCUTS) */}
-        <WebSidebarDock
-          onOpenQuickOdo={() => setQuickOdoVisible(true)}
-          onOpenQuickFuel={() => setQuickFuelVisible(true)}
-          onOpenSpecs={() => setActiveTab('specs')}
-          onOpenStats={() => setStatsModalVisible(true)}
-        />
+            {visitedTabs.has('services') && (
+              <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'services' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
+                <ServicesTab initialComponent={servicesInitialComp} />
+              </View>
+            )}
 
-        {/* WEB MAIN VIEW */}
-        <ScrollView 
-          ref={desktopScrollRef}
-          style={{ flex: 1 }}
-          contentContainerStyle={{ minHeight: '100%', paddingBottom: 60 }}
-          showsVerticalScrollIndicator={true}
-        >
-          {activeTab === 'moto' && (
-            <View style={{ width: '100%' }}>
-              {/* VEHICLE SHOWCASE HERO */}
-              <WebVehicleHero
-                onOpenSpecs={() => setActiveTab('specs')}
-                onOpenStats={() => setStatsModalVisible(true)}
-                onOpenQuickOdo={() => setQuickOdoVisible(true)}
-                onOpenQuickFuel={() => setQuickFuelVisible(true)}
-                onScrollToTelemetry={scrollToTelemetry}
-                onOpenInspection={() => setInspectionModalVisible(true)}
-                onOpenReport={() => setReportModalVisible(true)}
-                onOpenServicesTab={() => {
-                  setServicesInitialComp('oil');
-                  setActiveTab('services');
-                }}
-              />
+            {visitedTabs.has('history') && (
+              <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'history' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
+                <HistoryTab />
+              </View>
+            )}
 
-              {/* TELEMETRY & WEAR GRID */}
-              <WebTelemetrySection
-                onOpenSpecs={() => setActiveTab('specs')}
-                onOpenQuickOdo={() => setQuickOdoVisible(true)}
-                onOpenQuickFuel={() => setQuickFuelVisible(true)}
-                onOpenServicesTab={(comp?: string) => {
-                  if (comp) {
-                    setServicesInitialComp(comp as ComponentType);
-                  } else {
-                    setServicesInitialComp(undefined);
-                  }
-                  setActiveTab('services');
-                }}
-              />
-            </View>
-          )}
+            {visitedTabs.has('wallet') && (
+              <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'wallet' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
+                <WalletTab />
+              </View>
+            )}
 
-          {activeTab === 'specs' && (
-            <View style={{ width: '100%' }}>
-              <SpecsTab onNavigateToServices={() => setActiveTab('services')} />
-            </View>
-          )}
+            {visitedTabs.has('profile') && (
+              <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'profile' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
+                <ProfileTab onOpenReport={() => setReportModalVisible(true)} />
+              </View>
+            )}
+          </BentoDashboardView>
+        ) : (
+          /* ========================================================== */
+          /* 2. PORTAL DEL CLIENTE (PLANTA EXCLUSIVA, READ-ONLY & OPERADOR) */
+          /* ========================================================== */
+          <ClientDashboardView
+            activeTab={activeTab === 'services' || activeTab === 'wallet' ? 'moto' : activeTab}
+            onSelectTab={(tab) => handleSelectTab(tab)}
+            onOpenQuickHours={() => setQuickOdoVisible(true)}
+            onOpenQuickFuel={() => setQuickFuelVisible(true)}
+            onOpenSpecs={() => handleSelectTab('specs')}
+            onOpenReport={() => setReportModalVisible(true)}
+            onOpenOperatorModal={() => setOperatorModalVisible(true)}
+          >
+            {visitedTabs.has('specs') && (
+              <View style={{ flex: 1, width: '100%', display: activeTab === 'specs' ? 'flex' : 'none' }}>
+                <SpecsTab onNavigateToServices={() => setOperatorModalVisible(true)} />
+              </View>
+            )}
 
-          {activeTab === 'services' && (
-            <View style={[styles.desktopTabContainer, { paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
-              <ServicesTab initialComponent={servicesInitialComp} />
-            </View>
-          )}
+            {visitedTabs.has('history') && (
+              <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'history' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
+                <HistoryTab />
+              </View>
+            )}
 
-          {activeTab === 'history' && (
-            <View style={[styles.desktopTabContainer, { paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
-              <HistoryTab />
-            </View>
-          )}
-
-          {activeTab === 'wallet' && (
-            <View style={[styles.desktopTabContainer, { paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
-              <WalletTab />
-            </View>
-          )}
-
-          {activeTab === 'profile' && (
-            <View style={[styles.desktopTabContainer, { paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
-              <ProfileTab onOpenReport={() => setReportModalVisible(true)} />
-            </View>
-          )}
-        </ScrollView>
+            {visitedTabs.has('profile') && (
+              <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'profile' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
+                <ProfileTab onOpenReport={() => setReportModalVisible(true)} />
+              </View>
+            )}
+          </ClientDashboardView>
+        )}
 
         {/* MODAL: FICHA TÉCNICA */}
         <TechnicalSheetModal
@@ -296,18 +309,11 @@ export const MainApp = () => {
           onClose={() => setStatsModalVisible(false)}
         />
 
-        {/* MODAL: SOS CRASH EMERGENCY */}
-        <EmergencyCrashModal
-          visible={sosModalVisible}
-          onClose={() => setSosModalVisible(false)}
-          manualTrigger={true}
-        />
-
-        {/* MODAL: INSPECCIÓN INTERACTIVA 3D DE LA MOTO */}
-        <MotoInspectionModal
-          visible={inspectionModalVisible}
-          onClose={() => setInspectionModalVisible(false)}
-          onOpenQuickService={() => setActiveTab('services')}
+        {/* MODAL: FICHA TÉCNICA Y CONTACTOS DEL OPERADOR ASIGNADO (SUSTITUYE SOS/EMERGENCIA) */}
+        <AssignedOperatorModal
+          visible={operatorModalVisible}
+          onClose={() => setOperatorModalVisible(false)}
+          myMoto={myMoto}
         />
 
         {/* MODAL: REPORTE EJECUTIVO PDF */}
@@ -318,13 +324,13 @@ export const MainApp = () => {
           specs={specs}
         />
 
-        {/* MODAL: ACTUALIZAR ODÓMETRO */}
+        {/* MODAL: ACTUALIZAR HORÓMETRO / ODÓMETRO */}
         <Modal visible={quickOdoVisible} transparent={true} animationType="fade">
           <View style={styles.desktopModalBackdrop}>
             <View style={[styles.dialogBox, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
                 <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 18 }}>
-                  Actualizar Odómetro
+                  {isPlanta(myMoto) ? 'Actualizar Horómetro' : 'Actualizar Odómetro'}
                 </Text>
                 <TouchableOpacity onPress={() => setQuickOdoVisible(false)}>
                   <MaterialIcons name="close" size={20} color={colors.onSurfaceVariant} />
@@ -332,13 +338,15 @@ export const MainApp = () => {
               </View>
 
               <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 12, marginBottom: 16 }}>
-                Odómetro actual: {myMoto?.currentOdometer || 0} km
+                {isPlanta(myMoto)
+                  ? `Horas acumuladas actuales: ${(myMoto?.currentHours || myMoto?.currentOdometer || 0).toLocaleString()} hrs`
+                  : `Odómetro actual: ${(myMoto?.currentOdometer || 0).toLocaleString()} km`}
               </Text>
 
               <TextInput 
                 value={newOdoInput}
                 onChangeText={setNewOdoInput}
-                placeholder={`Mayor a ${myMoto?.currentOdometer || 0} km`}
+                placeholder={isPlanta(myMoto) ? `Mayor a ${myMoto?.currentHours || myMoto?.currentOdometer || 0} hrs` : `Mayor a ${myMoto?.currentOdometer || 0} km`}
                 placeholderTextColor={colors.onSurfaceVariant}
                 keyboardType="numeric"
                 style={[styles.dialogInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface, borderColor: colors.outlineVariant, fontFamily: F.bold }]}
@@ -348,8 +356,10 @@ export const MainApp = () => {
                 <TouchableOpacity onPress={() => setQuickOdoVisible(false)} style={[styles.dialogBtn, { borderColor: colors.outlineVariant, borderWidth: 0.5 }]}>
                   <Text style={{ fontFamily: F.bold, color: colors.onSurface }}>Cancelar</Text>
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleSaveQuickOdo} style={[styles.dialogBtn, { backgroundColor: '#4169E1' }]}>
-                  <Text style={{ fontFamily: F.bold, color: '#ffffff' }}>Guardar Odómetro</Text>
+                <TouchableOpacity onPress={handleSaveQuickOdo} style={[styles.dialogBtn, { backgroundColor: '#0b3b60' }]}>
+                  <Text style={{ fontFamily: F.bold, color: '#ffffff' }}>
+                    {isPlanta(myMoto) ? 'Guardar Horas' : 'Guardar Odómetro'}
+                  </Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -416,12 +426,34 @@ export const MainApp = () => {
     <View style={{ flex: 1, backgroundColor: colors.surface }}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <View style={{ flex: 1, paddingBottom: 68 + insets.bottom }}>
-          {activeTab === 'moto' && <DashboardTab />}
-          {activeTab === 'specs' && <SpecsTab onNavigateToServices={() => setActiveTab('services')} />}
-          {activeTab === 'services' && <ServicesTab initialComponent={servicesInitialComp} />}
-          {activeTab === 'history' && <HistoryTab />}
-          {activeTab === 'wallet' && <WalletTab />}
-          {activeTab === 'profile' && <ProfileTab onOpenReport={() => setReportModalVisible(true)} />}
+          <View style={{ flex: 1, display: activeTab === 'moto' ? 'flex' : 'none' }}>
+            <DashboardTab />
+          </View>
+          {visitedTabs.has('specs') && (
+            <View style={{ flex: 1, display: activeTab === 'specs' ? 'flex' : 'none' }}>
+              <SpecsTab onNavigateToServices={() => handleSelectTab('services')} />
+            </View>
+          )}
+          {visitedTabs.has('services') && (
+            <View style={{ flex: 1, display: activeTab === 'services' ? 'flex' : 'none' }}>
+              <ServicesTab initialComponent={servicesInitialComp} />
+            </View>
+          )}
+          {visitedTabs.has('history') && (
+            <View style={{ flex: 1, display: activeTab === 'history' ? 'flex' : 'none' }}>
+              <HistoryTab />
+            </View>
+          )}
+          {visitedTabs.has('wallet') && (
+            <View style={{ flex: 1, display: activeTab === 'wallet' ? 'flex' : 'none' }}>
+              <WalletTab />
+            </View>
+          )}
+          {visitedTabs.has('profile') && (
+            <View style={{ flex: 1, display: activeTab === 'profile' ? 'flex' : 'none' }}>
+              <ProfileTab onOpenReport={() => setReportModalVisible(true)} />
+            </View>
+          )}
         </View>
       </KeyboardAvoidingView>
 
@@ -707,21 +739,23 @@ export const MainApp = () => {
         </View>
       </Modal>
 
-      {/* MODAL RÁPIDO: ACTUALIZAR ODÓMETRO (MOBILE) */}
+      {/* MODAL RÁPIDO: ACTUALIZAR HORÓMETRO / ODÓMETRO (MOBILE) */}
       <Modal visible={quickOdoVisible} transparent={true} animationType="fade">
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <View style={[styles.dialogBox, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
             <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 18, textAlign: 'center' }}>
-              Actualizar Odómetro
+              {isPlanta(myMoto) ? 'Actualizar Horómetro' : 'Actualizar Odómetro'}
             </Text>
             <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 12, textAlign: 'center', marginTop: 4, marginBottom: 16 }}>
-              Odómetro actual: {myMoto?.currentOdometer || 0} km
+              {isPlanta(myMoto)
+                ? `Horas acumuladas actuales: ${(myMoto?.currentHours || myMoto?.currentOdometer || 0).toLocaleString()} hrs`
+                : `Odómetro actual: ${(myMoto?.currentOdometer || 0).toLocaleString()} km`}
             </Text>
 
             <TextInput 
               value={newOdoInput}
               onChangeText={setNewOdoInput}
-              placeholder={`Mayor a ${myMoto?.currentOdometer || 0} km`}
+              placeholder={isPlanta(myMoto) ? `Mayor a ${myMoto?.currentHours || myMoto?.currentOdometer || 0} hrs` : `Mayor a ${myMoto?.currentOdometer || 0} km`}
               placeholderTextColor={colors.onSurfaceVariant}
               keyboardType="numeric"
               style={[styles.dialogInput, { backgroundColor: colors.surfaceContainer, color: colors.onSurface, borderColor: colors.outlineVariant, fontFamily: F.bold }]}

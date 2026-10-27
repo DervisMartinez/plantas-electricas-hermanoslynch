@@ -1,4 +1,4 @@
-export type VehicleType = 'moto' | 'car';
+export type VehicleType = 'moto' | 'car' | 'planta';
 
 export type ComponentType = 
   | 'oil' 
@@ -32,6 +32,8 @@ export interface ServiceRecord {
   costUSD: number;
   notes?: string;
   isAgency?: boolean;
+  status?: 'completed' | 'scheduled';
+  scheduledTime?: string;
 }
 
 export interface Moto {
@@ -44,35 +46,74 @@ export interface Moto {
   plate?: string;
   vehicleType?: VehicleType;
   
-  // Real-time tracking
+  // Real-time tracking (en plantas eléctricas el odómetro actúa como horómetro de horas de uso)
   currentOdometer: number;
-  purchaseDate?: string;
+  currentHours?: number;
+  powerKva?: number;
+  powerKw?: number;
+  fuelType?: string;
+  engineBrand?: string;
+  engineModel?: string;
+  alternatorBrand?: string;
+  alternatorModel?: string;
+  controllerModel?: string;
+  installationType?: string;
+  fuelTankCapacity?: number;
+  oilPanCapacity?: number;
+  coolantCapacity?: number;
+  systemVoltage?: string;
+  serialNumber?: string;
+  location?: string;
+  assignedOperatorId?: string;
+  assignedOperatorName?: string;
+  
   isFromAgency?: boolean;
+  agencyMaintenanceDate?: string;
+  
+  // Custom user settings
+  customOilInterval?: number;
+  customTirePressureFront?: number;
+  customTirePressureRear?: number;
 }
 
-export const isCar = (vehicle?: { brand?: string; model?: string; vehicleType?: string } | null): boolean => {
+/**
+ * Utility to identify if a vehicle entity is a car / commercial support vehicle.
+ */
+export const isCar = (vehicle?: Moto | null): boolean => {
   if (!vehicle) return false;
   if (vehicle.vehicleType === 'car') return true;
-  if (vehicle.vehicleType === 'moto') return false;
-
-  const brand = (vehicle.brand || '').trim().toLowerCase();
-  const model = (vehicle.model || '').trim().toLowerCase();
-
-  if (brand.includes('chevrolet') || model.includes('optra')) return true;
-  if (
-    brand.includes('toyota') || 
-    brand.includes('ford') || 
-    brand.includes('renault') || 
-    brand.includes('volkswagen') || 
-    brand.includes('hyundai') || 
+  const brand = vehicle.brand.toLowerCase();
+  const model = vehicle.model.toLowerCase();
+  return (
+    brand.includes('toyota') ||
+    brand.includes('ford') ||
+    brand.includes('chevrolet') ||
     brand.includes('nissan') ||
-    brand.includes('fiat') ||
-    brand.includes('peugeot') ||
-    brand.includes('kia')
-  ) {
-    return true;
-  }
-
-  return false;
+    brand.includes('mitsubishi') ||
+    model.includes('hilux') ||
+    model.includes('f-150') ||
+    model.includes('d-max')
+  );
 };
 
+/**
+ * Utility to identify if a vehicle entity is an industrial generator / Planta Eléctrica.
+ */
+export const isPlanta = (vehicle?: Moto | null): boolean => {
+  if (!vehicle) return true; // Default to planta for Hermanos Lynch
+  if (vehicle.vehicleType === 'planta') return true;
+  const brand = vehicle.brand.toLowerCase();
+  const model = vehicle.model.toLowerCase();
+  return (
+    brand.includes('blue power') ||
+    brand.includes('lynch') ||
+    brand.includes('cummins') ||
+    brand.includes('caterpillar') ||
+    brand.includes('perkins') ||
+    model.includes('c35') ||
+    model.includes('c55') ||
+    model.includes('c125') ||
+    model.includes('planta') ||
+    model.includes('generador')
+  );
+};

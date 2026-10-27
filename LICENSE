@@ -1,11 +1,51 @@
-Copyright (c) 2026 Dervis Martinez. Todos los derechos reservados.
+PROPRIETARY AND CONFIDENTIAL SOFTWARE LICENSE AGREEMENT
+=========================================================
+Copyright (c) 2026 Hermanos Lynch C.A.
+Todos los derechos reservados / All Rights Reserved.
 
-GARAGE - APLICACIÓN INTELIGENTE DE GESTIÓN Y MANTENIMIENTO DE VEHÍCULOS
+AVISO DE PROPIEDAD INTELECTUAL Y DERECHOS DE AUTOR
+--------------------------------------------------
+Este software, incluyendo pero no limitándose al código fuente, código objeto,
+arquitectura de software, diagramas, esquemas de bases de datos, algoritmos de
+telemetría industrial, diseños visuales, componentes de interfaz de usuario (UI/UX),
+archivos multimedia, logotipos, marcas registradas y documentación asociada
+(en adelante, el "Software"), es propiedad exclusiva y confidencial de
+HERMANOS LYNCH C.A. y sus licenciantes autorizados.
 
-Queda expresamente prohibida la copia, reproducción, redistribución, modificación,
-ingeniería inversa o explotación comercial total o parcial de este software,
-su código fuente, activos visuales, marcas y documentación asociada sin la previa
-autorización por escrito del titular de los derechos de autor: Dervis Martinez.
+TÉRMINOS Y CONDICIONES DE USO RESTRINGIDO:
+------------------------------------------
+1. PROHIBICIÓN DE COPIA Y DISTRIBUCIÓN:
+   Queda terminantemente prohibida la copia, reproducción, duplicación, distribución,
+   venta, arrendamiento, cesión, sublicenciamiento o divulgación total o parcial de
+   este Software o cualquiera de sus componentes por cualquier medio físico o digital,
+   sin la previa autorización expresa, por escrito y firmada por los representantes
+   legales de HERMANOS LYNCH C.A.
 
-El uso de este código está restringido a fines autorizados explícitamente por el autor.
-Todos los derechos sobre la propiedad intelectual, diseño y algoritmos son reservados.
+2. PROHIBICIÓN DE INGENIERÍA INVERSA:
+   Queda expresamente prohibido descompilar, realizar ingeniería inversa, desensamblar,
+   descifrar o intentar descubrir el código fuente, la lógica interna o los algoritmos
+   subyacentes del Software.
+
+3. DERECHOS DE MARCA:
+   Los nombres "Hermanos Lynch", "Blue Power Generation", logotipos corporativos,
+   isotipos y elementos de identidad visual asociados son marcas comerciales protegidas.
+   El acceso a este repositorio o al código fuente no concede ninguna licencia ni
+   derecho sobre dichas marcas.
+
+4. ACCESO AUTORIZADO:
+   El uso, acceso y despliegue de este repositorio está estrictamente limitado al
+   personal técnico y contratistas expresamente autorizados por HERMANOS LYNCH C.A.
+   bajo estrictos acuerdos de confidencialidad (NDA).
+
+5. EXCLUSIÓN DE GARANTÍAS Y RESPONSABILIDAD:
+   EL SOFTWARE SE PROPORCIONA "TAL CUAL" ("AS IS"), PARA USO EXCLUSIVO EN LA
+   INFRAESTRUCTURA Y OPERACIONES TÉCNICAS AUTORIZADAS DE HERMANOS LYNCH C.A. EN NINGÚN
+   CASO HERMANOS LYNCH C.A. SERÁ RESPONSABLE POR DAÑOS DIRECTOS, INDIRECTOS, INCIDENTALES,
+   PUNITIVOS O CONSECUENTES DERIVADOS DEL USO NO AUTORIZADO O INDEBIDO DEL SOFTWARE.
+
+=========================================================
+Para solicitudes de autorización, licencias o consultas técnicas:
+HERMANOS LYNCH C.A. • Central Operativa
+Correo: operaciones@hermanoslynch.com
+Teléfono: +58 (212) 238-1244
+Caracas, Venezuela.
