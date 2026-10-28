@@ -364,8 +364,13 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             </Text>
           </View>
 
-          {/* RIGHT ACTION BUTTONS */}
-          <View style={styles.headerRightActions}>
+          {/* RIGHT ACTION BUTTONS WITH HORIZONTAL SCROLL FOR MOBILE */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.headerRightActions, isMobile && { paddingVertical: 4, paddingRight: 8 }]}
+            style={isMobile ? { maxWidth: '100%', marginTop: 6 } : undefined}
+          >
             <TouchableOpacity
               onPress={onOpenQuickHours}
               style={[styles.quickActionButton, { backgroundColor: accentBlue }]}
@@ -435,7 +440,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
                 Cerrar Sesión
               </Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
         {/* SCROLLABLE CLIENT DASHBOARD CONTENT (DASHBOARD ONLY) */}
@@ -448,34 +453,34 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           showsVerticalScrollIndicator={false}
         >
           {/* GREETING / HERO BANNER */}
-          <View style={styles.greetingBannerRow}>
-            <View>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+          <View style={[styles.greetingBannerRow, isMobile && { marginVertical: 12 }]}>
+            <View style={{ flex: 1, minWidth: 260 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                 <View style={[styles.clientBadge, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
                   <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 11 }}>
                     PORTAL DE CLIENTE
                   </Text>
                 </View>
-                <View style={[styles.locationBadge, { backgroundColor: pillDarkBg }]}>
+                <View style={[styles.locationBadge, { backgroundColor: pillDarkBg, maxWidth: '100%' }]}>
                   <MaterialIcons name="place" size={12} color={accentCyan} />
-                  <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 11 }}>
+                  <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 11 }} numberOfLines={1}>
                     {plantLocation}
                   </Text>
                 </View>
               </View>
 
-              <Text style={[styles.greetingTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+              <Text style={[styles.greetingTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 20 : 26, lineHeight: isMobile ? 26 : 32 }]}>
                 Tu Planta Eléctrica en Operación
               </Text>
-              <Text style={[styles.greetingSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+              <Text style={[styles.greetingSubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 12 : 13, marginTop: 4 }]}>
                 Monitoreo en tiempo real de generación, horómetro y ciclos preventivos respaldados por Hermanos Lynch.
               </Text>
             </View>
 
-            <View style={styles.greetingRightFilters}>
+            <View style={[styles.greetingRightFilters, isMobile && { width: '100%', marginTop: 8 }]}>
               <TouchableOpacity
                 onPress={onOpenReport}
-                style={[styles.pdfTopActionBtn, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                style={[styles.pdfTopActionBtn, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { width: '100%', justifyContent: 'center' }]}
                 activeOpacity={0.8}
               >
                 <MaterialIcons name="picture-as-pdf" size={16} color="#ef4444" />
@@ -907,28 +912,30 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             </Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            onPress={onOpenOperatorModal}
-            style={styles.mobileNavItem}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons
-              name="engineering"
-              size={22}
-              color={accentCyan}
-            />
-            <Text
-              style={[
-                styles.mobileNavLabel,
-                {
-                  color: accentCyan,
-                  fontFamily: F.bold,
-                },
-              ]}
+          {!isOperatorOrAdmin && (
+            <TouchableOpacity
+              onPress={onOpenOperatorModal}
+              style={styles.mobileNavItem}
+              activeOpacity={0.7}
             >
-              Operador
-            </Text>
-          </TouchableOpacity>
+              <MaterialIcons
+                name="support-agent"
+                size={22}
+                color={textSecondary}
+              />
+              <Text
+                style={[
+                  styles.mobileNavLabel,
+                  {
+                    color: textSecondary,
+                    fontFamily: F.medium,
+                  },
+                ]}
+              >
+                Operador
+              </Text>
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             onPress={() => onSelectTab('profile')}

@@ -276,11 +276,16 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       }
 
       // 1. CARGA PRIORITARIA: Plantas Eléctricas (Hermanos Lynch / Blue Power Generation)
-      const { data: plantasData } = await supabase
+      let plantasQuery = supabase
         .from('plantas')
         .select('*')
-        .eq('user_id', user.id)
         .order('created_at', { ascending: false });
+
+      if (detectedRole !== 'admin') {
+        plantasQuery = plantasQuery.eq('user_id', user.id);
+      }
+
+      const { data: plantasData } = await plantasQuery;
 
       const parsedPlantas: Moto[] = (plantasData || []).map((p: any) => ({
         id: p.id,
@@ -314,10 +319,15 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       }));
 
       // 2. Flota de Vehículos de la Empresa (Automóviles/Camionetas de Soporte Técnico)
-      const { data: vehiculosData } = await supabase
+      let vehiculosQuery = supabase
         .from('vehiculos_empresa')
-        .select('*')
-        .eq('user_id', user.id);
+        .select('*');
+
+      if (detectedRole !== 'admin') {
+        vehiculosQuery = vehiculosQuery.eq('user_id', user.id);
+      }
+
+      const { data: vehiculosData } = await vehiculosQuery;
 
       const parsedVehiculos: Moto[] = (vehiculosData || []).map((v: any) => ({
         id: v.id,

@@ -8,6 +8,7 @@ import {
   Image,
   TextInput,
   Platform,
+  Linking,
   useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
@@ -59,7 +60,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     loadSystemUsers,
     userName,
     isSuperAdmin,
-    userRoleTitle
+    userRoleTitle,
+    operatorsList,
+    clientsList
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -76,6 +79,43 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const [selectedBarIndex, setSelectedBarIndex] = useState<number>(3); // Default highlighted bar
   const [userMgmtVisible, setUserMgmtVisible] = useState(false);
   const [agendaVisible, setAgendaVisible] = useState(false);
+
+  // Super Admin Fleet & Operators Supervision
+  const allPlants = useMemo(() => motos.filter(isPlanta), [motos]);
+
+  const fleetStats = useMemo(() => {
+    const total = allPlants.length;
+    const online = allPlants.length;
+    const attentionNeeded = allPlants.filter(p => !p.assignedOperatorId && !p.assignedOperatorName).length;
+    const totalHours = allPlants.reduce((acc, p) => acc + (p.currentHours || p.currentOdometer || 0), 0);
+    return { total, online, attentionNeeded, totalHours };
+  }, [allPlants]);
+
+  const [selectedStateFilter, setSelectedStateFilter] = useState('Todos');
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState('Todos');
+  const [operatorSearch, setOperatorSearch] = useState('');
+
+  const VENEZUELA_STATES = ['Todos', 'Carabobo', 'Distrito Capital', 'Aragua', 'Zulia', 'Miranda', 'Lara'];
+  const DEPARTMENTS = ['Todos', 'Generación Eléctrica', 'Mantenimiento Preventivo', 'Media Tensión', 'Electrónica ComAp'];
+
+  const filteredOperators = useMemo(() => {
+    let list = operatorsList || [];
+    if (selectedStateFilter !== 'Todos') {
+      list = list.filter((op: any) => (op.state || 'Carabobo').toLowerCase() === selectedStateFilter.toLowerCase());
+    }
+    if (selectedDeptFilter !== 'Todos') {
+      list = list.filter((op: any) => (op.department || op.specialty || '').toLowerCase().includes(selectedDeptFilter.toLowerCase()));
+    }
+    if (operatorSearch.trim()) {
+      const q = operatorSearch.toLowerCase().trim();
+      list = list.filter((op: any) =>
+        (op.full_name || '').toLowerCase().includes(q) ||
+        (op.email || '').toLowerCase().includes(q) ||
+        (op.operator_code || '').toLowerCase().includes(q)
+      );
+    }
+    return list;
+  }, [operatorsList, selectedStateFilter, selectedDeptFilter, operatorSearch]);
 
   const isVehiclePlanta = myMoto ? isPlanta(myMoto) : true;
   const isDesktop = windowWidth >= 1024;
@@ -618,8 +658,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </Text>
           </View>
 
-          {/* RIGHT ACTION BUTTONS */}
-          <View style={styles.headerRightActions}>
+          {/* RIGHT ACTION BUTTONS WITH HORIZONTAL SCROLL FOR MOBILE */}
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={[styles.headerRightActions, isMobile && { paddingVertical: 4, paddingRight: 8 }]}
+            style={isMobile ? { maxWidth: '100%', marginTop: 6 } : undefined}
+          >
             {/* GESTIÓN DE USUARIOS Y OPERADORES (SUPERADMIN) */}
             <TouchableOpacity
               onPress={() => {
@@ -732,7 +777,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
               )}
             </TouchableOpacity>
-          </View>
+          </ScrollView>
         </View>
 
         {/* SCROLLABLE BENTO GRID CONTENT */}
@@ -801,6 +846,389 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* SUPER ADMIN: 1. FLOTA DE PLANTAS ELÉCTRICAS EN LÍNEA (CENTRO DE MANDO MAESTRO) */}
+          {isSuperAdmin && (
+            <View style={[styles.superFleetContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={styles.superFleetHeader}>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                      Flota de Plantas Eléctricas en Línea
+                    </Text>
+                    <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                      <View style={styles.greenPulseDot} />
+                      <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>
+                        {fleetStats.total} EN RED
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                    Selecciona cualquier planta de la red para supervisar sus parámetros, telemetría de 10 subsistemas y consumos en tiempo real.
+                  </Text>
+                </View>
+
+                {/* KPI CHIPS DE FLOTA */}
+                <View style={styles.fleetKpiChipsRow}>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10 }}>Total Plantas</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: textPrimary, fontSize: 16 }}>{fleetStats.total}</Text>
+                  </View>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>Operativas</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: '#22c55e', fontSize: 16 }}>{fleetStats.online}</Text>
+                  </View>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 10 }}>Horas Flota</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: accentCyan, fontSize: 16 }}>{fleetStats.totalHours.toLocaleString()}h</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* HORIZONTAL SCROLL DE PLANTAS */}
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.fleetCardsScroll}
+              >
+                {allPlants.map((plant) => {
+                  const isSelected = myMoto?.id === plant.id;
+                  const opName = plant.assignedOperatorName || 'Por Asignar';
+                  const kva = plant.powerKva || 35;
+
+                  return (
+                    <TouchableOpacity
+                      key={plant.id}
+                      onPress={() => selectMoto(plant.id)}
+                      style={[
+                        styles.fleetPlantCard,
+                        {
+                          backgroundColor: isSelected ? (isDark ? '#1a2236' : '#eff6ff') : pillDarkBg,
+                          borderColor: isSelected ? accentBlue : cardBorder,
+                          borderWidth: isSelected ? 2 : 1,
+                        },
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.fleetPlantCardHeader}>
+                        <View style={{ flex: 1, paddingRight: 6 }}>
+                          <Text style={[styles.fleetPlantModel, { color: textPrimary, fontFamily: F.extrabold }]} numberOfLines={1}>
+                            {plant.model} · {kva} kVA
+                          </Text>
+                          <Text style={[styles.fleetPlantBrand, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
+                            {plant.brand}
+                          </Text>
+                        </View>
+                        <View style={[styles.onlineStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                          <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 9 }}>EN LÍNEA</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.fleetPlantLocationRow}>
+                        <MaterialIcons name="place" size={14} color={accentCyan} />
+                        <Text style={[styles.fleetPlantLocationText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
+                          {plant.location || 'Sede Principal'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.fleetPlantOperatorRow}>
+                        <MaterialIcons name="engineering" size={14} color={textSecondary} />
+                        <Text style={[styles.fleetPlantOperatorText, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
+                          Operador: <Text style={{ fontFamily: F.bold, color: plant.assignedOperatorName ? accentBlue : '#f59e0b' }}>{opName}</Text>
+                        </Text>
+                      </View>
+
+                      <View style={styles.fleetPlantCardFooter}>
+                        <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 11 }}>
+                          Horas: <Text style={{ fontFamily: F.extrabold, color: textPrimary }}>{(plant.currentHours || 0).toLocaleString()} hrs</Text>
+                        </Text>
+                        <View style={[styles.selectPlantIndicator, { backgroundColor: isSelected ? accentBlue : 'transparent' }]}>
+                          <Text style={{ fontFamily: F.bold, color: isSelected ? '#ffffff' : textSecondary, fontSize: 10 }}>
+                            {isSelected ? 'ACTIVA' : 'SUPERVISAR →'}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* SUPER ADMIN: 2. SUPERVISIÓN DE OPERADORES, TERRITORIOS Y VEHÍCULOS DE EMPRESA */}
+          {isSuperAdmin && (
+            <View style={[styles.superOperatorsContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={styles.superOperatorsHeader}>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                      Supervisión de Operadores y Flota de Vehículos
+                    </Text>
+                    <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
+                      <MaterialIcons name="badge" size={13} color={accentBlue} />
+                      <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10 }}>
+                        {operatorsList.length} OPERADORES ACTIVOS
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                    Organización territorial por Estado, País, Departamento técnico y consumo de combustible de vehículos corporativos.
+                  </Text>
+                </View>
+
+                {/* BOTÓN GESTIONAR O CREAR OPERADOR */}
+                <TouchableOpacity
+                  onPress={() => {
+                    loadSystemUsers();
+                    setUserMgmtVisible(true);
+                  }}
+                  style={[styles.manageUsersQuickBtn, { backgroundColor: accentBlue }]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="person-add" size={16} color="#ffffff" />
+                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                    Gestionar / Crear Operador
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* FILTROS GEOGRÁFICOS Y DEPARTAMENTALES */}
+              <View style={styles.filterSectionBox}>
+                {/* 1. FILTRO ESTADO */}
+                <View style={styles.filterGroupRow}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    ESTADO / REGIÓN:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {VENEZUELA_STATES.map((st) => (
+                      <TouchableOpacity
+                        key={st}
+                        onPress={() => setSelectedStateFilter(st)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedStateFilter === st ? accentBlue : pillDarkBg,
+                            borderColor: selectedStateFilter === st ? accentBlue : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedStateFilter === st ? F.bold : F.medium,
+                            color: selectedStateFilter === st ? '#ffffff' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {st}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* 2. FILTRO DEPARTAMENTO */}
+                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    DEPARTAMENTO:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {DEPARTMENTS.map((dept) => (
+                      <TouchableOpacity
+                        key={dept}
+                        onPress={() => setSelectedDeptFilter(dept)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedDeptFilter === dept ? accentCyan : pillDarkBg,
+                            borderColor: selectedDeptFilter === dept ? accentCyan : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedDeptFilter === dept ? F.bold : F.medium,
+                            color: selectedDeptFilter === dept ? '#0c0e14' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {dept}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                {/* 3. BUSCADOR EN VIVO DE OPERADOR */}
+                <View style={[styles.operatorSearchInputRow, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+                  <MaterialIcons name="search" size={18} color={textSecondary} />
+                  <TextInput
+                    value={operatorSearch}
+                    onChangeText={setOperatorSearch}
+                    placeholder="Buscar operador por nombre, carnet HL o correo..."
+                    placeholderTextColor={textSecondary}
+                    style={{ flex: 1, fontFamily: F.medium, color: textPrimary, fontSize: 12 }}
+                  />
+                  {operatorSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setOperatorSearch('')}>
+                      <MaterialIcons name="clear" size={16} color={textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* LISTA DE OPERADORES Y SUS VEHÍCULOS / PLANTAS */}
+              <View style={styles.operatorsCardsGrid}>
+                {filteredOperators.length === 0 ? (
+                  <View style={[styles.emptyFilterBox, { backgroundColor: pillDarkBg }]}>
+                    <MaterialIcons name="person-search" size={28} color={textSecondary} />
+                    <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 13, marginTop: 6 }}>
+                      No se encontraron operadores con los filtros seleccionados
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                      Intenta seleccionar otro estado o limpiar el buscador.
+                    </Text>
+                  </View>
+                ) : (
+                  filteredOperators.map((op: any) => {
+                    const initials = (op.full_name || 'OP')
+                      .split(' ')
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
+
+                    // Plantas asignadas a este operador
+                    const assignedPlants = allPlants.filter(
+                      (p) =>
+                        p.assignedOperatorId === op.id ||
+                        (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+                    );
+
+                    // Vehículo asignado
+                    const hasVehicle = !!op.drives_company_vehicle || !!op.assigned_vehicle_name;
+                    const vehicleName = op.assigned_vehicle_name || (hasVehicle ? 'Toyota Hilux Soporte HL-01' : 'Sin vehículo asignado');
+                    const vehiclePlate = op.assigned_vehicle_plate || 'A10BC2D';
+
+                    return (
+                      <View key={op.id} style={[styles.operatorSuperCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+                        <View style={styles.operatorSuperCardTop}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={[styles.operatorSuperAvatar, { backgroundColor: accentBlue }]}>
+                              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 14 }}>{initials}</Text>
+                            </View>
+                            <View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.operatorSuperName, { color: textPrimary, fontFamily: F.extrabold }]}>
+                                  {op.full_name || 'Operador Técnico'}
+                                </Text>
+                                <MaterialIcons name="verified" size={14} color="#22c55e" />
+                              </View>
+                              <Text style={{ fontFamily: F.semibold, color: accentCyan, fontSize: 11 }}>
+                                Carnet: {op.operator_code || 'HL-TECH-3018'} · {op.specialty || 'Especialista Técnico Senior'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={[styles.locationMiniTag, { backgroundColor: cardBg }]}>
+                            <MaterialIcons name="place" size={12} color={accentCyan} />
+                            <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 10 }}>
+                              {op.state || 'Carabobo'}, Venezuela
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* PLANTAS ASIGNADAS */}
+                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+                          <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5, marginBottom: 4 }}>
+                            PLANTAS BAJO SU CONTROL ({assignedPlants.length}):
+                          </Text>
+                          {assignedPlants.length === 0 ? (
+                            <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11, fontStyle: 'italic' }}>
+                              Sin plantas asignadas actualmente
+                            </Text>
+                          ) : (
+                            assignedPlants.map((ap) => (
+                              <TouchableOpacity
+                                key={ap.id}
+                                onPress={() => selectMoto(ap.id)}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingVertical: 2 }}
+                              >
+                                <MaterialIcons name="bolt" size={14} color="#f59e0b" />
+                                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
+                                  {ap.brand} {ap.model} ({ap.location || 'Sede Principal'})
+                                </Text>
+                                <MaterialIcons name="arrow-forward" size={12} color={accentCyan} />
+                              </TouchableOpacity>
+                            ))
+                          )}
+                        </View>
+
+                        {/* VEHÍCULO DE EMPRESA Y CONSUMO */}
+                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder, marginTop: 8 }]}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5 }}>
+                              VEHÍCULO DE EMPRESA ASIGNADO:
+                            </Text>
+                            <Text style={{ fontFamily: F.bold, color: hasVehicle ? '#22c55e' : textSecondary, fontSize: 10 }}>
+                              {hasVehicle ? 'ACTIVO' : 'NO ASIGNADO'}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <MaterialIcons name={hasVehicle ? "directions-car" : "car-crash"} size={14} color={hasVehicle ? accentBlue : textSecondary} />
+                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
+                              {vehicleName}
+                            </Text>
+                            {hasVehicle && (
+                              <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                                (Placa: {vehiclePlate})
+                              </Text>
+                            )}
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 4 }}>
+                            <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                              Consumo Diésel: <Text style={{ fontFamily: F.bold, color: textPrimary }}>0.0 L</Text>
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                              Gasto Diésel: <Text style={{ fontFamily: F.bold, color: '#22c55e' }}>$0.00 USD</Text>
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* ACCIONES DIRECTAS */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const rawDigits = (op.phone || '584143059921').replace(/\D/g, '');
+                              const phone = rawDigits.startsWith('58') ? rawDigits : `58${rawDigits.replace(/^0/, '')}`;
+                              const url = `https://wa.me/${phone}?text=${encodeURIComponent(`Hola ${op.full_name}, te contacto desde la consola de Hermanos Lynch.`)}`;
+                              Linking.openURL(url).catch(() => {});
+                            }}
+                            style={[styles.opDirectActionBtn, { backgroundColor: '#25D366' }]}
+                            activeOpacity={0.85}
+                          >
+                            <MaterialCommunityIcons name="whatsapp" size={14} color="#ffffff" />
+                            <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>WhatsApp</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => {
+                              loadSystemUsers();
+                              setUserMgmtVisible(true);
+                            }}
+                            style={[styles.opDirectActionBtn, { backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }]}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialIcons name="settings" size={14} color={textPrimary} />
+                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11 }}>Reasignar / Control</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </View>
+          )}
 
           {/* MAIN BENTO SECTION (GRID DE 2 COLUMNAS) */}
           <View style={[styles.bentoMasterGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
@@ -2159,6 +2587,223 @@ const styles = StyleSheet.create({
   },
   subsystemCardRemaining: {
     fontSize: 10.5,
+  },
+  // Super Admin Fleet Section Styles
+  superFleetContainer: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 20,
+  },
+  superFleetHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 16,
+  },
+  superFleetTitle: {
+    fontSize: 18,
+    letterSpacing: -0.3,
+  },
+  superFleetSubtitle: {
+    fontSize: 12,
+    maxWidth: 520,
+    marginTop: 2,
+  },
+  liveFleetPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+  },
+  greenPulseDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#22c55e',
+  },
+  fleetKpiChipsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  fleetMiniKpi: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 12,
+    alignItems: 'center',
+    minWidth: 85,
+  },
+  fleetCardsScroll: {
+    gap: 14,
+    paddingVertical: 4,
+  },
+  fleetPlantCard: {
+    width: 260,
+    borderRadius: 18,
+    padding: 16,
+  },
+  fleetPlantCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 10,
+  },
+  fleetPlantModel: {
+    fontSize: 15,
+  },
+  fleetPlantBrand: {
+    fontSize: 11,
+    marginTop: 1,
+  },
+  fleetPlantLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 6,
+  },
+  fleetPlantLocationText: {
+    fontSize: 11.5,
+    flex: 1,
+  },
+  fleetPlantOperatorRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 12,
+  },
+  fleetPlantOperatorText: {
+    fontSize: 11,
+    flex: 1,
+  },
+  fleetPlantCardFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(255,255,255,0.06)',
+    paddingTop: 10,
+  },
+  selectPlantIndicator: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+
+  // Super Admin Operators Section Styles
+  superOperatorsContainer: {
+    borderRadius: 22,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 20,
+  },
+  superOperatorsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    flexWrap: 'wrap',
+    gap: 14,
+    marginBottom: 16,
+  },
+  manageUsersQuickBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 9,
+    borderRadius: 12,
+  },
+  filterSectionBox: {
+    marginBottom: 16,
+  },
+  filterGroupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    flexWrap: 'wrap',
+  },
+  filterGroupLabel: {
+    fontSize: 10.5,
+    letterSpacing: 0.5,
+  },
+  filterChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
+    borderWidth: 1,
+  },
+  operatorSearchInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    height: 38,
+    marginTop: 12,
+  },
+  operatorsCardsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 14,
+  },
+  operatorSuperCard: {
+    flex: 1,
+    minWidth: 280,
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 16,
+  },
+  operatorSuperCardTop: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  operatorSuperAvatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  operatorSuperName: {
+    fontSize: 14,
+  },
+  locationMiniTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  opResourcesBox: {
+    borderRadius: 10,
+    borderWidth: 1,
+    padding: 10,
+  },
+  opDirectActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 8,
+    borderRadius: 10,
+  },
+  emptyFilterBox: {
+    width: '100%',
+    borderRadius: 14,
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   mobileBottomNav: {
     position: 'absolute',
