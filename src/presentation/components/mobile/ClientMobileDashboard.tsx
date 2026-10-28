@@ -41,7 +41,8 @@ interface SubsystemItem {
   wear: number;
   hoursSince: number;
   hoursRemaining: number;
-  status: 'ÓPTIMO' | 'PREVENTIVO' | 'REQUIERE REVISIÓN';
+  isInspected: boolean;
+  status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' | 'REQUIERE REVISIÓN' | 'SIN CALIBRAR';
 }
 
 interface ClientMobileDashboardProps {
@@ -136,7 +137,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
 
   // 10 Industrial Subsystems (Read-Only Telemetry for Client)
   const plantSubsystems: SubsystemItem[] = useMemo(() => {
-    const list: Array<Omit<SubsystemItem, 'wear' | 'hoursSince' | 'hoursRemaining' | 'status'>> = [
+    const list: Array<Omit<SubsystemItem, 'wear' | 'hoursSince' | 'hoursRemaining' | 'status' | 'isInspected'>> = [
       {
         id: 'oil',
         name: 'Aceite Diésel 15W-40',
@@ -231,26 +232,25 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
 
     return list.map((item) => {
       const typeRecords = records.filter((r) => r.type === item.id);
-      let wear = 100;
+      const isInspected = typeRecords.length > 0;
+      let wear = 0;
       let hoursSince = 0;
       let hoursRemaining = item.interval;
+      let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' | 'SIN CALIBRAR' = 'SIN CALIBRAR';
 
-      if (typeRecords.length > 0) {
+      if (isInspected) {
         const lastHours = Math.max(...typeRecords.map((r) => r.odometer || 0));
         hoursSince = Math.max(0, currentHours - lastHours);
         const ratio = Math.max(0, 1 - hoursSince / item.interval);
         wear = Math.min(100, Math.round(ratio * 100));
         hoursRemaining = Math.max(0, item.interval - hoursSince);
-      } else if (currentHours > 0) {
-        const usedInCycle = currentHours % item.interval;
-        hoursSince = usedInCycle;
-        const ratio = Math.max(0, 1 - usedInCycle / item.interval);
-        wear = Math.min(100, Math.round(ratio * 100));
-        hoursRemaining = Math.max(0, item.interval - usedInCycle);
+        status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
       } else {
-        wear = 100;
+        // Inicial en cero: el operador asignado debe realizar la inspección y registrar el estado inicial
+        wear = 0;
         hoursSince = 0;
         hoursRemaining = item.interval;
+        status = 'SIN CALIBRAR';
       }
 
       return {
@@ -258,16 +258,18 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
         wear,
         hoursSince,
         hoursRemaining,
-        status: wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'REQUIERE REVISIÓN',
+        isInspected,
+        status,
       };
     });
   }, [records, currentHours]);
 
-  // Find lowest remaining subsystem for "Next Service Due" card
+  // Find lowest remaining subsystem for "Next Service Due" card from inspected components
+  const inspectedSubsystems = useMemo(() => plantSubsystems.filter((s) => s.isInspected), [plantSubsystems]);
   const nextDueSubsystem = useMemo(() => {
-    if (!plantSubsystems.length) return null;
-    return [...plantSubsystems].sort((a, b) => a.hoursRemaining - b.hoursRemaining)[0];
-  }, [plantSubsystems]);
+    if (!inspectedSubsystems.length) return null;
+    return [...inspectedSubsystems].sort((a, b) => a.hoursRemaining - b.hoursRemaining)[0];
+  }, [inspectedSubsystems]);
 
   const filteredSubsystems = useMemo(() => {
     if (!searchQuery.trim()) return plantSubsystems;
@@ -278,9 +280,10 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
   }, [plantSubsystems, searchQuery]);
 
   const generalHealth = useMemo(() => {
-    if (plantSubsystems.length === 0) return 100;
-    const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
-    return Math.round(sum / plantSubsystems.length);
+    const inspected = plantSubsystems.filter((s) => s.isInspected);
+    if (inspected.length === 0) return 0;
+    const sum = inspected.reduce((acc, c) => acc + c.wear, 0);
+    return Math.round(sum / inspected.length);
   }, [plantSubsystems]);
 
   const onRefresh = useCallback(async () => {
@@ -354,8 +357,9 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
     const plantName = myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Planta Eléctrica';
     const serial = myMoto?.serialNumber || myMoto?.plate || 'HL-PLANT-001';
     const loc = myMoto?.location || 'Sede Principal';
+    const operatorName = myMoto?.assignedOperatorName || 'Operador Técnico Hermanos Lynch';
     const text = encodeURIComponent(
-      `Hola ${myMoto?.assignedOperatorName || 'Ing. Alejandro Rivas'}, me comunico desde la app móvil Hermanos Lynch respecto a la ${plantName} (Serial: ${serial}) ubicada en ${loc}. Requiero asistencia técnica.`
+      `Hola ${operatorName}, me comunico desde la app móvil Hermanos Lynch respecto a la ${plantName} (Serial: ${serial}) ubicada en ${loc}. Requiero asistencia técnica.`
     );
     const url = `https://wa.me/584143059921?text=${text}`;
     Linking.openURL(url).catch(() => {
@@ -600,7 +604,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
               <Text style={[styles.nextServiceSubtitle, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
                 {nextDueSubsystem
                   ? `In ${nextDueSubsystem.hoursRemaining} hrs · ${nextDueSubsystem.name}`
-                  : 'In 250 hrs · Cambio de Aceite Diésel 15W-40'}
+                  : 'Pendiente primera inspección y calibración por operador'}
               </Text>
             </View>
 
@@ -629,8 +633,8 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
               style={[
                 styles.nextServiceProgressFill,
                 {
-                  width: `${Math.max(10, nextDueSubsystem ? nextDueSubsystem.wear : 85)}%`,
-                  backgroundColor: accentEmerald,
+                  width: nextDueSubsystem ? `${Math.max(10, nextDueSubsystem.wear)}%` : '0%',
+                  backgroundColor: nextDueSubsystem ? accentEmerald : '#94a3b8',
                 },
               ]}
             />
@@ -709,12 +713,12 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
             <View style={{ marginLeft: 10, flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                 <Text style={[styles.operatorNameHeading, { color: textPrimary, fontFamily: F.bold }]} numberOfLines={1}>
-                  {myMoto?.assignedOperatorName || 'Ing. Alejandro Rivas Silva'}
+                  {myMoto?.assignedOperatorName || 'Operador por Asignar'}
                 </Text>
-                <MaterialIcons name="verified" size={14} color={accentEmerald} />
+                <MaterialIcons name={myMoto?.assignedOperatorName ? 'verified' : 'schedule'} size={14} color={myMoto?.assignedOperatorName ? accentEmerald : accentAmber} />
               </View>
               <Text style={[styles.operatorRoleSubtext, { color: textSecondary, fontFamily: F.medium }]}>
-                Técnico Certificado · {myMoto?.assignedOperatorId ? `HL-${myMoto.assignedOperatorId.slice(0, 4).toUpperCase()}` : 'HL-TECH-4098'}
+                Técnico Certificado · {myMoto?.assignedOperatorId ? `HL-${myMoto.assignedOperatorId.slice(0, 4).toUpperCase()}` : 'En Proceso'}
               </Text>
             </View>
           </View>
@@ -782,8 +786,13 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
               {/* LIST OF 10 SUBSYSTEMS */}
               <View style={styles.subsystemsVerticalList}>
                 {filteredSubsystems.map((sub) => {
-                  const statusColor =
-                    sub.wear >= 60 ? accentEmerald : sub.wear >= 30 ? accentAmber : '#ef4444';
+                  const statusColor = !sub.isInspected
+                    ? '#94a3b8'
+                    : sub.wear >= 60
+                    ? accentEmerald
+                    : sub.wear >= 30
+                    ? accentAmber
+                    : '#ef4444';
 
                   return (
                     <TouchableOpacity
@@ -813,7 +822,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
 
                         <View style={[styles.wearBadgePill, { backgroundColor: `${statusColor}22` }]}>
                           <Text style={[styles.wearBadgeText, { color: statusColor, fontFamily: F.extrabold }]}>
-                            {sub.wear}%
+                            {sub.isInspected ? `${sub.wear}%` : '0%'}
                           </Text>
                         </View>
                       </View>
@@ -824,7 +833,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
                           style={[
                             styles.subsystemProgressFill,
                             {
-                              width: `${Math.max(4, sub.wear)}%`,
+                              width: sub.isInspected ? `${Math.max(4, sub.wear)}%` : '0%',
                               backgroundColor: statusColor,
                             },
                           ]}
@@ -837,7 +846,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
                           Uso: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{sub.hoursSince} hrs</Text>
                         </Text>
                         <Text style={[styles.subsystemRemainingInfo, { color: statusColor, fontFamily: F.bold }]}>
-                          Restan: {sub.hoursRemaining} hrs
+                          {sub.isInspected ? `Restan: ${sub.hoursRemaining} hrs` : 'Pendiente inspección'}
                         </Text>
                       </View>
                     </TouchableOpacity>
@@ -893,8 +902,8 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
                 <View style={styles.sheetMetricsRow}>
                   <View style={[styles.sheetMetricBox, { backgroundColor: tileBg }]}>
                     <Text style={[styles.sheetMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>Vida Útil</Text>
-                    <Text style={[styles.sheetMetricVal, { color: selectedSubsystem.wear >= 60 ? accentEmerald : accentAmber, fontFamily: F.extrabold }]}>
-                      {selectedSubsystem.wear}%
+                    <Text style={[styles.sheetMetricVal, { color: !selectedSubsystem.isInspected ? '#94a3b8' : selectedSubsystem.wear >= 60 ? accentEmerald : accentAmber, fontFamily: F.extrabold }]}>
+                      {selectedSubsystem.isInspected ? `${selectedSubsystem.wear}%` : '0%'}
                     </Text>
                   </View>
                   <View style={[styles.sheetMetricBox, { backgroundColor: tileBg }]}>
@@ -906,7 +915,7 @@ export const ClientMobileDashboard: React.FC<ClientMobileDashboardProps> = ({
                   <View style={[styles.sheetMetricBox, { backgroundColor: tileBg }]}>
                     <Text style={[styles.sheetMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>Restantes</Text>
                     <Text style={[styles.sheetMetricVal, { color: textPrimary, fontFamily: F.extrabold }]}>
-                      {selectedSubsystem.hoursRemaining} hrs
+                      {selectedSubsystem.isInspected ? `${selectedSubsystem.hoursRemaining} hrs` : 'Pendiente'}
                     </Text>
                   </View>
                 </View>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
+  Modal,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -44,7 +45,8 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
   children,
 }) => {
   const { isDark, toggleTheme } = useTheme();
-  const { myMoto, records, logout } = useMyMoto();
+  const { myMoto, records, logout, isAdmin, isSuperAdmin, userName, userRoleTitle } = useMyMoto();
+  const isOperatorOrAdmin = isAdmin || isSuperAdmin;
   const { width: windowWidth } = useWindowDimensions();
 
   const [searchQuery, setSearchQuery] = useState('');
@@ -123,27 +125,25 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
 
     return list.map((item) => {
       const typeRecords = records.filter((r) => r.type === item.id);
-      let wear = 100;
+      const isInspected = typeRecords.length > 0;
+      let wear = 0;
       let hoursSince = 0;
       let hoursRemaining = item.interval;
+      let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' | 'SIN CALIBRAR' = 'SIN CALIBRAR';
 
-      if (typeRecords.length > 0) {
+      if (isInspected) {
         const lastHours = Math.max(...typeRecords.map((r) => r.odometer || 0));
         hoursSince = Math.max(0, currentHours - lastHours);
         const ratio = Math.max(0, 1 - hoursSince / item.interval);
         wear = Math.min(100, Math.round(ratio * 100));
         hoursRemaining = Math.max(0, item.interval - hoursSince);
-      } else if (currentHours > 0) {
-        const usedInCycle = currentHours % item.interval;
-        hoursSince = usedInCycle;
-        const ratio = Math.max(0, 1 - usedInCycle / item.interval);
-        wear = Math.min(100, Math.round(ratio * 100));
-        hoursRemaining = Math.max(0, item.interval - usedInCycle);
+        status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
       } else {
-        // Horómetro inicial en 0 hrs: 100% de vida útil disponible
-        wear = 100;
+        // Inicial en cero: el operador asignado debe realizar la inspección y registrar el estado inicial
+        wear = 0;
         hoursSince = 0;
         hoursRemaining = item.interval;
+        status = 'SIN CALIBRAR';
       }
 
       return {
@@ -151,7 +151,8 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
         wear,
         hoursSince,
         hoursRemaining,
-        status: wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'REQUIERE REVISIÓN',
+        isInspected,
+        status,
       };
     });
   }, [records, currentHours]);
@@ -165,9 +166,10 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
   }, [plantSubsystems, searchQuery]);
 
   const generalHealth = useMemo(() => {
-    if (plantSubsystems.length === 0) return 100;
-    const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
-    return Math.round(sum / plantSubsystems.length);
+    const inspected = plantSubsystems.filter((s) => s.isInspected);
+    if (inspected.length === 0) return 0;
+    const sum = inspected.reduce((acc, c) => acc + c.wear, 0);
+    return Math.round(sum / inspected.length);
   }, [plantSubsystems]);
 
   const F = {
@@ -382,19 +384,21 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
               <Text style={{ fontFamily: F.bold, color: '#0c0e14', fontSize: 12 }}>+ DIÉSEL</Text>
             </TouchableOpacity>
 
-            {/* BOTÓN OPERADOR ASIGNADO */}
-            <TouchableOpacity
-              onPress={onOpenOperatorModal}
-              style={[styles.operatorPillBtn, { backgroundColor: 'rgba(0, 180, 216, 0.15)', borderColor: accentCyan }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="support-agent" size={18} color={accentCyan} />
-              {isDesktop && (
-                <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11 }}>
-                  Operador HL
-                </Text>
-              )}
-            </TouchableOpacity>
+            {/* BOTÓN OPERADOR ASIGNADO (Solo visible para Clientes, nunca para Operadores/Admins) */}
+            {!isOperatorOrAdmin && (
+              <TouchableOpacity
+                onPress={onOpenOperatorModal}
+                style={[styles.operatorPillBtn, { backgroundColor: 'rgba(0, 180, 216, 0.15)', borderColor: accentCyan }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="support-agent" size={18} color={accentCyan} />
+                {isDesktop && (
+                  <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11 }}>
+                    Operador HL
+                  </Text>
+                )}
+              </TouchableOpacity>
+            )}
 
             {/* USER PROFILE AVATAR PILL */}
             <TouchableOpacity
@@ -403,11 +407,13 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
               activeOpacity={0.8}
             >
               <View style={styles.avatarCircle}>
-                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>CL</Text>
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>
+                  {userName ? userName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : 'CL'}
+                </Text>
               </View>
               {isDesktop && (
                 <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 13, marginRight: 4 }}>
-                  Cliente HL
+                  {userName || (isOperatorOrAdmin ? userRoleTitle : 'Cliente HL')}
                 </Text>
               )}
             </TouchableOpacity>
@@ -747,66 +753,76 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
 
             {/* SUBSYSTEMS PROGRESS BARS GRID (READ-ONLY) */}
             <View style={styles.subsystemsCardsGrid}>
-              {filteredSubsystems.map((sub) => (
-                <TouchableOpacity
-                  key={sub.id}
-                  onPress={() => setSelectedSubsystemInfo(sub)}
-                  style={[styles.subsystemMiniCard, { backgroundColor: pillDarkBg }]}
-                  activeOpacity={0.8}
-                >
-                  <View style={styles.subsystemCardHeader}>
-                    <Text style={[styles.subsystemCardName, { color: textPrimary, fontFamily: F.bold }]}>
-                      {sub.name}
-                    </Text>
-                    <Text
-                      style={[
-                        styles.subsystemCardStatus,
-                        {
-                          color: sub.wear >= 60 ? '#22c55e' : sub.wear >= 30 ? '#f59e0b' : '#ef4444',
-                          fontFamily: F.extrabold,
-                        },
-                      ]}
-                    >
-                      {sub.wear}%
-                    </Text>
-                  </View>
+              {filteredSubsystems.map((sub) => {
+                const statusColor = !sub.isInspected
+                  ? '#94a3b8'
+                  : sub.wear >= 60
+                  ? '#22c55e'
+                  : sub.wear >= 30
+                  ? '#f59e0b'
+                  : '#ef4444';
 
-                  {/* PROGRESS BAR */}
-                  <View style={styles.progressBarBase}>
-                    <View
-                      style={[
-                        styles.progressBarFill,
-                        {
-                          width: `${sub.wear}%`,
-                          backgroundColor: sub.wear >= 60 ? '#22c55e' : sub.wear >= 30 ? '#f59e0b' : '#ef4444',
-                        },
-                      ]}
-                    />
-                  </View>
+                return (
+                  <TouchableOpacity
+                    key={sub.id}
+                    onPress={() => setSelectedSubsystemInfo(sub)}
+                    style={[styles.subsystemMiniCard, { backgroundColor: pillDarkBg }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.subsystemCardHeader}>
+                      <Text style={[styles.subsystemCardName, { color: textPrimary, fontFamily: F.bold }]}>
+                        {sub.name}
+                      </Text>
+                      <Text
+                        style={[
+                          styles.subsystemCardStatus,
+                          {
+                            color: statusColor,
+                            fontFamily: F.extrabold,
+                          },
+                        ]}
+                      >
+                        {sub.isInspected ? `${sub.wear}%` : '0%'}
+                      </Text>
+                    </View>
 
-                  <View style={styles.subsystemCardFooter}>
-                    <Text style={[styles.subsystemCardUsage, { color: textSecondary, fontFamily: F.medium }]}>
-                      Uso: {sub.hoursSince} hrs
-                    </Text>
-                    <Text style={[styles.subsystemCardRemaining, { color: textPrimary, fontFamily: F.semibold }]}>
-                      Restan: {sub.hoursRemaining} hrs
-                    </Text>
-                  </View>
+                    {/* PROGRESS BAR */}
+                    <View style={styles.progressBarBase}>
+                      <View
+                        style={[
+                          styles.progressBarFill,
+                          {
+                            width: sub.isInspected ? `${sub.wear}%` : '0%',
+                            backgroundColor: statusColor,
+                          },
+                        ]}
+                      />
+                    </View>
 
-                  <View style={styles.statusIndicatorRow}>
-                    <Text
-                      style={{
-                        fontFamily: F.bold,
-                        fontSize: 10,
-                        color: sub.wear >= 60 ? '#22c55e' : sub.wear >= 30 ? '#f59e0b' : '#ef4444',
-                      }}
-                    >
-                      {sub.status}
-                    </Text>
-                    <MaterialIcons name="info" size={14} color={textSecondary} />
-                  </View>
-                </TouchableOpacity>
-              ))}
+                    <View style={styles.subsystemCardFooter}>
+                      <Text style={[styles.subsystemCardUsage, { color: textSecondary, fontFamily: F.medium }]}>
+                        Uso: {sub.hoursSince} hrs
+                      </Text>
+                      <Text style={[styles.subsystemCardRemaining, { color: textPrimary, fontFamily: F.semibold }]}>
+                        {sub.isInspected ? `Restan: ${sub.hoursRemaining} hrs` : 'Pendiente inspección'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.statusIndicatorRow}>
+                      <Text
+                        style={{
+                          fontFamily: F.bold,
+                          fontSize: 10,
+                          color: statusColor,
+                        }}
+                      >
+                        {sub.status}
+                      </Text>
+                      <MaterialIcons name="info" size={14} color={textSecondary} />
+                    </View>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
           </View>
 
@@ -944,6 +960,93 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
         visible={inquiryModalVisible}
         onClose={() => setInquiryModalVisible(false)}
       />
+
+      {/* MODAL INFORMATIVO DE SUBSISTEMA (MODO LECTURA PARA CLIENTE) */}
+      <Modal
+        visible={!!selectedSubsystemInfo}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setSelectedSubsystemInfo(null)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.65)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ width: '100%', maxWidth: 480, backgroundColor: cardBg, borderRadius: 20, borderWidth: 1, borderColor: cardBorder, padding: 24 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: `${selectedSubsystemInfo?.color || accentBlue}20`, justifyContent: 'center', alignItems: 'center' }}>
+                  <MaterialIcons name="engineering" size={20} color={selectedSubsystemInfo?.color || accentBlue} />
+                </View>
+                <View>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: textPrimary }}>
+                    {selectedSubsystemInfo?.name}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textSecondary }}>
+                    Ciclo de Fábrica OEM: {selectedSubsystemInfo?.interval} hrs
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity onPress={() => setSelectedSubsystemInfo(null)} style={{ padding: 4 }}>
+                <MaterialIcons name="close" size={20} color={textSecondary} />
+              </TouchableOpacity>
+            </View>
+
+            {/* AVISO MODO LECTURA EXCLUSIVA */}
+            <View style={{ backgroundColor: 'rgba(0, 180, 216, 0.1)', borderWidth: 1, borderColor: 'rgba(0, 180, 216, 0.3)', borderRadius: 12, padding: 12, marginBottom: 16, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              <MaterialIcons name="lock-clock" size={20} color={accentCyan} />
+              <Text style={{ flex: 1, fontFamily: F.medium, fontSize: 11.5, color: textPrimary }}>
+                {selectedSubsystemInfo?.isInspected 
+                  ? 'Este componente se encuentra calibrado y activo en telemetría. Las calibraciones e inspecciones son realizadas únicamente por el operador técnico.'
+                  : 'Componente en 0% / Sin Calibrar. El operador técnico asignado a esta planta registrará el estado inicial de este componente en la primera inspección oficial.'}
+              </Text>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20 }}>
+              <View style={{ flex: 1, backgroundColor: pillDarkBg, padding: 12, borderRadius: 12, alignItems: 'center' }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>Estado</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: !selectedSubsystemInfo?.isInspected ? '#94a3b8' : selectedSubsystemInfo?.wear >= 60 ? '#22c55e' : '#f59e0b', marginTop: 4 }}>
+                  {selectedSubsystemInfo?.status}
+                </Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: pillDarkBg, padding: 12, borderRadius: 12, alignItems: 'center' }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>Vida Útil</Text>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: !selectedSubsystemInfo?.isInspected ? '#94a3b8' : selectedSubsystemInfo?.wear >= 60 ? '#22c55e' : '#f59e0b', marginTop: 2 }}>
+                  {selectedSubsystemInfo?.isInspected ? `${selectedSubsystemInfo?.wear}%` : '0%'}
+                </Text>
+              </View>
+              <View style={{ flex: 1, backgroundColor: pillDarkBg, padding: 12, borderRadius: 12, alignItems: 'center' }}>
+                <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>Restante</Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: textPrimary, marginTop: 4 }}>
+                  {selectedSubsystemInfo?.isInspected ? `${selectedSubsystemInfo?.hoursRemaining} hrs` : 'Pendiente'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedSubsystemInfo(null);
+                  setInquiryModalVisible(true);
+                }}
+                style={{ flex: 1, backgroundColor: '#10b981', paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                activeOpacity={0.8}
+              >
+                <MaterialCommunityIcons name="calendar-clock" size={16} color="#ffffff" />
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>Agendar Revisión</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedSubsystemInfo(null);
+                  onOpenOperatorModal();
+                }}
+                style={{ flex: 1, backgroundColor: accentBlue, paddingVertical: 12, borderRadius: 12, alignItems: 'center', justifyContent: 'center', flexDirection: 'row', gap: 6 }}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="support-agent" size={16} color="#ffffff" />
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>Ver Operador</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
     </View>
   );

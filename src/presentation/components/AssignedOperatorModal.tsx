@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
+import { useMyMoto } from '../context/MotoContext';
 import { Moto } from '../../domain/entities/Moto';
 
 interface Props {
@@ -21,6 +22,7 @@ interface Props {
 
 export const AssignedOperatorModal: React.FC<Props> = ({ visible, onClose, myMoto }) => {
   const { isDark } = useTheme();
+  const { operatorsList } = useMyMoto();
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -42,15 +44,49 @@ export const AssignedOperatorModal: React.FC<Props> = ({ visible, onClose, myMot
   const plantSerial = myMoto?.plate || myMoto?.serialNumber || 'BPG-HL-001';
   const plantLocation = myMoto?.location || 'Sede del Cliente';
 
+  const matchedOperator = useMemo(() => {
+    if (!operatorsList || operatorsList.length === 0) return null;
+    if (myMoto?.assignedOperatorId) {
+      const found = operatorsList.find((op) => op.id === myMoto.assignedOperatorId);
+      if (found) return found;
+    }
+    if (myMoto?.assignedOperatorName) {
+      const found = operatorsList.find(
+        (op) =>
+          op.full_name &&
+          op.full_name.toLowerCase().trim() === myMoto.assignedOperatorName?.toLowerCase().trim()
+      );
+      if (found) return found;
+    }
+    return operatorsList[0] || null;
+  }, [operatorsList, myMoto]);
+
+  const operatorName = myMoto?.assignedOperatorName || matchedOperator?.full_name || 'Ing. Marcos Pinto';
+  const operatorInitials = (operatorName || 'HL')
+    .split(' ')
+    .map((n: string) => n[0])
+    .filter(Boolean)
+    .slice(0, 2)
+    .join('')
+    .toUpperCase() || 'HL';
+
+  const operatorCode =
+    matchedOperator?.operator_code ||
+    (myMoto?.assignedOperatorId ? `HL-TECH-${myMoto.assignedOperatorId.slice(0, 4).toUpperCase()}` : 'HL-TECH-3018');
+  const operatorTitle = matchedOperator?.specialty || 'Especialista Técnico Senior de Planta';
+  const operatorEmail = matchedOperator?.email || 'operaciones@hermanoslynch.com';
+  const operatorPhone = matchedOperator?.phone || '+58 414 305 9921';
+  const operatorPhoneFormatted = matchedOperator?.phone ? matchedOperator.phone : '+58 (414) 305-9921';
+
   const operatorData = {
-    name: 'Ing. Alejandro Rivas Silva',
-    title: 'Especialista Técnico Senior de Planta',
-    code: 'HL-TECH-4098',
+    name: operatorName,
+    title: operatorTitle,
+    code: operatorCode,
     status: 'EN GUARDIA Y ACTIVO',
-    phone: '+58 414 305 9921',
-    phoneFormatted: '+58 (414) 305-9921',
+    phone: operatorPhone,
+    phoneFormatted: operatorPhoneFormatted,
     officePhone: '+58 (212) 238-1244',
-    email: 'operaciones@hermanoslynch.com',
+    email: operatorEmail,
     certifications: [
       'Cummins Power Generation & Motores Diésel QSB/6BT',
       'Alternadores Industriales Leroy Somer TAL Series',
@@ -60,17 +96,20 @@ export const AssignedOperatorModal: React.FC<Props> = ({ visible, onClose, myMot
   };
 
   const handleOpenWhatsApp = () => {
+    const rawDigits = operatorData.phone.replace(/\D/g, '');
+    const cleanPhone = rawDigits.startsWith('58') ? rawDigits : rawDigits ? `58${rawDigits.replace(/^0/, '')}` : '584143059921';
     const text = encodeURIComponent(
       `Hola ${operatorData.name}, me comunico desde la plataforma Hermanos Lynch respecto a la ${plantName} (Serial: ${plantSerial}) ubicada en ${plantLocation}. Requiero asistencia técnica.`
     );
-    const url = `https://wa.me/584143059921?text=${text}`;
+    const url = `https://wa.me/${cleanPhone}?text=${text}`;
     Linking.openURL(url).catch(() => {
       alert(`Puedes escribir directamente al WhatsApp: ${operatorData.phone}`);
     });
   };
 
   const handleCall = () => {
-    Linking.openURL(`tel:+584143059921`).catch(() => {
+    const rawDigits = operatorData.phone.replace(/\D/g, '');
+    Linking.openURL(`tel:+${rawDigits || '584143059921'}`).catch(() => {
       alert(`Línea directa: ${operatorData.phone}`);
     });
   };
@@ -114,7 +153,7 @@ export const AssignedOperatorModal: React.FC<Props> = ({ visible, onClose, myMot
               <View style={styles.operatorTopRow}>
                 <View style={styles.avatarWrapper}>
                   <View style={[styles.avatarCircle, { backgroundColor: accentBlue }]}>
-                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 20 }}>AR</Text>
+                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 20 }}>{operatorInitials}</Text>
                   </View>
                   <View style={styles.verifiedCheckBadge}>
                     <MaterialIcons name="verified" size={16} color="#22c55e" />

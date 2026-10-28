@@ -74,14 +74,21 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         setSystemMetrics(metrics);
       }
 
-      const { data: profiles } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
+      let profiles: any[] | null = null;
+      const { data: rpcProfiles, error: rpcErr } = await supabase.rpc('get_all_system_profiles');
+      if (!rpcErr && rpcProfiles) {
+        profiles = rpcProfiles;
+      } else {
+        const { data: selectProfiles } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+        profiles = selectProfiles;
+      }
 
       if (profiles) {
         setPendingUsersList(profiles.filter((p: any) => p.approval_status === 'pending'));
-        setOperatorsList(profiles.filter((p: any) => p.role === 'operator'));
+        setOperatorsList(profiles.filter((p: any) => p.role === 'operator' || p.role === 'technician'));
         setClientsList(profiles.filter((p: any) => p.role === 'client' || p.role === 'user'));
       }
     } catch (err) {

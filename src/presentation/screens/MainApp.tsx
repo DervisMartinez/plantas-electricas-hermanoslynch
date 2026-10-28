@@ -726,7 +726,7 @@ export const MainApp = () => {
                     <View style={{ flex: 1, marginLeft: 14 }}>
                       <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>Operador Técnico Asignado</Text>
                       <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                        {myMoto?.assignedOperatorName || 'Ing. Alejandro Rivas'} • WhatsApp directo
+                        {myMoto?.assignedOperatorName || 'Operador por Asignar'} • Contacto directo
                       </Text>
                     </View>
                     <MaterialIcons name="chevron-right" size={20} color={colors.onSurfaceVariant} />

@@ -97,6 +97,19 @@ export const CreateOperatorModal: React.FC<Props> = ({
 
       if (error) throw error;
 
+      if (data?.user) {
+        await supabase.from('profiles').upsert({
+          id: data.user.id,
+          email: email.trim(),
+          full_name: fullName.trim(),
+          role: 'operator',
+          approval_status: 'approved',
+          phone: phone.trim() || null,
+          operator_code: operatorCode.trim() || `HL-TECH-${Math.floor(1000 + Math.random() * 9000)}`,
+          specialty: specialty.trim() || 'Técnico de Generadores Diésel',
+        });
+      }
+
       alert(`¡Operador "${fullName.trim()}" registrado y acreditado exitosamente!`);
       resetForm();
       onOperatorCreated();

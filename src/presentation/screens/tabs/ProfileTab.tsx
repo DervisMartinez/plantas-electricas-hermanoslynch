@@ -540,16 +540,16 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               )}
             </TouchableOpacity>
 
-            {/* Protocolo de Emergencia & SOS (Solo visible en versión Web) */}
-            {isWebPlatform() && (
+            {/* Ficha del Operador Asignado (Solo visible para Clientes) */}
+            {!isOperatorOrAdmin && isWebPlatform() && (
               <TouchableOpacity 
                 onPress={() => setShowSOSModal(true)}
                 style={{
                   flexDirection: 'row',
                   alignItems: 'center',
                   justifyContent: 'center',
-                  backgroundColor: 'rgba(255, 69, 58, 0.12)',
-                  borderColor: 'rgba(255, 69, 58, 0.45)',
+                  backgroundColor: 'rgba(0, 180, 216, 0.12)',
+                  borderColor: 'rgba(0, 180, 216, 0.45)',
                   borderWidth: 1,
                   paddingVertical: 11,
                   borderRadius: 14,
@@ -558,9 +558,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                 }}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="warning" size={18} color="#FF453A" />
-                <Text style={{ fontFamily: F.bold, color: '#FF453A', fontSize: 13, letterSpacing: 0.3 }}>
-                  {isOperatorOrAdmin ? 'Ver Protocolo de Seguridad Industrial' : 'Ver Ficha del Operador Asignado'}
+                <MaterialIcons name="support-agent" size={18} color="#00b4d8" />
+                <Text style={{ fontFamily: F.bold, color: '#00b4d8', fontSize: 13, letterSpacing: 0.3 }}>
+                  Ver Ficha del Operador Asignado
                 </Text>
               </TouchableOpacity>
             )}

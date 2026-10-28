@@ -155,27 +155,25 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
     return list.map((item) => {
       const typeRecords = records.filter((r) => r.type === item.id);
-      let wear = 100;
+      const isInspected = typeRecords.length > 0;
+      let wear = 0;
       let hoursSince = 0;
       let hoursRemaining = item.interval;
+      let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' | 'SIN CALIBRAR' = 'SIN CALIBRAR';
 
-      if (typeRecords.length > 0) {
+      if (isInspected) {
         const lastHours = Math.max(...typeRecords.map((r) => r.odometer || 0));
         hoursSince = Math.max(0, currentHours - lastHours);
         const ratio = Math.max(0, 1 - hoursSince / item.interval);
         wear = Math.min(100, Math.round(ratio * 100));
         hoursRemaining = Math.max(0, item.interval - hoursSince);
-      } else if (currentHours > 0) {
-        const usedInCycle = currentHours % item.interval;
-        hoursSince = usedInCycle;
-        const ratio = Math.max(0, 1 - usedInCycle / item.interval);
-        wear = Math.min(100, Math.round(ratio * 100));
-        hoursRemaining = Math.max(0, item.interval - usedInCycle);
+        status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
       } else {
-        // Horómetro inicial en 0 hrs: 100% de vida útil disponible
-        wear = 100;
+        // Inicial en cero: el operador asignado debe realizar la inspección y registrar el estado inicial
+        wear = 0;
         hoursSince = 0;
         hoursRemaining = item.interval;
+        status = 'SIN CALIBRAR';
       }
 
       return {
@@ -183,7 +181,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         wear,
         hoursSince,
         hoursRemaining,
-        status: wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO',
+        isInspected,
+        status,
       };
     });
   }, [records, currentHours]);
@@ -199,9 +198,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
   // Overall General Health
   const generalHealth = useMemo(() => {
-    if (plantSubsystems.length === 0) return 100;
-    const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
-    return Math.round(sum / plantSubsystems.length);
+    const inspected = plantSubsystems.filter((s) => s.isInspected);
+    if (inspected.length === 0) return 0;
+    const sum = inspected.reduce((acc, c) => acc + c.wear, 0);
+    return Math.round(sum / inspected.length);
   }, [plantSubsystems]);
 
   // Dynamic Real Generation Bar Chart Data (last 8 days ending today)

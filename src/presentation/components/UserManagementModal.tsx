@@ -72,6 +72,7 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
   React.useEffect(() => {
     if (visible) {
       fetchFleet();
+      loadSystemUsers();
     }
   }, [visible]);
 
