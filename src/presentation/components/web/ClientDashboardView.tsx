@@ -191,16 +191,17 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
     extrabold: 'Montserrat_800ExtraBold',
   };
 
-  const bgMain = isDark ? '#0c0e14' : '#f4f6fa';
-  const cardBg = isDark ? '#141721' : '#ffffff';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(0, 0, 0, 0.06)';
-  const railBg = isDark ? '#090a0f' : '#ffffff';
-  const railBorder = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(0, 0, 0, 0.06)';
-  const textPrimary = isDark ? '#ffffff' : '#0f172a';
-  const textSecondary = isDark ? '#8e96aa' : '#64748b';
-  const accentBlue = '#1a5cff';
-  const accentCyan = '#00b4d8';
-  const pillDarkBg = isDark ? '#1c202d' : '#e2e8f0';
+  // Bedimcode Clean & Aesthetic Theme Tokens
+  const bgMain = isDark ? '#0a0d14' : '#f8fafc';
+  const cardBg = isDark ? '#121622' : '#ffffff';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.07)' : 'rgba(15, 23, 42, 0.06)';
+  const railBg = isDark ? '#0c0f18' : '#ffffff';
+  const railBorder = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.05)';
+  const textPrimary = isDark ? '#f8fafc' : '#0f172a';
+  const textSecondary = isDark ? '#8e9aaf' : '#64748b';
+  const accentBlue = '#2563eb';
+  const accentCyan = '#00e3fd';
+  const pillDarkBg = isDark ? '#182030' : '#f1f5f9';
 
   const plantLocation = myMoto?.location || 'Ubicación sin registrar';
 
@@ -540,7 +541,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           style={[{ flex: 1 }, activeTab !== 'moto' && { display: 'none' }]}
           contentContainerStyle={[
             styles.bentoScrollContent,
-            isMobile && { paddingHorizontal: 16, paddingBottom: 84 },
+            isMobile && { paddingHorizontal: 14, paddingBottom: 96 },
           ]}
           showsVerticalScrollIndicator={false}
         >
@@ -932,24 +933,24 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
 
       </View>
 
-      {/* MOBILE BOTTOM NAVIGATION BAR FOR CLIENT (< 768px) */}
+      {/* MOBILE FLOATING BOTTOM NAVIGATION DOCK (BEDIMCODE SIGNATURE) */}
       {isMobile && (
-        <View style={[styles.mobileBottomNav, { backgroundColor: railBg, borderTopColor: railBorder }]}>
+        <View style={[styles.mobileBottomNav, { backgroundColor: cardBg, borderColor: cardBorder }]}>
           <TouchableOpacity
             onPress={() => onSelectTab('moto')}
-            style={styles.mobileNavItem}
-            activeOpacity={0.7}
+            style={[styles.mobileNavItem, activeTab === 'moto' && styles.mobileNavItemActive]}
+            activeOpacity={0.75}
           >
             <MaterialIcons
               name="speed"
-              size={22}
-              color={activeTab === 'moto' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary}
+              size={20}
+              color={activeTab === 'moto' ? accentCyan : textSecondary}
             />
             <Text
               style={[
                 styles.mobileNavLabel,
                 {
-                  color: activeTab === 'moto' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary,
+                  color: activeTab === 'moto' ? accentCyan : textSecondary,
                   fontFamily: activeTab === 'moto' ? F.bold : F.medium,
                 },
               ]}
@@ -960,19 +961,19 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
 
           <TouchableOpacity
             onPress={() => onSelectTab('specs')}
-            style={styles.mobileNavItem}
-            activeOpacity={0.7}
+            style={[styles.mobileNavItem, activeTab === 'specs' && styles.mobileNavItemActive]}
+            activeOpacity={0.75}
           >
             <MaterialIcons
               name="assignment"
-              size={22}
-              color={activeTab === 'specs' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary}
+              size={20}
+              color={activeTab === 'specs' ? accentCyan : textSecondary}
             />
             <Text
               style={[
                 styles.mobileNavLabel,
                 {
-                  color: activeTab === 'specs' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary,
+                  color: activeTab === 'specs' ? accentCyan : textSecondary,
                   fontFamily: activeTab === 'specs' ? F.bold : F.medium,
                 },
               ]}
@@ -983,19 +984,19 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
 
           <TouchableOpacity
             onPress={() => onSelectTab('history')}
-            style={styles.mobileNavItem}
-            activeOpacity={0.7}
+            style={[styles.mobileNavItem, activeTab === 'history' && styles.mobileNavItemActive]}
+            activeOpacity={0.75}
           >
             <MaterialIcons
               name="receipt-long"
-              size={22}
-              color={activeTab === 'history' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary}
+              size={20}
+              color={activeTab === 'history' ? accentCyan : textSecondary}
             />
             <Text
               style={[
                 styles.mobileNavLabel,
                 {
-                  color: activeTab === 'history' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary,
+                  color: activeTab === 'history' ? accentCyan : textSecondary,
                   fontFamily: activeTab === 'history' ? F.bold : F.medium,
                 },
               ]}
@@ -1008,11 +1009,11 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             <TouchableOpacity
               onPress={onOpenOperatorModal}
               style={styles.mobileNavItem}
-              activeOpacity={0.7}
+              activeOpacity={0.75}
             >
               <MaterialIcons
                 name="support-agent"
-                size={22}
+                size={20}
                 color={textSecondary}
               />
               <Text
@@ -1031,19 +1032,19 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
 
           <TouchableOpacity
             onPress={() => onSelectTab('profile')}
-            style={styles.mobileNavItem}
-            activeOpacity={0.7}
+            style={[styles.mobileNavItem, activeTab === 'profile' && styles.mobileNavItemActive]}
+            activeOpacity={0.75}
           >
             <MaterialIcons
               name="person"
-              size={22}
-              color={activeTab === 'profile' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary}
+              size={20}
+              color={activeTab === 'profile' ? accentCyan : textSecondary}
             />
             <Text
               style={[
                 styles.mobileNavLabel,
                 {
-                  color: activeTab === 'profile' ? (isDark ? '#00b4d8' : '#1a5cff') : textSecondary,
+                  color: activeTab === 'profile' ? accentCyan : textSecondary,
                   fontFamily: activeTab === 'profile' ? F.bold : F.medium,
                 },
               ]}
@@ -1462,10 +1463,19 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
   },
   topHeaderBarMobile: {
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
+    marginHorizontal: 14,
+    marginTop: 10,
+    marginBottom: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 22,
+    borderWidth: 1,
     zIndex: 25,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 6,
   },
   mobileSearchExpandedRow: {
     flexDirection: 'row',
@@ -1496,7 +1506,7 @@ const styles = StyleSheet.create({
   mobileHamburgerBtn: {
     width: 40,
     height: 40,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1519,7 +1529,7 @@ const styles = StyleSheet.create({
   mobileSearchIconBtn: {
     width: 40,
     height: 40,
-    borderRadius: 20,
+    borderRadius: 14,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
@@ -1751,12 +1761,17 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   plantShowcaseCard: {
-    borderRadius: 26,
+    borderRadius: 28,
     borderWidth: 1,
     padding: 26,
     marginBottom: 18,
     position: 'relative',
     overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.22,
+    shadowRadius: 20,
+    elevation: 6,
   },
   plantShowcaseInner: {
     alignItems: 'center',
@@ -1875,10 +1890,15 @@ const styles = StyleSheet.create({
     marginTop: -10,
   },
   assignedOperatorCard: {
-    borderRadius: 22,
+    borderRadius: 26,
     borderWidth: 1,
-    padding: 20,
+    padding: 22,
     marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 4,
   },
   assignedOperatorHeader: {
     flexDirection: 'row',
@@ -1927,10 +1947,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
   },
   balanceCard: {
-    borderRadius: 22,
+    borderRadius: 26,
     borderWidth: 1,
-    padding: 20,
+    padding: 22,
     marginBottom: 18,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 4,
   },
   balanceHeaderRow: {
     flexDirection: 'row',
@@ -1975,9 +2000,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   telemetrySectionCard: {
-    borderRadius: 24,
+    borderRadius: 26,
     borderWidth: 1,
     padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.16,
+    shadowRadius: 16,
+    elevation: 4,
   },
   telemetryHeaderRow: {
     flexDirection: 'row',
@@ -2022,8 +2052,14 @@ const styles = StyleSheet.create({
   subsystemMiniCard: {
     flex: 1,
     minWidth: 180,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 3,
   },
   subsystemCardHeader: {
     flexDirection: 'row',
@@ -2070,25 +2106,36 @@ const styles = StyleSheet.create({
   },
   mobileBottomNav: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    bottom: 14,
+    left: 16,
+    right: 16,
     height: 64,
-    borderTopWidth: 1,
+    borderRadius: 32,
+    borderWidth: 1,
     flexDirection: 'row',
     justifyContent: 'space-around',
     alignItems: 'center',
     paddingHorizontal: 8,
     zIndex: 100,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 18,
+    elevation: 14,
   },
   mobileNavItem: {
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 10,
+    borderRadius: 18,
+  },
+  mobileNavItemActive: {
+    backgroundColor: 'rgba(0, 227, 253, 0.12)',
   },
   mobileNavLabel: {
-    fontSize: 10,
+    fontSize: 9.5,
     marginTop: 2,
+    letterSpacing: 0.2,
   },
 });
