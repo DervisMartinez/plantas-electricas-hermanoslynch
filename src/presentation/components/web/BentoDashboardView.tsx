@@ -938,6 +938,164 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
           </View>
 
+          {/* BEDIMCODE SIGNATURE PLANT HERO SHOWCASE (.home / .home__container / .home__shape / .home__car) */}
+          <View style={[styles.bedimHeroSection, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            {/* 1. .home__data HEADER */}
+            <View style={styles.bedimHeroHeader}>
+              <View style={[styles.bedimHeroSubtitlePill, { backgroundColor: 'rgba(0, 227, 253, 0.12)' }]}>
+                <MaterialIcons name="bolt" size={14} color={accentCyan} />
+                <Text style={[styles.bedimHeroSubtitleText, { color: accentCyan, fontFamily: F.bold }]}>
+                  {myMoto ? `${myMoto.powerKva || 35} kVA / ${myMoto.powerKw || 28} kW STANDBY` : 'GRUPO ELECTRÓGENO INDUSTRIAL'}
+                </Text>
+              </View>
+
+              <Text style={[styles.bedimHeroTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Blue Power Generation C125'}
+              </Text>
+
+              <View style={styles.bedimHeroDescriptionRow}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                  Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'HL-GEN-001'}</Text>
+                </Text>
+                <Text style={{ color: textSecondary }}>•</Text>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                  Motor: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{specs?.engineType || 'Cummins 3.9L 4BTA'}</Text>
+                </Text>
+                <Text style={{ color: textSecondary }}>•</Text>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                  Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.location || 'Sede Principal'}</Text>
+                </Text>
+              </View>
+            </View>
+
+            {/* 2. .home__img WITH AMBIENT GLOW (.home__shape) */}
+            <View style={styles.bedimCenterpieceArea}>
+              <View style={styles.bedimShapeGlow} />
+              <View style={styles.bedimShapeGlowInner} />
+              <Image
+                source={plantImageSource}
+                style={styles.bedimHeroImg}
+                resizeMode="contain"
+              />
+              <View style={[styles.bedimFloatingPillStatus, { backgroundColor: isDark ? 'rgba(18, 22, 34, 0.94)' : 'rgba(255, 255, 255, 0.94)', borderColor: cardBorder }]}>
+                <View style={styles.greenLiveDot} />
+                <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 11, letterSpacing: 0.6 }}>
+                  OPERATIVA EN LÍNEA · MONITOREO ACTIVO ISO 8528
+                </Text>
+              </View>
+            </View>
+
+            {/* 3. .home__car: 4 FLOATING TELEMETRY SPEC CARDS (Bedimcode exact pattern) */}
+            <View style={styles.bedimTelemetryStrip}>
+              {/* Card 1: Temperatura */}
+              <View style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+                <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(0, 227, 253, 0.15)' }]}>
+                  <MaterialCommunityIcons name="thermometer" size={18} color={accentCyan} />
+                </View>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  85°C
+                </Text>
+                <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                  TEMPERATURA
+                </Text>
+              </View>
+
+              {/* Card 2: Horas Motor */}
+              <TouchableOpacity
+                onPress={onOpenQuickHours}
+                style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                  <MaterialIcons name="speed" size={18} color="#22c55e" />
+                </View>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  {currentHours.toLocaleString()}h
+                </Text>
+                <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                  HORAS MOTOR
+                </Text>
+              </TouchableOpacity>
+
+              {/* Card 3: Sistema Eléctrico 24V */}
+              <View style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+                <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                  <MaterialIcons name="bolt" size={18} color="#f59e0b" />
+                </View>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  {myMoto?.systemVoltage || '24.2V'}
+                </Text>
+                <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                  SISTEMA 24V
+                </Text>
+              </View>
+
+              {/* Card 4: Nivel Diésel / Cargas */}
+              <TouchableOpacity
+                onPress={onOpenQuickFuel}
+                style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(37, 99, 235, 0.15)' }]}>
+                  <MaterialIcons name="local-gas-station" size={18} color={accentCyan} />
+                </View>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                  {totalFuelLiters > 0 ? `${totalFuelLiters} L` : '100%'}
+                </Text>
+                <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                  DIÉSEL TOTAL
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* 4. .home__button / ACTION CTA ROW */}
+            <View style={styles.bedimCtaRow}>
+              <TouchableOpacity
+                onPress={onOpenQuickHours}
+                style={[styles.bedimPrimaryCta, { backgroundColor: accentBlue }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="add-alarm" size={18} color="#ffffff" />
+                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold }]}>
+                  + ACTUALIZAR HORAS
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onOpenQuickFuel}
+                style={[styles.bedimSecondaryCta, { backgroundColor: accentCyan }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="local-gas-station" size={18} color="#0c0e14" />
+                <Text style={[styles.bedimCtaText, { color: '#0c0e14', fontFamily: F.extrabold }]}>
+                  + CARGAR DIÉSEL
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onOpenSpecs}
+                style={[styles.bedimGhostCta, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="menu-book" size={18} color={textPrimary} />
+                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold }]}>
+                  FICHA TÉCNICA
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onOpenReport}
+                style={[styles.bedimGhostCta, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="qr-code-2" size={18} color={accentCyan} />
+                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold }]}>
+                  EXPEDIENTE QR
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* SUPER ADMIN: 1. FLOTA DE PLANTAS ELÉCTRICAS EN LÍNEA (CENTRO DE MANDO MAESTRO) */}
           {isSuperAdmin && (
             <View style={[styles.superFleetContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
@@ -1544,107 +1702,6 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </View>
             </View>
 
-          </View>
-
-          {/* 3. SHOWCASE HERO DE LA PLANTA (FOTO OFICIAL + SPECS + ACCIONES RÁPIDAS) */}
-          <View style={[styles.plantShowcaseCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={[styles.plantShowcaseInner, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-              
-              {/* DATOS TÉCNICOS Y ESPECIFICACIONES */}
-              <View style={{ flex: 1.2, paddingRight: isDesktop ? 24 : 0 }}>
-                <View style={styles.plantBadgeRow}>
-                  <View style={[styles.plantKvaBadge, { backgroundColor: 'rgba(0, 180, 216, 0.15)' }]}>
-                    <MaterialIcons name="bolt" size={14} color={accentCyan} />
-                    <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11 }}>
-                      {myMoto ? `${myMoto.powerKva || 35} kVA / ${myMoto.powerKw || 28} kW STANDBY` : 'PLANTA ELÉCTRICA'}
-                    </Text>
-                  </View>
-                  <View style={[styles.onlineStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                    <View style={styles.greenLiveDot} />
-                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>EN LÍNEA</Text>
-                  </View>
-                </View>
-
-                <Text style={[styles.plantTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Generador Diésel Hermanos Lynch'}
-                </Text>
-
-                <Text style={[styles.plantSerialLocation, { color: textSecondary, fontFamily: F.medium }]}>
-                  Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'Sin serial asignado'}</Text> • Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.location || 'Ubicación sin registrar'}</Text>
-                </Text>
-
-                {/* SPEC CHIPS */}
-                <View style={styles.specChipsGrid}>
-                  <View style={[styles.specChip, { backgroundColor: pillDarkBg }]}>
-                    <MaterialCommunityIcons name="engine" size={16} color={accentCyan} />
-                    <Text style={[styles.specChipText, { color: textPrimary, fontFamily: F.semibold }]}>
-                      {specs?.engineType || 'Cummins 3.9L Diésel'}
-                    </Text>
-                  </View>
-
-                  <View style={[styles.specChip, { backgroundColor: pillDarkBg }]}>
-                    <MaterialIcons name="cached" size={16} color="#f59e0b" />
-                    <Text style={[styles.specChipText, { color: textPrimary, fontFamily: F.semibold }]}>
-                      {specs?.transmission || 'Leroy Somer 60 Hz'}
-                    </Text>
-                  </View>
-
-                  <View style={[styles.specChip, { backgroundColor: pillDarkBg }]}>
-                    <MaterialIcons name="tune" size={16} color="#10b981" />
-                    <Text style={[styles.specChipText, { color: textPrimary, fontFamily: F.semibold }]}>
-                      {specs?.equipment || 'ComAp InteliLite IL-9'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* ACCIONES RÁPIDAS HERMANOS LYNCH */}
-                <View style={styles.plantActionButtonsRow}>
-                  <TouchableOpacity
-                    onPress={onOpenSpecs}
-                    style={[styles.outlineActionBtn, { borderColor: cardBorder }]}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="menu-book" size={16} color={textPrimary} />
-                    <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>Ficha Técnica</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={onOpenReport}
-                    style={[styles.pdfReportActionBtn, { backgroundColor: '#0b3b60' }]}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="picture-as-pdf" size={16} color="#00e3fd" />
-                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>Expediente PDF</Text>
-                  </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={onOpenStats}
-                    style={[styles.scheduleActionBtn, { backgroundColor: accentBlue }]}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="event" size={16} color="#ffffff" />
-                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>Agendar</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* FOTO REAL DE LA PLANTA ELÉCTRICA CON RESPLANDOR */}
-              <View style={styles.plantPhotoColumn}>
-                <View style={styles.photoAtmosphereGlow} />
-                <Image
-                  source={plantImageSource}
-                  style={styles.plantShowcaseImage}
-                  resizeMode="contain"
-                />
-                <View style={[styles.horometerOverlayBadge, { backgroundColor: 'rgba(20, 23, 33, 0.9)', borderColor: cardBorder }]}>
-                  <MaterialIcons name="timer" size={16} color={accentCyan} />
-                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                    Horómetro: {currentHours.toLocaleString()} hrs
-                  </Text>
-                </View>
-              </View>
-
-            </View>
           </View>
 
           {/* 4. FILA INFERIOR: SPLIT CARDS (IZQUIERDA) & DONUT CATEGORY CHART (DERECHA) */}
@@ -2903,37 +2960,188 @@ const styles = StyleSheet.create({
     fontSize: 10,
     marginTop: 8,
   },
-  plantShowcaseCard: {
-    borderRadius: 28,
+  // BEDIMCODE ARCHITECTURAL HERO PATTERNS (.home, .home__data, .home__shape, .home__car, .home__car-data, .home__button)
+  bedimHeroSection: {
+    borderRadius: 30,
     borderWidth: 1,
-    padding: 26,
-    marginBottom: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 28,
+    marginBottom: 24,
     position: 'relative',
     overflow: 'hidden',
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.22,
-    shadowRadius: 20,
-    elevation: 6,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 24,
+    elevation: 8,
   },
-  plantShowcaseInner: {
+  bedimHeroHeader: {
     alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 20,
+    textAlign: 'center',
+    marginBottom: 20,
   },
-  plantBadgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    marginBottom: 10,
-  },
-  plantKvaBadge: {
+  bedimHeroSubtitlePill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 20,
+    marginBottom: 10,
+  },
+  bedimHeroSubtitleText: {
+    fontSize: 11,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+  },
+  bedimHeroTitle: {
+    fontSize: 30,
+    letterSpacing: -0.6,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  bedimHeroDescriptionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+  },
+  bedimHeroDescText: {
+    fontSize: 13,
+    textAlign: 'center',
+  },
+  bedimCenterpieceArea: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+    marginVertical: 16,
+    minHeight: 220,
+  },
+  bedimShapeGlow: {
+    position: 'absolute',
+    width: 280,
+    height: 280,
+    borderRadius: 140,
+    backgroundColor: 'rgba(0, 227, 253, 0.16)',
+    ...(Platform.OS === 'web' ? { filter: 'blur(50px)' } : {}),
+  },
+  bedimShapeGlowInner: {
+    position: 'absolute',
+    width: 180,
+    height: 180,
+    borderRadius: 90,
+    backgroundColor: 'rgba(37, 99, 235, 0.22)',
+    ...(Platform.OS === 'web' ? { filter: 'blur(30px)' } : {}),
+  },
+  bedimHeroImg: {
+    width: 320,
+    height: 210,
+    zIndex: 2,
+  },
+  bedimFloatingPillStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    marginTop: -8,
+    zIndex: 3,
+  },
+  bedimTelemetryStrip: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+    marginVertical: 20,
+    flexWrap: 'wrap',
+  },
+  bedimTelemetryCard: {
+    minWidth: 135,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 20,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  bedimIconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  bedimCardValue: {
+    fontSize: 18,
+    marginBottom: 2,
+    letterSpacing: -0.3,
+  },
+  bedimCardLabel: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textTransform: 'uppercase',
+  },
+  bedimCtaRow: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 10,
+    flexWrap: 'wrap',
+  },
+  bedimPrimaryCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 22,
+    height: 44,
+    borderRadius: 22,
+    shadowColor: '#2563eb',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 4,
+  },
+  bedimSecondaryCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 20,
+    height: 44,
+    borderRadius: 22,
+    shadowColor: '#00e3fd',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 14,
+    elevation: 3,
+  },
+  bedimGhostCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+  },
+  bedimCtaText: {
+    fontSize: 12,
+    letterSpacing: 0.6,
+  },
+  greenLiveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#22c55e',
   },
   onlineStatusBadge: {
     flexDirection: 'row',
@@ -2942,95 +3150,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 10,
-  },
-  greenLiveDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#22c55e',
-  },
-  plantTitle: {
-    fontSize: 22,
-    letterSpacing: -0.4,
-  },
-  plantSerialLocation: {
-    fontSize: 12,
-    marginVertical: 6,
-  },
-  specChipsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-    marginVertical: 14,
-  },
-  specChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 10,
-  },
-  specChipText: {
-    fontSize: 11,
-  },
-  plantActionButtonsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 8,
-    flexWrap: 'wrap',
-  },
-  outlineActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    height: 38,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  pdfReportActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 14,
-    height: 38,
-    borderRadius: 12,
-  },
-  scheduleActionBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 16,
-    height: 38,
-    borderRadius: 12,
-  },
-  plantPhotoColumn: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    minWidth: 260,
-  },
-  photoAtmosphereGlow: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(26, 92, 255, 0.12)',
-  },
-  plantShowcaseImage: {
-    width: 250,
-    height: 180,
-  },
-  horometerOverlayBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginTop: -10,
   },
   bottomBentoRow: {
     gap: 18,
