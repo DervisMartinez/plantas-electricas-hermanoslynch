@@ -1232,7 +1232,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
         </View>
       </Modal>
 
-      {/* MENÚ HAMBURGUESA DESPLEGABLE PARA CLIENTES EN MÓVILES */}
+      {/* MENÚ HAMBURGUESA DESPLEGABLE ESTILO APPLE iOS INSET GROUPED */}
       <Modal
         visible={mobileMenuOpen}
         transparent={true}
@@ -1246,232 +1246,301 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             onPress={() => setMobileMenuOpen(false)}
           />
 
-          <View style={[styles.mobileMenuDrawer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            {/* DRAWER HEADER: PROFILE CARNET */}
-            <View style={[styles.mobileDrawerHeader, { borderBottomColor: cardBorder }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
-                <View style={[styles.avatarCircle, { backgroundColor: accentBlue, width: 44, height: 44, borderRadius: 22 }]}>
-                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 15 }}>{userInitials}</Text>
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: textPrimary }} numberOfLines={1}>
-                    {userName || 'Cliente HL'}
-                  </Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                    <View style={[
-                      styles.roleBadgePillSmall,
-                      {
-                        backgroundColor: 'rgba(0, 180, 216, 0.15)',
-                        borderColor: 'rgba(0, 180, 216, 0.45)',
-                      }
-                    ]}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 9.5, color: accentCyan }}>
-                        CLIENTE HL
-                      </Text>
-                    </View>
-                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                      {headerDate}
+          <View style={[styles.mobileMenuDrawer, { backgroundColor: isDark ? '#121316' : '#f2f2f7', borderColor: cardBorder }]}>
+            {/* APPLE GRABBER PILL */}
+            <View style={[styles.appleGrabberBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)' }]} />
+
+            {/* APPLE ID PROFILE CARD */}
+            <View style={[styles.appleProfileCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
+              <View style={[styles.avatarCircle, { backgroundColor: '#007AFF', width: 44, height: 44, borderRadius: 22 }]}>
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 15 }}>{userInitials}</Text>
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: textPrimary, letterSpacing: -0.2 }} numberOfLines={1}>
+                  {userName || 'Cliente HL'}
+                </Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                  <View style={[
+                    styles.appleRoleBadge,
+                    {
+                      backgroundColor: 'rgba(0, 122, 255, 0.12)',
+                      borderColor: 'rgba(0, 122, 255, 0.3)',
+                    }
+                  ]}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 9.5, color: '#007AFF' }}>
+                      CLIENTE HL
                     </Text>
                   </View>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                    {headerDate}
+                  </Text>
                 </View>
               </View>
 
               <TouchableOpacity
                 onPress={() => setMobileMenuOpen(false)}
-                style={[styles.mobileDrawerCloseBtn, { backgroundColor: isDark ? '#1c202d' : '#f1f5f9' }]}
+                style={[styles.appleCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}
                 activeOpacity={0.7}
               >
-                <MaterialIcons name="close" size={20} color={textPrimary} />
+                <MaterialIcons name="close" size={17} color={isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'} />
               </TouchableOpacity>
             </View>
 
-            <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
-              {/* SECTION: OPERACIONES RÁPIDAS */}
-              <Text style={[styles.mobileMenuSectionTitle, { color: textSecondary, fontFamily: F.bold }]}>
+            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+              {/* SECTION: GESTIÓN Y REGISTROS */}
+              <Text style={styles.appleSectionHeader}>
                 GESTIÓN Y REGISTROS
               </Text>
 
-              {/* + HORAS */}
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onOpenQuickHours();
-                }}
-                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.mobileMenuIconBox, { backgroundColor: accentBlue }]}>
-                  <MaterialIcons name="add" size={20} color="#ffffff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
-                    + Registrar Horómetro
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                    Actualizar horas de funcionamiento
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* + DIESEL */}
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onOpenQuickFuel();
-                }}
-                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.mobileMenuIconBox, { backgroundColor: '#00b4d8' }]}>
-                  <MaterialIcons name="local-gas-station" size={20} color="#0c0e14" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
-                    + Registrar Carga de Diésel
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                    Litros cargados y control de consumo
-                  </Text>
-                </View>
-              </TouchableOpacity>
-
-              {/* CONTACTAR OPERADOR */}
-              {!isOperatorOrAdmin && (
+              <View style={[styles.appleGroupCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
+                {/* + HORAS */}
                 <TouchableOpacity
                   onPress={() => {
                     setMobileMenuOpen(false);
-                    onOpenOperatorModal();
+                    onOpenQuickHours();
                   }}
-                  style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
-                  activeOpacity={0.75}
+                  style={styles.appleGroupRow}
+                  activeOpacity={0.7}
                 >
-                  <View style={[styles.mobileMenuIconBox, { backgroundColor: '#10b981' }]}>
-                    <MaterialIcons name="support-agent" size={20} color="#ffffff" />
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#34C759' }]}>
+                    <MaterialIcons name="add" size={18} color="#ffffff" />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
-                      Contactar Operador Asignado
+                    <Text style={[styles.appleRowTitle, { color: textPrimary }]}>
+                      Registrar Horómetro
                     </Text>
-                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                      Soporte técnico y asistencia en sitio
+                    <Text style={[styles.appleRowSubtitle, { color: textSecondary }]} numberOfLines={1}>
+                      Actualizar horas de funcionamiento
                     </Text>
                   </View>
+                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
                 </TouchableOpacity>
-              )}
 
-              {/* EXPEDIENTE PDF */}
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onOpenReport();
-                }}
-                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.mobileMenuIconBox, { backgroundColor: '#ef4444' }]}>
-                  <MaterialIcons name="picture-as-pdf" size={20} color="#ffffff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
-                    Expediente Técnico PDF
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                    Ficha oficial e historial de la planta
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
 
-              {/* SECTION: SECCIONES */}
-              <Text style={[styles.mobileMenuSectionTitle, { color: textSecondary, fontFamily: F.bold, marginTop: 14 }]}>
-                SECCIONES
+                {/* + DIESEL */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onOpenQuickFuel();
+                  }}
+                  style={styles.appleGroupRow}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#FF9500' }]}>
+                    <MaterialIcons name="local-gas-station" size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: textPrimary }]}>
+                      Registrar Carga de Diésel
+                    </Text>
+                    <Text style={[styles.appleRowSubtitle, { color: textSecondary }]} numberOfLines={1}>
+                      Litros cargados y control de consumo
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                </TouchableOpacity>
+
+                {/* CONTACTAR OPERADOR */}
+                {!isOperatorOrAdmin && (
+                  <>
+                    <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
+                    <TouchableOpacity
+                      onPress={() => {
+                        setMobileMenuOpen(false);
+                        onOpenOperatorModal();
+                      }}
+                      style={styles.appleGroupRow}
+                      activeOpacity={0.7}
+                    >
+                      <View style={[styles.appleSquircleIcon, { backgroundColor: '#007AFF' }]}>
+                        <MaterialIcons name="support-agent" size={17} color="#ffffff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.appleRowTitle, { color: textPrimary }]}>
+                          Contactar Operador Asignado
+                        </Text>
+                        <Text style={[styles.appleRowSubtitle, { color: textSecondary }]} numberOfLines={1}>
+                          Soporte técnico y asistencia en sitio
+                        </Text>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
+
+                {/* EXPEDIENTE PDF */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onOpenReport();
+                  }}
+                  style={styles.appleGroupRow}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#FF3B30' }]}>
+                    <MaterialIcons name="picture-as-pdf" size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: textPrimary }]}>
+                      Expediente Técnico PDF
+                    </Text>
+                    <Text style={[styles.appleRowSubtitle, { color: textSecondary }]} numberOfLines={1}>
+                      Ficha oficial e historial de la planta
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                </TouchableOpacity>
+              </View>
+
+              {/* SECTION: NAVEGACIÓN */}
+              <Text style={styles.appleSectionHeader}>
+                NAVEGACIÓN
               </Text>
 
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onSelectTab('moto');
-                }}
-                style={[styles.mobileNavDrawerItem, activeTab === 'moto' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="speed" size={20} color={activeTab === 'moto' ? accentBlue : textSecondary} />
-                <Text style={{ fontFamily: activeTab === 'moto' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'moto' ? accentBlue : textPrimary }}>
-                  Mi Planta Eléctrica / Inicio
-                </Text>
-              </TouchableOpacity>
+              <View style={[styles.appleGroupCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
+                {/* PLANTA / INICIO */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onSelectTab('moto');
+                  }}
+                  style={[styles.appleGroupRow, activeTab === 'moto' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#007AFF' }]}>
+                    <MaterialIcons name="speed" size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: activeTab === 'moto' ? '#007AFF' : textPrimary, fontFamily: activeTab === 'moto' ? F.bold : F.semibold }]}>
+                      Mi Planta Eléctrica / Inicio
+                    </Text>
+                  </View>
+                  {activeTab === 'moto' ? (
+                    <MaterialIcons name="check" size={18} color="#007AFF" />
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                  )}
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onSelectTab('specs');
-                }}
-                style={[styles.mobileNavDrawerItem, activeTab === 'specs' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="assignment" size={20} color={activeTab === 'specs' ? accentBlue : textSecondary} />
-                <Text style={{ fontFamily: activeTab === 'specs' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'specs' ? accentBlue : textPrimary }}>
-                  Ficha Técnica Industrial
-                </Text>
-              </TouchableOpacity>
+                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
 
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onSelectTab('history');
-                }}
-                style={[styles.mobileNavDrawerItem, activeTab === 'history' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="receipt-long" size={20} color={activeTab === 'history' ? accentBlue : textSecondary} />
-                <Text style={{ fontFamily: activeTab === 'history' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'history' ? accentBlue : textPrimary }}>
-                  Historial de Mantenimientos
-                </Text>
-              </TouchableOpacity>
+                {/* FICHA TÉCNICA */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onSelectTab('specs');
+                  }}
+                  style={[styles.appleGroupRow, activeTab === 'specs' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#AF52DE' }]}>
+                    <MaterialIcons name="assignment" size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: activeTab === 'specs' ? '#007AFF' : textPrimary, fontFamily: activeTab === 'specs' ? F.bold : F.semibold }]}>
+                      Ficha Técnica Industrial
+                    </Text>
+                  </View>
+                  {activeTab === 'specs' ? (
+                    <MaterialIcons name="check" size={18} color="#007AFF" />
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                  )}
+                </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  onSelectTab('profile');
-                }}
-                style={[styles.mobileNavDrawerItem, activeTab === 'profile' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="person" size={20} color={activeTab === 'profile' ? accentBlue : textSecondary} />
-                <Text style={{ fontFamily: activeTab === 'profile' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'profile' ? accentBlue : textPrimary }}>
-                  Mi Perfil de Usuario
-                </Text>
-              </TouchableOpacity>
+                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
 
-              {/* TEMA OSCURO / CLARO */}
-              <TouchableOpacity
-                onPress={toggleTheme}
-                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder, marginTop: 12 }]}
-                activeOpacity={0.75}
-              >
-                <View style={[styles.mobileMenuIconBox, { backgroundColor: isDark ? '#ffb703' : '#1a5cff' }]}>
-                  <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={20} color="#ffffff" />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
-                    {isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                    Alternar contraste visual
-                  </Text>
-                </View>
-              </TouchableOpacity>
+                {/* HISTORIAL */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onSelectTab('history');
+                  }}
+                  style={[styles.appleGroupRow, activeTab === 'history' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#34C759' }]}>
+                    <MaterialIcons name="receipt-long" size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: activeTab === 'history' ? '#007AFF' : textPrimary, fontFamily: activeTab === 'history' ? F.bold : F.semibold }]}>
+                      Historial de Mantenimientos
+                    </Text>
+                  </View>
+                  {activeTab === 'history' ? (
+                    <MaterialIcons name="check" size={18} color="#007AFF" />
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                  )}
+                </TouchableOpacity>
 
-              {/* LOGOUT BUTTON */}
+                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
+
+                {/* PERFIL */}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onSelectTab('profile');
+                  }}
+                  style={[styles.appleGroupRow, activeTab === 'profile' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#8E8E93' }]}>
+                    <MaterialIcons name="person" size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: activeTab === 'profile' ? '#007AFF' : textPrimary, fontFamily: activeTab === 'profile' ? F.bold : F.semibold }]}>
+                      Mi Perfil de Usuario
+                    </Text>
+                  </View>
+                  {activeTab === 'profile' ? (
+                    <MaterialIcons name="check" size={18} color="#007AFF" />
+                  ) : (
+                    <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              {/* SECTION: PREFERENCIAS */}
+              <Text style={styles.appleSectionHeader}>
+                PREFERENCIAS
+              </Text>
+
+              <View style={[styles.appleGroupCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
+                <TouchableOpacity
+                  onPress={toggleTheme}
+                  style={styles.appleGroupRow}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#FFCC00' }]}>
+                    <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={17} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.appleRowTitle, { color: textPrimary }]}>
+                      {isDark ? 'Modo Claro' : 'Modo Oscuro'}
+                    </Text>
+                    <Text style={[styles.appleRowSubtitle, { color: textSecondary }]}>
+                      {isDark ? 'Activar paleta diurna clara' : 'Activar paleta nocturna OLED'}
+                    </Text>
+                  </View>
+                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
+                </TouchableOpacity>
+              </View>
+
+              {/* APPLE SIGN OUT CARD */}
               <TouchableOpacity
                 onPress={() => {
                   setMobileMenuOpen(false);
                   logout();
                 }}
-                style={styles.mobileDrawerLogoutBtn}
-                activeOpacity={0.8}
+                style={[styles.appleSignOutCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
+                activeOpacity={0.7}
               >
-                <MaterialIcons name="logout" size={18} color="#ef4444" />
-                <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 13 }}>
+                <MaterialIcons name="logout" size={17} color="#FF3B30" />
+                <Text style={styles.appleSignOutText}>
                   Cerrar Sesión Segura
                 </Text>
               </TouchableOpacity>
@@ -1636,17 +1705,107 @@ const styles = StyleSheet.create({
     bottom: 0,
   },
   mobileMenuDrawer: {
-    width: '88%',
-    maxWidth: 380,
+    width: '86%',
+    maxWidth: 360,
     height: '100%',
     borderRightWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 4, height: 0 },
     shadowOpacity: 0.35,
-    shadowRadius: 16,
+    shadowRadius: 18,
     elevation: 20,
-    paddingTop: 16,
+    paddingTop: 14,
     paddingBottom: 24,
+    paddingHorizontal: 16,
+  },
+  appleGrabberBar: {
+    width: 36,
+    height: 4.5,
+    borderRadius: 2.5,
+    alignSelf: 'center',
+    marginBottom: 14,
+  },
+  appleProfileCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 8,
+  },
+  appleRoleBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  appleCloseBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appleSectionHeader: {
+    fontSize: 11,
+    fontFamily: 'Montserrat_700Bold',
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+    color: '#8E8E93',
+    marginLeft: 10,
+    marginTop: 16,
+    marginBottom: 6,
+  },
+  appleGroupCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  appleGroupRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    gap: 12,
+  },
+  appleSquircleIcon: {
+    width: 29,
+    height: 29,
+    borderRadius: 7,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  appleRowTitle: {
+    fontSize: 13,
+    fontFamily: 'Montserrat_600SemiBold',
+    letterSpacing: -0.2,
+  },
+  appleRowSubtitle: {
+    fontSize: 10.5,
+    fontFamily: 'Montserrat_500Medium',
+    marginTop: 1,
+  },
+  appleHairlineDivider: {
+    height: StyleSheet.hairlineWidth,
+    marginLeft: 53,
+  },
+  appleSignOutCard: {
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 18,
+    marginBottom: 32,
+    paddingVertical: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  appleSignOutText: {
+    color: '#FF3B30',
+    fontSize: 13.5,
+    fontFamily: 'Montserrat_700Bold',
+    letterSpacing: -0.2,
   },
   mobileDrawerHeader: {
     paddingHorizontal: 16,
