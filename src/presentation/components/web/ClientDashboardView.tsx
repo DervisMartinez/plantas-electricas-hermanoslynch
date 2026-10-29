@@ -50,8 +50,19 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
   const { width: windowWidth } = useWindowDimensions();
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [selectedSubsystemInfo, setSelectedSubsystemInfo] = useState<any>(null);
   const [inquiryModalVisible, setInquiryModalVisible] = useState(false);
+
+  const userInitials = useMemo(() => {
+    const name = (userName || 'Cliente').trim();
+    const parts = name.split(' ').filter(Boolean);
+    if (parts.length >= 2) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return name.slice(0, 2).toUpperCase();
+  }, [userName]);
 
   const isDesktop = windowWidth >= 1024;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
@@ -343,105 +354,186 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
       <View style={styles.mainContentArea}>
         
         {/* TOP HEADER BAR */}
-        <View style={styles.topHeaderBar}>
-          {/* SEARCH BAR (PILL SHAPE) */}
-          <View style={[styles.searchPillContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <MaterialIcons name="search" size={20} color={textSecondary} />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Buscar componente o ciclo preventivo..."
-              placeholderTextColor={textSecondary}
-              style={[styles.searchInput, { color: textPrimary, fontFamily: F.medium }]}
-            />
+        {isMobile ? (
+          <View style={[styles.topHeaderBarMobile, { backgroundColor: cardBg, borderBottomColor: cardBorder }]}>
+            {mobileSearchOpen ? (
+              /* EXPANDED FULL-WIDTH SEARCH BAR ON MOBILE */
+              <View style={[styles.mobileSearchExpandedRow, { backgroundColor: isDark ? '#1a1f2c' : '#f1f5f9', borderColor: accentCyan }]}>
+                <MaterialIcons name="search" size={20} color={accentCyan} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Buscar componente o ciclo..."
+                  placeholderTextColor={textSecondary}
+                  style={[styles.mobileSearchInput, { color: textPrimary, fontFamily: F.medium }]}
+                  autoFocus={true}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity
+                    onPress={() => setSearchQuery('')}
+                    style={{ padding: 4 }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <MaterialIcons name="close" size={18} color={textSecondary} />
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileSearchOpen(false);
+                    setSearchQuery('');
+                  }}
+                  style={[styles.mobileSearchCancelBtn, { backgroundColor: isDark ? '#262f40' : '#e2e8f0' }]}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="arrow-back" size={18} color={textPrimary} />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              /* COLLAPSED COMPACT HEADER: [ ☰ Hamburger ] [ Brand Logo ] [ 🔍 Lupa ] [ Avatar ] */
+              <View style={styles.mobileCollapsedHeaderRow}>
+                {/* HAMBURGER BUTTON */}
+                <TouchableOpacity
+                  onPress={() => setMobileMenuOpen(true)}
+                  style={[styles.mobileHamburgerBtn, { backgroundColor: isDark ? '#1a1f2c' : '#f1f5f9', borderColor: cardBorder }]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="menu" size={22} color={textPrimary} />
+                </TouchableOpacity>
+
+                {/* BRAND CENTER LOGO */}
+                <TouchableOpacity
+                  onPress={() => onSelectTab('moto')}
+                  style={styles.mobileBrandCenter}
+                  activeOpacity={0.8}
+                >
+                  <Image source={HL_LOGO_REQUIRE} style={styles.mobileBrandLogo} resizeMode="contain" />
+                  <View style={{ marginLeft: 8 }}>
+                    <Text style={{ fontFamily: F.extrabold, fontSize: 13, color: textPrimary, letterSpacing: 0.5 }}>
+                      HERMANOS LYNCH
+                    </Text>
+                    <Text style={{ fontFamily: F.semibold, fontSize: 9.5, color: accentCyan, letterSpacing: 0.5 }}>
+                      CLIENTE HL TELEMÁTICA
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                {/* RIGHT ACTIONS: LUPA + AVATAR */}
+                <View style={styles.mobileHeaderRightRow}>
+                  {/* LUPA SEARCH BUTTON */}
+                  <TouchableOpacity
+                    onPress={() => setMobileSearchOpen(true)}
+                    style={[styles.mobileSearchIconBtn, { backgroundColor: isDark ? '#1a1f2c' : '#f1f5f9', borderColor: cardBorder }]}
+                    activeOpacity={0.8}
+                  >
+                    <MaterialIcons name="search" size={20} color={textPrimary} />
+                  </TouchableOpacity>
+
+                  {/* USER PROFILE AVATAR (OPEN MENU) */}
+                  <TouchableOpacity
+                    onPress={() => setMobileMenuOpen(true)}
+                    style={[styles.mobileAvatarBtn, { borderColor: accentCyan }]}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.avatarCircle, { backgroundColor: accentBlue, width: 34, height: 34, borderRadius: 17 }]}>
+                      <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>{userInitials}</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
           </View>
+        ) : (
+          <View style={styles.topHeaderBar}>
+            {/* SEARCH BAR (PILL SHAPE) */}
+            <View style={[styles.searchPillContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <MaterialIcons name="search" size={20} color={textSecondary} />
+              <TextInput
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                placeholder="Buscar componente o ciclo preventivo..."
+                placeholderTextColor={textSecondary}
+                style={[styles.searchInput, { color: textPrimary, fontFamily: F.medium }]}
+              />
+            </View>
 
-          {/* CENTER DATE BADGE */}
-          <View style={[styles.dateBadgePill, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <MaterialIcons name="access-time" size={16} color={accentCyan} />
-            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>
-              Hoy, {headerDate}
-            </Text>
-          </View>
+            {/* CENTER DATE BADGE */}
+            <View style={[styles.dateBadgePill, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <MaterialIcons name="access-time" size={16} color={accentCyan} />
+              <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>
+                Hoy, {headerDate}
+              </Text>
+            </View>
 
-          {/* RIGHT ACTION BUTTONS WITH HORIZONTAL SCROLL FOR MOBILE */}
-          <ScrollView
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.headerRightActions, isMobile && { paddingVertical: 4, paddingRight: 8 }]}
-            style={isMobile ? { maxWidth: '100%', marginTop: 6 } : undefined}
-          >
-            <TouchableOpacity
-              onPress={onOpenQuickHours}
-              style={[styles.quickActionButton, { backgroundColor: accentBlue }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="add" size={18} color="#ffffff" />
-              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>+ HORAS</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onOpenQuickFuel}
-              style={[styles.quickActionButton, { backgroundColor: accentCyan }]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="local-gas-station" size={18} color="#0c0e14" />
-              <Text style={{ fontFamily: F.bold, color: '#0c0e14', fontSize: 12 }}>+ DIÉSEL</Text>
-            </TouchableOpacity>
-
-            {/* BOTÓN OPERADOR ASIGNADO (Solo visible para Clientes, nunca para Operadores/Admins) */}
-            {!isOperatorOrAdmin && (
+            {/* RIGHT ACTION BUTTONS */}
+            <View style={styles.headerRightActions}>
               <TouchableOpacity
-                onPress={onOpenOperatorModal}
-                style={[styles.operatorPillBtn, { backgroundColor: 'rgba(0, 180, 216, 0.15)', borderColor: accentCyan }]}
+                onPress={onOpenQuickHours}
+                style={[styles.quickActionButton, { backgroundColor: accentBlue }]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="support-agent" size={18} color={accentCyan} />
-                {isDesktop && (
+                <MaterialIcons name="add" size={18} color="#ffffff" />
+                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>+ HORAS</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={onOpenQuickFuel}
+                style={[styles.quickActionButton, { backgroundColor: accentCyan }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="local-gas-station" size={18} color="#0c0e14" />
+                <Text style={{ fontFamily: F.bold, color: '#0c0e14', fontSize: 12 }}>+ DIÉSEL</Text>
+              </TouchableOpacity>
+
+              {/* BOTÓN OPERADOR ASIGNADO (Solo visible para Clientes, nunca para Operadores/Admins) */}
+              {!isOperatorOrAdmin && (
+                <TouchableOpacity
+                  onPress={onOpenOperatorModal}
+                  style={[styles.operatorPillBtn, { backgroundColor: 'rgba(0, 180, 216, 0.15)', borderColor: accentCyan }]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="support-agent" size={18} color={accentCyan} />
                   <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11 }}>
                     Operador HL
                   </Text>
-                )}
-              </TouchableOpacity>
-            )}
+                </TouchableOpacity>
+              )}
 
-            {/* USER PROFILE AVATAR PILL */}
-            <TouchableOpacity
-              onPress={() => onSelectTab('profile')}
-              style={[styles.userProfilePill, { backgroundColor: cardBg, borderColor: cardBorder }]}
-              activeOpacity={0.8}
-            >
-              <View style={styles.avatarCircle}>
-                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>
-                  {userName ? userName.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase() : 'CL'}
-                </Text>
-              </View>
-              {isDesktop && (
+              {/* USER PROFILE AVATAR PILL */}
+              <TouchableOpacity
+                onPress={() => onSelectTab('profile')}
+                style={[styles.userProfilePill, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <View style={styles.avatarCircle}>
+                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>
+                    {userInitials}
+                  </Text>
+                </View>
                 <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 13, marginRight: 4 }}>
                   {userName || (isOperatorOrAdmin ? userRoleTitle : 'Cliente HL')}
                 </Text>
-              )}
-            </TouchableOpacity>
+              </TouchableOpacity>
 
-            {/* BOTÓN CERRAR SESIÓN */}
-            <TouchableOpacity
-              onPress={logout}
-              style={[
-                styles.logoutHeaderPill,
-                {
-                  backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
-                  borderColor: 'rgba(239, 68, 68, 0.35)',
-                },
-              ]}
-              activeOpacity={0.8}
-            >
-              <MaterialIcons name="logout" size={16} color="#ef4444" />
-              <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 12 }}>
-                Cerrar Sesión
-              </Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
+              {/* BOTÓN CERRAR SESIÓN */}
+              <TouchableOpacity
+                onPress={logout}
+                style={[
+                  styles.logoutHeaderPill,
+                  {
+                    backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2',
+                    borderColor: 'rgba(239, 68, 68, 0.35)',
+                  },
+                ]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="logout" size={16} color="#ef4444" />
+                <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 12 }}>
+                  Cerrar Sesión
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
 
         {/* SCROLLABLE CLIENT DASHBOARD CONTENT (DASHBOARD ONLY) */}
         <ScrollView
@@ -1055,6 +1147,254 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
         </View>
       </Modal>
 
+      {/* MENÚ HAMBURGUESA DESPLEGABLE PARA CLIENTES EN MÓVILES */}
+      <Modal
+        visible={mobileMenuOpen}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setMobileMenuOpen(false)}
+      >
+        <View style={styles.mobileMenuOverlay}>
+          <TouchableOpacity
+            style={styles.mobileMenuBackdrop}
+            activeOpacity={1}
+            onPress={() => setMobileMenuOpen(false)}
+          />
+
+          <View style={[styles.mobileMenuDrawer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+            {/* DRAWER HEADER: PROFILE CARNET */}
+            <View style={[styles.mobileDrawerHeader, { borderBottomColor: cardBorder }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 }}>
+                <View style={[styles.avatarCircle, { backgroundColor: accentBlue, width: 44, height: 44, borderRadius: 22 }]}>
+                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 15 }}>{userInitials}</Text>
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: textPrimary }} numberOfLines={1}>
+                    {userName || 'Cliente HL'}
+                  </Text>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
+                    <View style={[
+                      styles.roleBadgePillSmall,
+                      {
+                        backgroundColor: 'rgba(0, 180, 216, 0.15)',
+                        borderColor: 'rgba(0, 180, 216, 0.45)',
+                      }
+                    ]}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 9.5, color: accentCyan }}>
+                        CLIENTE HL
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                      {headerDate}
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              <TouchableOpacity
+                onPress={() => setMobileMenuOpen(false)}
+                style={[styles.mobileDrawerCloseBtn, { backgroundColor: isDark ? '#1c202d' : '#f1f5f9' }]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="close" size={20} color={textPrimary} />
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView style={{ flex: 1, paddingHorizontal: 16 }} showsVerticalScrollIndicator={false}>
+              {/* SECTION: OPERACIONES RÁPIDAS */}
+              <Text style={[styles.mobileMenuSectionTitle, { color: textSecondary, fontFamily: F.bold }]}>
+                GESTIÓN Y REGISTROS
+              </Text>
+
+              {/* + HORAS */}
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onOpenQuickHours();
+                }}
+                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.mobileMenuIconBox, { backgroundColor: accentBlue }]}>
+                  <MaterialIcons name="add" size={20} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
+                    + Registrar Horómetro
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                    Actualizar horas de funcionamiento
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* + DIESEL */}
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onOpenQuickFuel();
+                }}
+                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.mobileMenuIconBox, { backgroundColor: '#00b4d8' }]}>
+                  <MaterialIcons name="local-gas-station" size={20} color="#0c0e14" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
+                    + Registrar Carga de Diésel
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                    Litros cargados y control de consumo
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* CONTACTAR OPERADOR */}
+              {!isOperatorOrAdmin && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    onOpenOperatorModal();
+                  }}
+                  style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
+                  activeOpacity={0.75}
+                >
+                  <View style={[styles.mobileMenuIconBox, { backgroundColor: '#10b981' }]}>
+                    <MaterialIcons name="support-agent" size={20} color="#ffffff" />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
+                      Contactar Operador Asignado
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                      Soporte técnico y asistencia en sitio
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+
+              {/* EXPEDIENTE PDF */}
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onOpenReport();
+                }}
+                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder }]}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.mobileMenuIconBox, { backgroundColor: '#ef4444' }]}>
+                  <MaterialIcons name="picture-as-pdf" size={20} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
+                    Expediente Técnico PDF
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                    Ficha oficial e historial de la planta
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* SECTION: SECCIONES */}
+              <Text style={[styles.mobileMenuSectionTitle, { color: textSecondary, fontFamily: F.bold, marginTop: 14 }]}>
+                SECCIONES
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onSelectTab('moto');
+                }}
+                style={[styles.mobileNavDrawerItem, activeTab === 'moto' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="speed" size={20} color={activeTab === 'moto' ? accentBlue : textSecondary} />
+                <Text style={{ fontFamily: activeTab === 'moto' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'moto' ? accentBlue : textPrimary }}>
+                  Mi Planta Eléctrica / Inicio
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onSelectTab('specs');
+                }}
+                style={[styles.mobileNavDrawerItem, activeTab === 'specs' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="assignment" size={20} color={activeTab === 'specs' ? accentBlue : textSecondary} />
+                <Text style={{ fontFamily: activeTab === 'specs' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'specs' ? accentBlue : textPrimary }}>
+                  Ficha Técnica Industrial
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onSelectTab('history');
+                }}
+                style={[styles.mobileNavDrawerItem, activeTab === 'history' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="receipt-long" size={20} color={activeTab === 'history' ? accentBlue : textSecondary} />
+                <Text style={{ fontFamily: activeTab === 'history' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'history' ? accentBlue : textPrimary }}>
+                  Historial de Mantenimientos
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  onSelectTab('profile');
+                }}
+                style={[styles.mobileNavDrawerItem, activeTab === 'profile' && { backgroundColor: isDark ? '#1e293b' : '#e0f2fe' }]}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="person" size={20} color={activeTab === 'profile' ? accentBlue : textSecondary} />
+                <Text style={{ fontFamily: activeTab === 'profile' ? F.bold : F.medium, fontSize: 13, color: activeTab === 'profile' ? accentBlue : textPrimary }}>
+                  Mi Perfil de Usuario
+                </Text>
+              </TouchableOpacity>
+
+              {/* TEMA OSCURO / CLARO */}
+              <TouchableOpacity
+                onPress={toggleTheme}
+                style={[styles.mobileMenuItem, { backgroundColor: isDark ? '#1a1f2c' : '#f8fafc', borderColor: cardBorder, marginTop: 12 }]}
+                activeOpacity={0.75}
+              >
+                <View style={[styles.mobileMenuIconBox, { backgroundColor: isDark ? '#ffb703' : '#1a5cff' }]}>
+                  <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={20} color="#ffffff" />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: textPrimary }}>
+                    {isDark ? 'Cambiar a Modo Claro' : 'Cambiar a Modo Oscuro'}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
+                    Alternar contraste visual
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* LOGOUT BUTTON */}
+              <TouchableOpacity
+                onPress={() => {
+                  setMobileMenuOpen(false);
+                  logout();
+                }}
+                style={styles.mobileDrawerLogoutBtn}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="logout" size={18} color="#ef4444" />
+                <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 13 }}>
+                  Cerrar Sesión Segura
+                </Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
+
     </View>
   );
 };
@@ -1120,6 +1460,164 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 14,
     flexWrap: 'wrap',
+  },
+  topHeaderBarMobile: {
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    zIndex: 25,
+  },
+  mobileSearchExpandedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    height: 42,
+    borderRadius: 21,
+    borderWidth: 1.5,
+    paddingHorizontal: 12,
+    gap: 10,
+  },
+  mobileSearchInput: {
+    flex: 1,
+    fontSize: 13,
+  },
+  mobileSearchCancelBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileCollapsedHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 44,
+  },
+  mobileHamburgerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileBrandCenter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+    marginLeft: 10,
+  },
+  mobileBrandLogo: {
+    width: 26,
+    height: 26,
+  },
+  mobileHeaderRightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  mobileSearchIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    borderWidth: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileAvatarBtn: {
+    padding: 2,
+    borderRadius: 20,
+    borderWidth: 1.5,
+  },
+  mobileMenuOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.65)',
+    justifyContent: 'flex-start',
+  },
+  mobileMenuBackdrop: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  mobileMenuDrawer: {
+    width: '88%',
+    maxWidth: 380,
+    height: '100%',
+    borderRightWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 4, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 20,
+    paddingTop: 16,
+    paddingBottom: 24,
+  },
+  mobileDrawerHeader: {
+    paddingHorizontal: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  mobileDrawerCloseBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileMenuSectionTitle: {
+    fontSize: 10.5,
+    letterSpacing: 1.2,
+    marginTop: 18,
+    marginBottom: 8,
+  },
+  mobileMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 12,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 8,
+    gap: 12,
+  },
+  mobileMenuIconBox: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  mobileNavDrawerItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    marginBottom: 4,
+    gap: 12,
+  },
+  mobileDrawerLogoutBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    marginTop: 16,
+    marginBottom: 20,
+  },
+  roleBadgePillSmall: {
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 6,
+    borderWidth: 1,
   },
   searchPillContainer: {
     flex: 1,

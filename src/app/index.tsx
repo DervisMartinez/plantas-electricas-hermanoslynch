@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, Animated, Easing, StyleSheet, Platform } from 'react-native';
+import { View, Text, Animated, Easing, StyleSheet, Platform, Image } from 'react-native';
 import { useMyMoto } from '@/presentation/context/MotoContext';
 import { SetupScreen } from '@/presentation/screens/SetupScreen';
 import { MainApp } from '@/presentation/screens/MainApp';
@@ -11,6 +11,8 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import { handleRecoveryDeepLink, RecoveryDeepLinkResult } from '@/services/authRecoveryService';
 
+const HL_LOGO_SIN_NOMBRE = require('../../assets/images/logo and media coorporative/logo-sin-nombre.png');
+
 const PreloadScreen = () => {
   const pulseAnim = useRef(new Animated.Value(1)).current;
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -18,19 +20,23 @@ const PreloadScreen = () => {
   useEffect(() => {
     Animated.loop(
       Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.15, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
+        Animated.timing(pulseAnim, { toValue: 1.12, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(pulseAnim, { toValue: 1, duration: 850, easing: Easing.inOut(Easing.ease), useNativeDriver: true })
       ])
     ).start();
 
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
+    Animated.timing(fadeAnim, { toValue: 1, duration: 600, useNativeDriver: true }).start();
   }, []);
 
   return (
     <View style={styles.preloadContainer}>
       <Animated.View style={{ opacity: fadeAnim, alignItems: 'center', transform: [{ scale: pulseAnim }] }}>
         <View style={styles.iconCircle}>
-          <MaterialCommunityIcons name="generator-portable" size={56} color="#00e3fd" />
+          <Image
+            source={HL_LOGO_SIN_NOMBRE}
+            style={styles.preloadLogo}
+            resizeMode="contain"
+          />
         </View>
       </Animated.View>
       <Animated.Text style={[styles.preloadTitle, { opacity: fadeAnim }]}>
@@ -163,9 +169,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#00e3fd',
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.45,
     shadowRadius: 20,
     elevation: 8,
+  },
+  preloadLogo: {
+    width: 64,
+    height: 64,
   },
   preloadTitle: {
     color: '#ffffff',
