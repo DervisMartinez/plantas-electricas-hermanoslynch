@@ -62,7 +62,6 @@ export default function HomeScreen() {
   const [session, setSession] = useState<Session | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [isRecoveryMode, setIsRecoveryMode] = useState(false);
-  const [minWaitDone, setMinWaitDone] = useState(false);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -100,17 +99,13 @@ export default function HomeScreen() {
       });
     });
 
-    setTimeout(() => {
-      setMinWaitDone(true);
-    }, 900);
-
     return () => {
       authListener?.subscription.unsubscribe();
       urlListener.remove();
     };
   }, []);
 
-  if (authLoading || !isLoaded || !minWaitDone) {
+  if (authLoading || !isLoaded) {
     return <PreloadScreen />;
   }
 

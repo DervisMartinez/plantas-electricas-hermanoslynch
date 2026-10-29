@@ -43,6 +43,14 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
   const [assigningOperator, setAssigningOperator] = useState<any | null>(null);
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
+
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [activeFilter, searchQuery]);
+
   // Fleet Catalog Management
   const [fleetList, setFleetList] = useState<any[]>([]);
   const [loadingFleet, setLoadingFleet] = useState(false);
@@ -172,6 +180,29 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
         (u.specialty || '').toLowerCase().includes(q)
     );
   }, [activeFilter, pendingUsersList, operatorsList, clientsList, searchQuery]);
+
+  const totalPages = useMemo(() => Math.ceil(currentList.length / PAGE_SIZE) || 1, [currentList.length]);
+  const paginatedUsers = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return currentList.slice(start, start + PAGE_SIZE);
+  }, [currentList, currentPage]);
+
+  const filteredFleet = useMemo(() => {
+    if (!searchQuery.trim()) return fleetList;
+    const q = searchQuery.toLowerCase().trim();
+    return fleetList.filter(
+      (v) =>
+        (v.brand || '').toLowerCase().includes(q) ||
+        (v.model || '').toLowerCase().includes(q) ||
+        (v.plate || '').toLowerCase().includes(q)
+    );
+  }, [fleetList, searchQuery]);
+
+  const totalFleetPages = useMemo(() => Math.ceil(filteredFleet.length / PAGE_SIZE) || 1, [filteredFleet.length]);
+  const paginatedFleet = useMemo(() => {
+    const start = (currentPage - 1) * PAGE_SIZE;
+    return filteredFleet.slice(start, start + PAGE_SIZE);
+  }, [filteredFleet, currentPage]);
 
   const handleApprove = async (userId: string) => {
     setActionLoadingId(userId);
@@ -459,17 +490,7 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                   </TouchableOpacity>
                 </View>
               ) : (
-                fleetList
-                  .filter((v) => {
-                    if (!searchQuery.trim()) return true;
-                    const q = searchQuery.toLowerCase().trim();
-                    return (
-                      (v.brand || '').toLowerCase().includes(q) ||
-                      (v.model || '').toLowerCase().includes(q) ||
-                      (v.plate || '').toLowerCase().includes(q)
-                    );
-                  })
-                  .map((v) => (
+                paginatedFleet.map((v) => (
                     <View
                       key={v.id}
                       style={{
@@ -546,7 +567,7 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                 </Text>
               </View>
             ) : (
-              currentList.map((user) => {
+              paginatedUsers.map((user) => {
                 const isPending = user.approval_status === 'pending';
                 const isApproved = user.approval_status === 'approved';
                 const isRejected = user.approval_status === 'rejected';
@@ -727,6 +748,63 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
               })
             )}
           </ScrollView>
+
+          {/* PAGINATION CONTROLS */}
+          {((activeFilter === 'fleet' ? totalFleetPages : totalPages) > 1) && (
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              paddingTop: 10,
+              paddingBottom: 4,
+              borderTopWidth: 1,
+              borderTopColor: borderModal,
+            }}>
+              <TouchableOpacity
+                onPress={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  backgroundColor: currentPage === 1 ? 'transparent' : cardSubBg,
+                  opacity: currentPage === 1 ? 0.35 : 1,
+                  borderWidth: 1,
+                  borderColor: borderModal,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <MaterialIcons name="chevron-left" size={18} color={textPrimary} />
+                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11 }}>Anterior</Text>
+              </TouchableOpacity>
+
+              <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11 }}>
+                Página {currentPage} de {activeFilter === 'fleet' ? totalFleetPages : totalPages}
+              </Text>
+
+              <TouchableOpacity
+                onPress={() => setCurrentPage((p) => Math.min(activeFilter === 'fleet' ? totalFleetPages : totalPages, p + 1))}
+                disabled={currentPage >= (activeFilter === 'fleet' ? totalFleetPages : totalPages)}
+                style={{
+                  paddingHorizontal: 12,
+                  paddingVertical: 6,
+                  borderRadius: 8,
+                  backgroundColor: currentPage >= (activeFilter === 'fleet' ? totalFleetPages : totalPages) ? 'transparent' : cardSubBg,
+                  opacity: currentPage >= (activeFilter === 'fleet' ? totalFleetPages : totalPages) ? 0.35 : 1,
+                  borderWidth: 1,
+                  borderColor: borderModal,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 4,
+                }}
+              >
+                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11 }}>Siguiente</Text>
+                <MaterialIcons name="chevron-right" size={18} color={textPrimary} />
+              </TouchableOpacity>
+            </View>
+          )}
 
           {/* FOOTER */}
           <View style={styles.footerRow}>

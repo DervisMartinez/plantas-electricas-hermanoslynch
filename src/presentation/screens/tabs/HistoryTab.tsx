@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -28,6 +28,7 @@ const parseSafeDate = (d: string) => {
 export const HistoryTab = () => {
   const { records, deleteRecord, myMoto } = useMyMoto();
   const { colors } = useTheme();
+  const [visibleMonthsCount, setVisibleMonthsCount] = useState(3);
 
   const F = {
     bold: 'Montserrat_700Bold',
@@ -122,6 +123,10 @@ export const HistoryTab = () => {
     return `${pct > 0 ? '+' : ''}${pct.toFixed(1)}%`;
   }, [totalThisMonth, totalLastMonth]);
 
+  const displayedMonths = useMemo(() => {
+    return groupedData.slice(0, visibleMonthsCount);
+  }, [groupedData, visibleMonthsCount]);
+
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surface }} edges={['top', 'left', 'right']}>
       <View style={{ padding: 24, paddingBottom: 16 }}>
@@ -148,55 +153,81 @@ export const HistoryTab = () => {
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 24, paddingTop: 8, paddingBottom: 100 }} showsVerticalScrollIndicator={false}>
-        {groupedData.length === 0 ? (
+        {displayedMonths.length === 0 ? (
           <View style={{ alignItems: 'center', justifyContent: 'center', paddingVertical: 60 }}>
             <MaterialIcons name="receipt-long" size={64} color={colors.surfaceContainerHighest} />
             <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, marginTop: 16 }}>Sin registros todavía</Text>
           </View>
         ) : (
-          groupedData.map((monthGroup) => (
-            <View key={monthGroup.label} style={{ marginBottom: 24 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 18 }}>
-                  {monthGroup.label}
-                </Text>
-                <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 16 }}>
-                  ${monthGroup.total.toFixed(2)}
-                </Text>
-              </View>
+          <>
+            {displayedMonths.map((monthGroup) => (
+              <View key={monthGroup.label} style={{ marginBottom: 24 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 18 }}>
+                    {monthGroup.label}
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 16 }}>
+                    ${monthGroup.total.toFixed(2)}
+                  </Text>
+                </View>
 
-              {Object.entries(monthGroup.days).map(([dayKey, dayRecords]) => {
-                const day = dayKey.split('-')[2];
-                return (
-                  <View key={dayKey} style={{ marginBottom: 16 }}>
-                    <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 14, marginBottom: 8, marginLeft: 4 }}>
-                      {day} de {monthGroup.label.split(' ')[0]}
-                    </Text>
-                    {dayRecords.map((record) => (
-                      <View key={record.id} style={{ backgroundColor: colors.surfaceContainerLow, padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
-                        <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: record.type === 'fuel' ? colors.tertiaryContainer : colors.primaryContainer, justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
-                          <MaterialIcons name={record.type === 'fuel' ? 'local-gas-station' : 'build'} size={24} color={record.type === 'fuel' ? colors.onTertiary : colors.onPrimaryContainer} />
+                {Object.entries(monthGroup.days).map(([dayKey, dayRecords]) => {
+                  const day = dayKey.split('-')[2];
+                  return (
+                    <View key={dayKey} style={{ marginBottom: 16 }}>
+                      <Text style={{ fontFamily: F.semibold, color: colors.onSurfaceVariant, fontSize: 14, marginBottom: 8, marginLeft: 4 }}>
+                        {day} de {monthGroup.label.split(' ')[0]}
+                      </Text>
+                      {dayRecords.map((record) => (
+                        <View key={record.id} style={{ backgroundColor: colors.surfaceContainerLow, padding: 16, borderRadius: 12, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }}>
+                          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: record.type === 'fuel' ? colors.tertiaryContainer : colors.primaryContainer, justifyContent: 'center', alignItems: 'center', marginRight: 16 }}>
+                            <MaterialIcons name={record.type === 'fuel' ? 'local-gas-station' : 'build'} size={24} color={record.type === 'fuel' ? colors.onTertiary : colors.onPrimaryContainer} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>{(COMPONENT_NAMES as any)[record.type] || record.type}</Text>
+                            <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
+                              {record.odometer} {isPlanta(myMoto) ? 'hrs' : 'km'}
+                            </Text>
+                            {record.notes && <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>{record.notes}</Text>}
+                          </View>
+                          <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
+                            <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 16 }}>${Number(record.costUSD).toFixed(2)}</Text>
+                            <TouchableOpacity onPress={() => deleteRecord(record.id)} style={{ padding: 4, marginTop: 4 }}>
+                              <MaterialIcons name="delete" size={20} color={colors.error} />
+                            </TouchableOpacity>
+                          </View>
                         </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 15 }}>{(COMPONENT_NAMES as any)[record.type] || record.type}</Text>
-                          <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 12, marginTop: 2 }}>
-                            {record.odometer} {isPlanta(myMoto) ? 'hrs' : 'km'}
-                          </Text>
-                          {record.notes && <Text style={{ fontFamily: F.regular, color: colors.onSurfaceVariant, fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>{record.notes}</Text>}
-                        </View>
-                        <View style={{ alignItems: 'flex-end', marginLeft: 8 }}>
-                          <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 16 }}>${Number(record.costUSD).toFixed(2)}</Text>
-                          <TouchableOpacity onPress={() => deleteRecord(record.id)} style={{ padding: 4, marginTop: 4 }}>
-                            <MaterialIcons name="delete" size={20} color={colors.error} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))}
-                  </View>
-                );
-              })}
-            </View>
-          ))
+                      ))}
+                    </View>
+                  );
+                })}
+              </View>
+            ))}
+
+            {groupedData.length > visibleMonthsCount && (
+              <TouchableOpacity
+                onPress={() => setVisibleMonthsCount((prev) => prev + 3)}
+                style={{
+                  paddingVertical: 14,
+                  paddingHorizontal: 20,
+                  backgroundColor: colors.surfaceContainerHigh,
+                  borderRadius: 14,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexDirection: 'row',
+                  gap: 8,
+                  marginTop: 8,
+                  marginBottom: 20,
+                }}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="history" size={18} color={colors.primary} />
+                <Text style={{ fontFamily: F.bold, color: colors.primary, fontSize: 13 }}>
+                  Cargar meses anteriores ({groupedData.length - visibleMonthsCount} restantes)
+                </Text>
+              </TouchableOpacity>
+            )}
+          </>
         )}
       </ScrollView>
     </SafeAreaView>

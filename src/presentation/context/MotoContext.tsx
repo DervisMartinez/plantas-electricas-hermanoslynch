@@ -1,4 +1,4 @@
-import React, { createContext, useState, useContext, ReactNode, useEffect } from 'react';
+import React, { createContext, useState, useContext, ReactNode, useEffect, useCallback, useMemo } from 'react';
 import { Moto, ServiceRecord, isCar, isPlanta, VehicleType } from '../../domain/entities/Moto';
 import { supabase } from '../../data/supabaseClient';
 
@@ -47,10 +47,11 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
   const [isLoaded, setIsLoaded] = useState(false);
   const isAdmin = userRole === 'admin';
 
-  const setUserRole = (role: 'admin' | 'client') => {
+  const setUserRole = useCallback((role: 'admin' | 'client') => {
     setUserRoleState(role);
     supabase.auth.updateUser({ data: { role } }).catch(() => {});
-  };
+  }, []);
+
   const [userName, setUserName] = useState('');
   const [userEmail, setUserEmail] = useState('');
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
@@ -67,17 +68,21 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
   const [operatorsList, setOperatorsList] = useState<any[]>([]);
   const [clientsList, setClientsList] = useState<any[]>([]);
 
-  const loadSystemUsers = async () => {
+  // Optimización de carga concurrente de usuarios y métricas
+  const loadSystemUsers = useCallback(async () => {
     try {
-      const { data: metrics } = await supabase.rpc('get_system_metrics');
-      if (metrics) {
-        setSystemMetrics(metrics);
+      const [metricsRes, rpcProfilesRes] = await Promise.all([
+        supabase.rpc('get_system_metrics'),
+        supabase.rpc('get_all_system_profiles'),
+      ]);
+
+      if (metricsRes.data) {
+        setSystemMetrics(metricsRes.data);
       }
 
       let profiles: any[] | null = null;
-      const { data: rpcProfiles, error: rpcErr } = await supabase.rpc('get_all_system_profiles');
-      if (!rpcErr && rpcProfiles) {
-        profiles = rpcProfiles;
+      if (!rpcProfilesRes.error && rpcProfilesRes.data) {
+        profiles = rpcProfilesRes.data;
       } else {
         const { data: selectProfiles } = await supabase
           .from('profiles')
@@ -94,9 +99,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       console.warn('Notice al cargar usuarios del sistema:', err);
     }
-  };
+  }, []);
 
-  const approveUser = async (userId: string) => {
+  const approveUser = useCallback(async (userId: string) => {
     try {
       const { error } = await supabase.rpc('approve_user', { target_user_id: userId });
       if (error) {
@@ -111,9 +116,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error al aprobar usuario:', err);
       return false;
     }
-  };
+  }, [loadSystemUsers]);
 
-  const rejectUser = async (userId: string) => {
+  const rejectUser = useCallback(async (userId: string) => {
     try {
       const { error } = await supabase.rpc('reject_user', { target_user_id: userId });
       if (error) {
@@ -128,9 +133,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error al rechazar usuario:', err);
       return false;
     }
-  };
+  }, [loadSystemUsers]);
 
-  const checkApprovalStatus = async () => {
+  const checkApprovalStatus = useCallback(async () => {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session?.user) return;
     const { data: profile } = await supabase
@@ -146,12 +151,194 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         setApprovalStatus('approved');
       }
     }
-  };
+  }, []);
 
   // In-memory cache for service records by entity id to make vehicle/planta pagination instant
   const recordsCacheRef = React.useRef<Map<string, ServiceRecord[]>>(new Map());
   const recordsFetchTimeRef = React.useRef<Map<string, number>>(new Map());
   const initialLoadDoneRef = React.useRef(false);
+
+  // CARGA PARALELIZADA ULTRA RÁPIDA CON PROMISE.ALL
+  const loadDataFromCloud = useCallback(async (preferredMotoId?: string) => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const user = session?.user || (await supabase.auth.getUser()).data?.user;
+      if (!user) {
+        setIsLoaded(true);
+        return;
+      }
+
+      const emailLower = (user.email || '').toLowerCase();
+      const isSuper = emailLower.includes('kalioverload') || user.user_metadata?.role === 'superadmin';
+      const isPrivilegedEmail = 
+        emailLower.includes('admin') ||
+        emailLower.includes('hermanoslynch') ||
+        emailLower.includes('lynch') ||
+        emailLower.includes('kalioverload') ||
+        user.user_metadata?.role === 'admin' ||
+        user.user_metadata?.role === 'superadmin' ||
+        isSuper;
+
+      // 1. DISPARAR TODAS LAS CONSULTAS DE PERFIL, PLANTAS, VEHÍCULOS Y MOTOS EN PARALELO
+      const [profileRes, plantasRes, vehiculosRes, motosRes] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('drives_company_vehicle, role, approval_status, full_name, email')
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabase
+          .from('plantas')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('vehiculos_empresa')
+          .select('*'),
+        supabase
+          .from('motos')
+          .select('*')
+          .eq('user_id', user.id),
+      ]);
+
+      const profile = profileRes.data;
+      let detectedRole: 'admin' | 'client' = 'client';
+      const isSuperProfile = profile?.role === 'superadmin' || isSuper;
+      setIsSuperAdmin(isSuperProfile);
+
+      if (isSuperProfile || profile?.role === 'admin' || profile?.role === 'operator' || isPrivilegedEmail) {
+        detectedRole = 'admin';
+        setApprovalStatus('approved');
+        setUserRoleTitle(isSuperProfile ? 'Super Usuario' : (profile?.role === 'operator' ? 'Operador de Planta' : 'Administrador'));
+      } else {
+        setApprovalStatus(profile?.approval_status || 'pending');
+        if (profile?.role === 'client') {
+          detectedRole = 'client';
+          setUserRoleTitle('Cliente');
+        }
+      }
+
+      let realName = '';
+      if (profile?.full_name && profile.full_name.trim() !== '') {
+        realName = profile.full_name.trim();
+      } else if (user.user_metadata?.full_name) {
+        realName = user.user_metadata.full_name.trim();
+      } else if (user.user_metadata?.first_name) {
+        realName = `${user.user_metadata.first_name} ${user.user_metadata.last_name || ''}`.trim();
+      }
+
+      if (!realName) {
+        if (isSuper || emailLower.includes('kalioverload')) {
+          realName = 'Kalioverload';
+        } else if (user.email) {
+          const username = user.email.split('@')[0];
+          realName = username.charAt(0).toUpperCase() + username.slice(1);
+        } else {
+          realName = detectedRole === 'admin' ? 'Operador' : 'Cliente';
+        }
+      }
+
+      setUserName(realName);
+      setUserEmail(user.email || '');
+      setUserRoleState(detectedRole);
+      setDrivesCompanyVehicleState(!!profile?.drives_company_vehicle);
+
+      // Carga asíncrona de usuarios para administradores sin bloquear el hilo principal
+      if (detectedRole === 'admin') {
+        loadSystemUsers();
+      }
+
+      // Filtrar plantas y vehículos para clientes sin permisos de administrador
+      let rawPlantas = plantasRes.data || [];
+      let rawVehiculos = vehiculosRes.data || [];
+      if (detectedRole !== 'admin') {
+        rawPlantas = rawPlantas.filter((p: any) => p.user_id === user.id);
+        rawVehiculos = rawVehiculos.filter((v: any) => v.user_id === user.id);
+      }
+
+      const parsedPlantas: Moto[] = rawPlantas.map((p: any) => ({
+        id: p.id,
+        brand: p.brand || 'Blue Power Generation',
+        model: p.model || 'C35',
+        year: 2026,
+        imageUrl: p.image_url,
+        catalogImageRes: undefined,
+        plate: p.serial_number || p.location || `PLANTA-${p.model}`,
+        currentOdometer: Number(p.current_hours) || 0,
+        currentHours: Number(p.current_hours) || 0,
+        powerKva: Number(p.power_kva) || 35,
+        powerKw: Number(p.power_kw) || 28,
+        fuelType: p.fuel_type || 'Diesel',
+        engineBrand: p.engine_brand || 'Cummins',
+        engineModel: p.engine_model,
+        alternatorBrand: p.alternator_brand || 'Leroy Somer',
+        alternatorModel: p.alternator_model,
+        controllerModel: p.controller_model || 'ComAp InteliLite IL-9',
+        installationType: p.installation_type || 'Canopy Insonorizada',
+        fuelTankCapacity: p.fuel_tank_capacity ? Number(p.fuel_tank_capacity) : 180,
+        oilPanCapacity: p.oil_pan_capacity ? Number(p.oil_pan_capacity) : 10.9,
+        coolantCapacity: p.coolant_capacity ? Number(p.coolant_capacity) : 7.2,
+        systemVoltage: p.system_voltage || '24V DC',
+        serialNumber: p.serial_number,
+        location: p.location,
+        assignedOperatorId: p.assigned_operator_id,
+        assignedOperatorName: p.assigned_operator_name,
+        isFromAgency: p.is_from_agency ?? false,
+        vehicleType: 'planta' as VehicleType,
+      }));
+
+      const parsedVehiculos: Moto[] = rawVehiculos.map((v: any) => ({
+        id: v.id,
+        brand: v.brand,
+        model: v.model,
+        year: v.year || 2024,
+        imageUrl: v.image_url,
+        plate: v.plate,
+        currentOdometer: v.current_odometer || 0,
+        isFromAgency: v.is_from_agency ?? false,
+        vehicleType: 'car' as VehicleType,
+      }));
+
+      const parsedMotos: Moto[] = (motosRes.data || []).map((m: any) => ({
+        id: m.id,
+        brand: m.brand,
+        model: m.model,
+        year: m.year,
+        imageUrl: m.image_url,
+        plate: m.plate,
+        currentOdometer: m.current_odometer || 0,
+        isFromAgency: m.is_from_agency ?? false,
+        vehicleType: (isCar(m) ? 'car' : 'moto') as VehicleType,
+      }));
+
+      const allUnits = [...parsedPlantas, ...parsedVehiculos, ...parsedMotos];
+
+      if (allUnits.length > 0) {
+        setMotos(allUnits);
+
+        setMyMoto((prev) => {
+          const targetId = preferredMotoId || prev?.id;
+          if (targetId) {
+            const found = allUnits.find(u => u.id === targetId);
+            if (found) return found;
+          }
+          if (prev) {
+            const foundByDetails = allUnits.find(
+              u => u.brand.trim().toLowerCase() === prev.brand.trim().toLowerCase() &&
+                   u.model.trim().toLowerCase() === prev.model.trim().toLowerCase()
+            );
+            if (foundByDetails) return foundByDetails;
+          }
+          return allUnits[0];
+        });
+      } else {
+        setMotos([]);
+        setMyMoto(null);
+      }
+    } catch (e) {
+      console.error('Error cargando datos de Supabase', e);
+    } finally {
+      setIsLoaded(true);
+    }
+  }, [loadSystemUsers]);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -190,208 +377,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     return () => {
       authListener.subscription.unsubscribe();
     };
-  }, []);
+  }, [loadDataFromCloud]);
 
-  const loadDataFromCloud = async (preferredMotoId?: string) => {
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      const user = session?.user || (await supabase.auth.getUser()).data?.user;
-      if (!user) return;
-
-      // 0. DETERMINAR ROL (ADMIN vs CLIENTE), SUPER USUARIO Y NOMBRE REAL
-      let detectedRole: 'admin' | 'client' = 'client';
-      const emailLower = (user.email || '').toLowerCase();
-      const isSuper = emailLower.includes('kalioverload') || user.user_metadata?.role === 'superadmin';
-
-      setUserEmail(user.email || '');
-      setIsSuperAdmin(isSuper);
-
-      let realName = '';
-      if (user.user_metadata) {
-        const meta = user.user_metadata;
-        if (meta.full_name) realName = meta.full_name.trim();
-        else if (meta.first_name) realName = `${meta.first_name} ${meta.last_name || ''}`.trim();
-      }
-
-      if (
-        emailLower.includes('admin') ||
-        emailLower.includes('hermanoslynch') ||
-        emailLower.includes('lynch') ||
-        emailLower.includes('kalioverload') ||
-        user.user_metadata?.role === 'admin' ||
-        user.user_metadata?.role === 'superadmin' ||
-        isSuper
-      ) {
-        detectedRole = 'admin';
-      }
-
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('drives_company_vehicle, role, approval_status, full_name, email')
-          .eq('id', user.id)
-          .single();
-
-        if (profile) {
-          if (profile.full_name && profile.full_name.trim() !== '') {
-            realName = profile.full_name.trim();
-          }
-
-          const isSuperProfile = profile.role === 'superadmin' || isSuper;
-          setIsSuperAdmin(isSuperProfile);
-
-          if (isSuperProfile || profile.role === 'admin' || profile.role === 'operator') {
-            detectedRole = 'admin';
-            setApprovalStatus('approved');
-            setUserRoleTitle(isSuperProfile ? 'Super Usuario' : (profile.role === 'operator' ? 'Operador de Planta' : 'Administrador'));
-          } else {
-            setApprovalStatus(profile.approval_status || 'pending');
-            if (profile.role === 'client') {
-              detectedRole = 'client';
-              setUserRoleTitle('Cliente');
-            }
-          }
-          setDrivesCompanyVehicleState(!!profile.drives_company_vehicle);
-        }
-      } catch (err) {
-        console.warn('Notice al consultar perfil:', err);
-      }
-
-      if (!realName) {
-        if (isSuper || emailLower.includes('kalioverload')) {
-          realName = 'Kalioverload';
-        } else if (user.email) {
-          const username = user.email.split('@')[0];
-          realName = username.charAt(0).toUpperCase() + username.slice(1);
-        } else {
-          realName = detectedRole === 'admin' ? 'Operador' : 'Cliente';
-        }
-      }
-
-      setUserName(realName);
-
-      setUserRoleState(detectedRole);
-      if (detectedRole === 'admin') {
-        loadSystemUsers();
-      }
-
-      // 1. CARGA PRIORITARIA: Plantas Eléctricas (Hermanos Lynch / Blue Power Generation)
-      let plantasQuery = supabase
-        .from('plantas')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (detectedRole !== 'admin') {
-        plantasQuery = plantasQuery.eq('user_id', user.id);
-      }
-
-      const { data: plantasData } = await plantasQuery;
-
-      const parsedPlantas: Moto[] = (plantasData || []).map((p: any) => ({
-        id: p.id,
-        brand: p.brand || 'Blue Power Generation',
-        model: p.model || 'C35',
-        year: 2026,
-        imageUrl: p.image_url,
-        catalogImageRes: undefined,
-        plate: p.serial_number || p.location || `PLANTA-${p.model}`,
-        currentOdometer: Number(p.current_hours) || 0,
-        currentHours: Number(p.current_hours) || 0,
-        powerKva: Number(p.power_kva) || 35,
-        powerKw: Number(p.power_kw) || 28,
-        fuelType: p.fuel_type || 'Diesel',
-        engineBrand: p.engine_brand || 'Cummins',
-        engineModel: p.engine_model,
-        alternatorBrand: p.alternator_brand || 'Leroy Somer',
-        alternatorModel: p.alternator_model,
-        controllerModel: p.controller_model || 'ComAp InteliLite IL-9',
-        installationType: p.installation_type || 'Canopy Insonorizada',
-        fuelTankCapacity: p.fuel_tank_capacity ? Number(p.fuel_tank_capacity) : 180,
-        oilPanCapacity: p.oil_pan_capacity ? Number(p.oil_pan_capacity) : 10.9,
-        coolantCapacity: p.coolant_capacity ? Number(p.coolant_capacity) : 7.2,
-        systemVoltage: p.system_voltage || '24V DC',
-        serialNumber: p.serial_number,
-        location: p.location,
-        assignedOperatorId: p.assigned_operator_id,
-        assignedOperatorName: p.assigned_operator_name,
-        isFromAgency: p.is_from_agency ?? false,
-        vehicleType: 'planta' as VehicleType,
-      }));
-
-      // 2. Flota de Vehículos de la Empresa (Automóviles/Camionetas de Soporte Técnico)
-      let vehiculosQuery = supabase
-        .from('vehiculos_empresa')
-        .select('*');
-
-      if (detectedRole !== 'admin') {
-        vehiculosQuery = vehiculosQuery.eq('user_id', user.id);
-      }
-
-      const { data: vehiculosData } = await vehiculosQuery;
-
-      const parsedVehiculos: Moto[] = (vehiculosData || []).map((v: any) => ({
-        id: v.id,
-        brand: v.brand,
-        model: v.model,
-        year: v.year || 2024,
-        imageUrl: v.image_url,
-        plate: v.plate,
-        currentOdometer: v.current_odometer || 0,
-        isFromAgency: v.is_from_agency ?? false,
-        vehicleType: 'car' as VehicleType,
-      }));
-
-      // 3. Motos registradas
-      const { data: motosData } = await supabase
-        .from('motos')
-        .select('*')
-        .eq('user_id', user.id);
-
-      const parsedMotos: Moto[] = (motosData || []).map((m: any) => ({
-        id: m.id,
-        brand: m.brand,
-        model: m.model,
-        year: m.year,
-        imageUrl: m.image_url,
-        plate: m.plate,
-        currentOdometer: m.current_odometer || 0,
-        isFromAgency: m.is_from_agency ?? false,
-        vehicleType: (isCar(m) ? 'car' : 'moto') as VehicleType,
-      }));
-
-      // Combinar unidades dando prioridad absoluta a Plantas Eléctricas
-      const allUnits = [...parsedPlantas, ...parsedVehiculos, ...parsedMotos];
-
-      if (allUnits.length > 0) {
-        setMotos(allUnits);
-
-        setMyMoto((prev) => {
-          const targetId = preferredMotoId || prev?.id;
-          if (targetId) {
-            const found = allUnits.find(u => u.id === targetId);
-            if (found) return found;
-          }
-          if (prev) {
-            const foundByDetails = allUnits.find(
-              u => u.brand.trim().toLowerCase() === prev.brand.trim().toLowerCase() &&
-                   u.model.trim().toLowerCase() === prev.model.trim().toLowerCase()
-            );
-            if (foundByDetails) return foundByDetails;
-          }
-          return allUnits[0];
-        });
-      } else {
-        setMotos([]);
-        setMyMoto(null);
-      }
-    } catch (e) {
-      console.error('Error cargando datos de Supabase', e);
-    } finally {
-      setIsLoaded(true);
-    }
-  };
-
-  const setDrivesCompanyVehicle = async (val: boolean) => {
+  const setDrivesCompanyVehicle = useCallback(async (val: boolean) => {
     setDrivesCompanyVehicleState(val);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -402,8 +390,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     } catch (e) {
       console.warn('Error actualizando perfil drives_company_vehicle:', e);
     }
-  };
+  }, []);
 
+  // CARGA RÁPIDA DE REGISTROS CON INDEX LOOKUP POR ENTIDAD Y LÍMITE
   useEffect(() => {
     if (!myMoto) {
       setRecords([]);
@@ -418,18 +407,31 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
 
     const lastFetch = recordsFetchTimeRef.current.get(unitId) || 0;
     const now = Date.now();
-    if (cached && now - lastFetch < 20000) {
+    // Cache de 30 segundos para evitar sobrecarga en paginación frecuente
+    if (cached && now - lastFetch < 30000) {
       return;
     }
 
     let isMounted = true;
     const loadRecords = async () => {
       try {
-        const { data: recordsData } = await supabase
+        const type = myMoto.vehicleType || (isPlanta(myMoto) ? 'planta' : 'moto');
+        let query = supabase
           .from('service_records')
-          .select('*')
-          .or(`moto_id.eq.${unitId},planta_id.eq.${unitId},vehiculo_id.eq.${unitId}`)
-          .order('created_at', { ascending: false });
+          .select('id, type, date, odometer, hours, cost_usd, notes, status, scheduled_time')
+          .order('created_at', { ascending: false })
+          .limit(100);
+
+        // Consulta directa sobre la clave foránea indexada
+        if (type === 'planta') {
+          query = query.eq('planta_id', unitId);
+        } else if (type === 'car') {
+          query = query.eq('vehiculo_id', unitId);
+        } else {
+          query = query.eq('moto_id', unitId);
+        }
+
+        const { data: recordsData } = await query;
 
         if (isMounted && recordsData) {
           const parsedRecords: ServiceRecord[] = recordsData.map((r: any) => ({
@@ -457,7 +459,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [myMoto?.id]);
 
-  const saveMoto = async (moto: Moto) => {
+  const saveMoto = useCallback(async (moto: Moto) => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       setMotos(prev => [...prev.filter(m => m.id !== moto.id), moto]);
@@ -469,7 +471,6 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       const type = moto.vehicleType || (isPlanta(moto) ? 'planta' : isCar(moto) ? 'car' : 'planta');
 
       if (type === 'planta') {
-        // Guardar en tabla public.plantas
         const { data: inserted, error } = await supabase.from('plantas').insert({
           user_id: user.id,
           brand: moto.brand || 'Blue Power Generation',
@@ -497,7 +498,6 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         if (error) console.error('Error guardando en plantas:', error);
         await loadDataFromCloud(inserted?.id);
       } else if (type === 'car') {
-        // Guardar en vehiculos_empresa
         const { data: inserted, error } = await supabase.from('vehiculos_empresa').insert({
           user_id: user.id,
           brand: moto.brand,
@@ -512,7 +512,6 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         if (error) console.error('Error guardando en vehiculos_empresa:', error);
         await loadDataFromCloud(inserted?.id);
       } else {
-        // Guardar en motos
         const { data: inserted, error } = await supabase.from('motos').insert({
           user_id: user.id,
           brand: moto.brand,
@@ -531,9 +530,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error guardando unidad:', e);
       await loadDataFromCloud();
     }
-  };
+  }, [loadDataFromCloud]);
 
-  const updateMoto = async (updates: Partial<Moto>) => {
+  const updateMoto = useCallback(async (updates: Partial<Moto>) => {
     if (!myMoto) return;
     const updated = { ...myMoto, ...updates };
     setMyMoto(updated);
@@ -571,16 +570,19 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     } catch (e) {
       console.error('Error actualizando unidad:', e);
     }
-  };
+  }, [myMoto]);
 
-  const selectMoto = (id: string) => {
-    const found = motos.find(m => m.id === id);
-    if (found) {
-      setMyMoto(found);
-    }
-  };
+  const selectMoto = useCallback((id: string) => {
+    setMotos(currentMotos => {
+      const found = currentMotos.find(m => m.id === id);
+      if (found) {
+        setMyMoto(found);
+      }
+      return currentMotos;
+    });
+  }, []);
 
-  const deleteMoto = async (id: string) => {
+  const deleteMoto = useCallback(async (id: string) => {
     try {
       const target = motos.find(m => m.id === id);
       const type = target?.vehicleType || (isPlanta(target) ? 'planta' : 'moto');
@@ -595,9 +597,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       console.error('Error eliminando unidad:', e);
     }
     await loadDataFromCloud();
-  };
+  }, [motos, loadDataFromCloud]);
 
-  const addRecord = async (record: ServiceRecord) => {
+  const addRecord = useCallback(async (record: ServiceRecord) => {
     setRecords(prev => {
       const updated = [record, ...prev];
       if (myMoto) {
@@ -625,9 +627,9 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         scheduled_time: record.scheduledTime || '09:00 - 11:00'
       });
     }
-  };
+  }, [myMoto]);
 
-  const deleteRecord = async (id: string) => {
+  const deleteRecord = useCallback(async (id: string) => {
     setRecords(prev => {
       const updated = prev.filter(r => r.id !== id);
       if (myMoto) {
@@ -636,46 +638,80 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       return updated;
     });
     await supabase.from('service_records').delete().eq('id', id);
-  };
+  }, [myMoto]);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await supabase.auth.signOut();
-  };
+  }, []);
+
+  const contextValue = useMemo(() => ({
+    myMoto, 
+    motos, 
+    records, 
+    drivesCompanyVehicle,
+    setDrivesCompanyVehicle,
+    userRole,
+    setUserRole,
+    isAdmin,
+    isSuperAdmin,
+    userName,
+    userEmail,
+    userRoleTitle,
+    approvalStatus,
+    systemMetrics,
+    pendingUsersList,
+    operatorsList,
+    clientsList,
+    loadSystemUsers,
+    approveUser,
+    rejectUser,
+    checkApprovalStatus,
+    saveMoto, 
+    updateMoto, 
+    addRecord, 
+    deleteRecord, 
+    selectMoto, 
+    deleteMoto, 
+    isLoaded, 
+    logout, 
+    isAddingMoto, 
+    setIsAddingMoto 
+  }), [
+    myMoto, 
+    motos, 
+    records, 
+    drivesCompanyVehicle,
+    setDrivesCompanyVehicle,
+    userRole,
+    setUserRole,
+    isAdmin,
+    isSuperAdmin,
+    userName,
+    userEmail,
+    userRoleTitle,
+    approvalStatus,
+    systemMetrics,
+    pendingUsersList,
+    operatorsList,
+    clientsList,
+    loadSystemUsers,
+    approveUser,
+    rejectUser,
+    checkApprovalStatus,
+    saveMoto, 
+    updateMoto, 
+    addRecord, 
+    deleteRecord, 
+    selectMoto, 
+    deleteMoto, 
+    isLoaded, 
+    logout, 
+    isAddingMoto, 
+    setIsAddingMoto
+  ]);
 
   return (
-    <MotoContext.Provider value={{ 
-      myMoto, 
-      motos, 
-      records, 
-      drivesCompanyVehicle,
-      setDrivesCompanyVehicle,
-      userRole,
-      setUserRole,
-      isAdmin,
-      isSuperAdmin,
-      userName,
-      userEmail,
-      userRoleTitle,
-      approvalStatus,
-      systemMetrics,
-      pendingUsersList,
-      operatorsList,
-      clientsList,
-      loadSystemUsers,
-      approveUser,
-      rejectUser,
-      checkApprovalStatus,
-      saveMoto, 
-      updateMoto, 
-      addRecord, 
-      deleteRecord, 
-      selectMoto, 
-      deleteMoto, 
-      isLoaded, 
-      logout, 
-      isAddingMoto, 
-      setIsAddingMoto 
-    }}>
+    <MotoContext.Provider value={contextValue}>
       {children}
     </MotoContext.Provider>
   );
