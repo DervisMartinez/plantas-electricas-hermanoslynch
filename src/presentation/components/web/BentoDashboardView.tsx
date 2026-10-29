@@ -876,13 +876,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           style={[{ flex: 1 }, activeTab !== 'moto' && { display: 'none' }]}
           contentContainerStyle={[
             styles.bentoScrollContent,
-            isMobile && { paddingHorizontal: 14, paddingBottom: 96 },
+            isMobile && { paddingHorizontal: 12, paddingBottom: 150 },
           ]}
           showsVerticalScrollIndicator={false}
         >
           {/* GREETING / HERO BANNER */}
-          <View style={styles.greetingBannerRow}>
-            <View>
+          <View style={[styles.greetingBannerRow, isMobile && { marginVertical: 12 }]}>
+            <View style={{ flex: 1, minWidth: 240 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
                 <View style={[
                   styles.roleBadgePill,
@@ -908,20 +908,20 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
               </View>
 
-              <Text style={[styles.greetingTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+              <Text style={[styles.greetingTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 20 : 26 }]}>
                 ¡Hola, {userName || (isSuperAdmin ? 'Kalioverload' : 'Operador')}!
               </Text>
-              <Text style={[styles.greetingSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+              <Text style={[styles.greetingSubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 12 : 13 }]}>
                 {isSuperAdmin
                   ? 'Consola central de supervisión telemática y control maestro de plantas eléctricas Hermanos Lynch.'
                   : 'Monitoreo en tiempo real y telemetría de tus plantas eléctricas Hermanos Lynch.'}
               </Text>
             </View>
 
-            <View style={styles.greetingRightFilters}>
+            <View style={[styles.greetingRightFilters, isMobile && { width: '100%', marginTop: 8 }]}>
               <TouchableOpacity
                 onPress={onOpenStats}
-                style={[styles.timeRangeDropdown, { backgroundColor: cardBg, borderColor: cardBorder }]}
+                style={[styles.timeRangeDropdown, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { flex: 1, justifyContent: 'center' }]}
                 activeOpacity={0.8}
               >
                 <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>Este mes</Text>
@@ -939,7 +939,11 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           </View>
 
           {/* BEDIMCODE SIGNATURE PLANT HERO SHOWCASE (.home / .home__container / .home__shape / .home__car) */}
-          <View style={[styles.bedimHeroSection, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={[
+            styles.bedimHeroSection,
+            { backgroundColor: cardBg, borderColor: cardBorder },
+            isMobile && { paddingVertical: 20, paddingHorizontal: 14, borderRadius: 24, marginBottom: 18 }
+          ]}>
             {/* 1. .home__data HEADER */}
             <View style={styles.bedimHeroHeader}>
               <View style={[styles.bedimHeroSubtitlePill, { backgroundColor: 'rgba(0, 227, 253, 0.12)' }]}>
@@ -949,50 +953,54 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </Text>
               </View>
 
-              <Text style={[styles.bedimHeroTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+              <Text style={[styles.bedimHeroTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 22 : 30 }]}>
                 {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Blue Power Generation C125'}
               </Text>
 
               <View style={styles.bedimHeroDescriptionRow}>
-                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 13 }]}>
                   Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'HL-GEN-001'}</Text>
                 </Text>
                 <Text style={{ color: textSecondary }}>•</Text>
-                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 13 }]}>
                   Motor: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{specs?.engineType || 'Cummins 3.9L 4BTA'}</Text>
                 </Text>
                 <Text style={{ color: textSecondary }}>•</Text>
-                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 13 }]}>
                   Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.location || 'Sede Principal'}</Text>
                 </Text>
               </View>
             </View>
 
             {/* 2. .home__img WITH AMBIENT GLOW (.home__shape) */}
-            <View style={styles.bedimCenterpieceArea}>
-              <View style={styles.bedimShapeGlow} />
-              <View style={styles.bedimShapeGlowInner} />
+            <View style={[styles.bedimCenterpieceArea, isMobile && { marginVertical: 10, minHeight: 180 }]}>
+              <View style={[styles.bedimShapeGlow, isMobile && { width: 210, height: 210 }]} />
+              <View style={[styles.bedimShapeGlowInner, isMobile && { width: 140, height: 140 }]} />
               <Image
                 source={plantImageSource}
-                style={styles.bedimHeroImg}
+                style={[styles.bedimHeroImg, isMobile && { width: 260, height: 165, maxWidth: '100%' }]}
                 resizeMode="contain"
               />
               <View style={[styles.bedimFloatingPillStatus, { backgroundColor: isDark ? 'rgba(18, 22, 34, 0.94)' : 'rgba(255, 255, 255, 0.94)', borderColor: cardBorder }]}>
                 <View style={styles.greenLiveDot} />
-                <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 11, letterSpacing: 0.6 }}>
-                  OPERATIVA EN LÍNEA · MONITOREO ACTIVO ISO 8528
+                <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: isMobile ? 9.5 : 11, letterSpacing: 0.6 }}>
+                  OPERATIVA EN LÍNEA · ISO 8528
                 </Text>
               </View>
             </View>
 
             {/* 3. .home__car: 4 FLOATING TELEMETRY SPEC CARDS (Bedimcode exact pattern) */}
-            <View style={styles.bedimTelemetryStrip}>
+            <View style={[styles.bedimTelemetryStrip, isMobile && { gap: 10, marginVertical: 14 }]}>
               {/* Card 1: Temperatura */}
-              <View style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+              <View style={[
+                styles.bedimTelemetryCard,
+                { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+              ]}>
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(0, 227, 253, 0.15)' }]}>
                   <MaterialCommunityIcons name="thermometer" size={18} color={accentCyan} />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   85°C
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -1003,13 +1011,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               {/* Card 2: Horas Motor */}
               <TouchableOpacity
                 onPress={onOpenQuickHours}
-                style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimTelemetryCard,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+                ]}
                 activeOpacity={0.8}
               >
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
                   <MaterialIcons name="speed" size={18} color="#22c55e" />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   {currentHours.toLocaleString()}h
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -1018,11 +1030,15 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </TouchableOpacity>
 
               {/* Card 3: Sistema Eléctrico 24V */}
-              <View style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+              <View style={[
+                styles.bedimTelemetryCard,
+                { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+              ]}>
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                   <MaterialIcons name="bolt" size={18} color="#f59e0b" />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   {myMoto?.systemVoltage || '24.2V'}
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -1033,13 +1049,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               {/* Card 4: Nivel Diésel / Cargas */}
               <TouchableOpacity
                 onPress={onOpenQuickFuel}
-                style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimTelemetryCard,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+                ]}
                 activeOpacity={0.8}
               >
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(37, 99, 235, 0.15)' }]}>
                   <MaterialIcons name="local-gas-station" size={18} color={accentCyan} />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   {totalFuelLiters > 0 ? `${totalFuelLiters} L` : '100%'}
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -1049,47 +1069,63 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
 
             {/* 4. .home__button / ACTION CTA ROW */}
-            <View style={styles.bedimCtaRow}>
+            <View style={[styles.bedimCtaRow, isMobile && { gap: 8 }]}>
               <TouchableOpacity
                 onPress={onOpenQuickHours}
-                style={[styles.bedimPrimaryCta, { backgroundColor: accentBlue }]}
+                style={[
+                  styles.bedimPrimaryCta,
+                  { backgroundColor: accentBlue },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="add-alarm" size={18} color="#ffffff" />
-                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold }]}>
-                  + ACTUALIZAR HORAS
+                <MaterialIcons name="add-alarm" size={16} color="#ffffff" />
+                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
+                  + HORAS
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={onOpenQuickFuel}
-                style={[styles.bedimSecondaryCta, { backgroundColor: accentCyan }]}
+                style={[
+                  styles.bedimSecondaryCta,
+                  { backgroundColor: accentCyan },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="local-gas-station" size={18} color="#0c0e14" />
-                <Text style={[styles.bedimCtaText, { color: '#0c0e14', fontFamily: F.extrabold }]}>
-                  + CARGAR DIÉSEL
+                <MaterialIcons name="local-gas-station" size={16} color="#0c0e14" />
+                <Text style={[styles.bedimCtaText, { color: '#0c0e14', fontFamily: F.extrabold, fontSize: isMobile ? 11 : 12 }]}>
+                  + DIÉSEL
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={onOpenSpecs}
-                style={[styles.bedimGhostCta, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimGhostCta,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="menu-book" size={18} color={textPrimary} />
-                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold }]}>
+                <MaterialIcons name="menu-book" size={16} color={textPrimary} />
+                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
                   FICHA TÉCNICA
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={onOpenReport}
-                style={[styles.bedimGhostCta, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimGhostCta,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="qr-code-2" size={18} color={accentCyan} />
-                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold }]}>
+                <MaterialIcons name="qr-code-2" size={16} color={accentCyan} />
+                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
                   EXPEDIENTE QR
                 </Text>
               </TouchableOpacity>
@@ -1483,11 +1519,11 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           <View style={[styles.bentoMasterGrid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
             
             {/* IZQUIERDA: 2x2 METRICS KPI CARDS (TAL COMO EN LA REFERENCIA) */}
-            <View style={[styles.kpiGridContainer, { flex: isDesktop ? 1.05 : 1 }]}>
+            <View style={[styles.kpiGridContainer, { flex: isDesktop ? 1.05 : 1 }, isMobile && { gap: 10 }]}>
               {/* CARD 1: HORAS DE OPERACIÓN (HIGHLIGHTED WITH BLUE ARROW BUTTON) */}
-              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { width: '47%', minWidth: undefined, padding: 14, minHeight: 135 }]}>
                 <View style={styles.kpiCardTopRow}>
-                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold, fontSize: isMobile ? 11 : 12.5 }]}>
                     Horas de Operación
                   </Text>
                   {/* ICON BUTTON BLUE CIRCLE LIKE REFERENCE */}
@@ -1500,8 +1536,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  {currentHours.toLocaleString()} <Text style={{ fontSize: 16 }}>hrs</Text>
+                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 20 : 24 }]}>
+                  {currentHours.toLocaleString()} <Text style={{ fontSize: isMobile ? 13 : 16 }}>hrs</Text>
                 </Text>
 
                 <View style={styles.kpiBottomRow}>
@@ -1511,16 +1547,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       {hoursMetrics.badgeText}
                     </Text>
                   </View>
-                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
+                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular, fontSize: isMobile ? 10 : 11 }]} numberOfLines={1}>
                     {hoursMetrics.subtext}
                   </Text>
                 </View>
               </View>
 
               {/* CARD 2: SERVICIOS EJECUTADOS */}
-              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { width: '47%', minWidth: undefined, padding: 14, minHeight: 135 }]}>
                 <View style={styles.kpiCardTopRow}>
-                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold, fontSize: isMobile ? 11 : 12.5 }]}>
                     Servicios Ejecutados
                   </Text>
                   <TouchableOpacity
@@ -1532,7 +1568,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 20 : 24 }]}>
                   {serviceRecords.length}
                 </Text>
 
@@ -1542,16 +1578,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       {serviceMetrics.badgeText}
                     </Text>
                   </View>
-                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
+                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular, fontSize: isMobile ? 10 : 11 }]} numberOfLines={1}>
                     {serviceMetrics.subtext}
                   </Text>
                 </View>
               </View>
 
               {/* CARD 3: CONSUMO DE DIÉSEL */}
-              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { width: '47%', minWidth: undefined, padding: 14, minHeight: 135 }]}>
                 <View style={styles.kpiCardTopRow}>
-                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold, fontSize: isMobile ? 11 : 12.5 }]}>
                     Consumo de Diésel
                   </Text>
                   <TouchableOpacity
@@ -1563,8 +1599,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  {totalFuelLiters} <Text style={{ fontSize: 16 }}>L</Text>
+                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 20 : 24 }]}>
+                  {totalFuelLiters} <Text style={{ fontSize: isMobile ? 13 : 16 }}>L</Text>
                 </Text>
 
                 <View style={styles.kpiBottomRow}>
@@ -1574,16 +1610,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       {fuelMetrics.badgeText}
                     </Text>
                   </View>
-                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
+                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular, fontSize: isMobile ? 10 : 11 }]} numberOfLines={1}>
                     {fuelMetrics.subtext}
                   </Text>
                 </View>
               </View>
 
               {/* CARD 4: SALUD OPERATIVA */}
-              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={[styles.bentoKpiCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { width: '47%', minWidth: undefined, padding: 14, minHeight: 135 }]}>
                 <View style={styles.kpiCardTopRow}>
-                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.semibold, fontSize: isMobile ? 11 : 12.5 }]}>
                     Salud Operativa
                   </Text>
                   <TouchableOpacity
@@ -1595,7 +1631,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </TouchableOpacity>
                 </View>
 
-                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.kpiMainValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 20 : 24 }]}>
                   {generalHealth}%
                 </Text>
 
@@ -1606,7 +1642,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       {healthMetrics.badgeText}
                     </Text>
                   </View>
-                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular }]}>
+                  <Text style={[styles.kpiSubtext, { color: textSecondary, fontFamily: F.regular, fontSize: isMobile ? 10 : 11 }]} numberOfLines={1}>
                     {healthMetrics.subtext}
                   </Text>
                 </View>
@@ -1614,13 +1650,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
 
             {/* DERECHA: REVENUE / BAR CHART CARD (TAL COMO EN LA REFERENCIA) */}
-            <View style={[styles.bentoChartCard, { flex: isDesktop ? 1.3 : 1, backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={[styles.bentoChartCard, { flex: isDesktop ? 1.3 : 1, backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { padding: 16 }]}>
               <View style={styles.chartHeaderRow}>
-                <View>
-                  <Text style={[styles.chartTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={[styles.chartTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 15 : 16 }]}>
                     Rendimiento de Operación (Horas)
                   </Text>
-                  <Text style={[styles.chartSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                  <Text style={[styles.chartSubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 11.5 }]}>
                     Generación diésel registrada en el periodo actual
                   </Text>
                 </View>
@@ -1746,13 +1782,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
 
             {/* DONUT CATEGORY CHART CARD (TAL COMO EN LA REFERENCIA) */}
-            <View style={[styles.donutChartCard, { flex: isDesktop ? 1.05 : 1, backgroundColor: cardBg, borderColor: cardBorder }]}>
+            <View style={[styles.donutChartCard, { flex: isDesktop ? 1.05 : 1, backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { padding: 16 }]}>
               <View style={styles.chartHeaderRow}>
-                <View>
-                  <Text style={[styles.chartTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={[styles.chartTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 15 : 16 }]}>
                     Distribución de Desgaste por Subsistema
                   </Text>
-                  <Text style={[styles.chartSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                  <Text style={[styles.chartSubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 11.5 }]}>
                     Salud porcentual remanente de componentes
                   </Text>
                 </View>
@@ -1766,9 +1802,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </TouchableOpacity>
               </View>
 
-              <View style={styles.donutAndLegendRow}>
+              <View style={[styles.donutAndLegendRow, isMobile && { flexDirection: 'column', alignItems: 'center', gap: 16 }]}>
                 {/* DONUT GRAPHIC */}
-                <View style={styles.donutGraphicBox}>
+                <View style={[styles.donutGraphicBox, isMobile && { width: '100%', alignItems: 'center' }]}>
                   {/* MULTI-SEGMENT DONUT VISUAL */}
                   <View style={[styles.donutOuterRing, { borderColor: cardBorder }]}>
                     <View style={[styles.donutSegment, { borderColor: '#1a5cff', transform: [{ rotate: '0deg' }] }]} />
@@ -1789,7 +1825,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
 
                 {/* LEGEND ON RIGHT */}
-                <View style={styles.donutLegendList}>
+                <View style={[styles.donutLegendList, isMobile && { width: '100%' }]}>
                   {plantSubsystems.map((sub) => (
                     <View key={sub.id} style={styles.legendItemRow}>
                       <View style={[styles.legendColorDot, { backgroundColor: sub.color }]} />
@@ -1811,20 +1847,20 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           </View>
 
           {/* 5. AUDITORÍA DETALLADA DE LOS 10 SUBSISTEMAS INDUSTRIALES */}
-          <View style={[styles.telemetrySectionCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.telemetryHeaderRow}>
-              <View>
-                <Text style={[styles.telemetryTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+          <View style={[styles.telemetrySectionCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { padding: 16 }]}>
+            <View style={[styles.telemetryHeaderRow, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 12 }]}>
+              <View style={{ flex: 1, width: '100%' }}>
+                <Text style={[styles.telemetryTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 17 }]}>
                   Auditoría y Telemetría de los 10 Subsistemas
                 </Text>
-                <Text style={[styles.telemetrySubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.telemetrySubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 12 }]}>
                   Seguimiento de horas acumuladas y ciclos preventivos de fábrica
                 </Text>
               </View>
 
               <TouchableOpacity
                 onPress={() => onOpenServicesTab()}
-                style={[styles.adjustAllBtn, { backgroundColor: accentBlue }]}
+                style={[styles.adjustAllBtn, { backgroundColor: accentBlue }, isMobile && { width: '100%', justifyContent: 'center' }]}
                 activeOpacity={0.8}
               >
                 <MaterialIcons name="build" size={16} color="#ffffff" />
@@ -1833,12 +1869,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
 
             {/* SUBSYSTEMS PROGRESS BARS GRID */}
-            <View style={styles.subsystemsCardsGrid}>
+            <View style={[styles.subsystemsCardsGrid, isMobile && { gap: 10 }]}>
               {filteredSubsystems.map((sub) => (
                 <TouchableOpacity
                   key={sub.id}
                   onPress={() => onOpenServicesTab(sub.id)}
-                  style={[styles.subsystemMiniCard, { backgroundColor: pillDarkBg }]}
+                  style={[
+                    styles.subsystemMiniCard,
+                    { backgroundColor: pillDarkBg },
+                    isMobile && { minWidth: '100%', width: '100%', padding: 14 }
+                  ]}
                   activeOpacity={0.75}
                 >
                   <View style={styles.subsystemCardHeader}>

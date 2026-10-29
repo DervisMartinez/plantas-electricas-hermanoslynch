@@ -542,13 +542,13 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           style={[{ flex: 1 }, activeTab !== 'moto' && { display: 'none' }]}
           contentContainerStyle={[
             styles.bentoScrollContent,
-            isMobile && { paddingHorizontal: 14, paddingBottom: 96 },
+            isMobile && { paddingHorizontal: 12, paddingBottom: 150 },
           ]}
           showsVerticalScrollIndicator={false}
         >
           {/* GREETING / HERO BANNER */}
           <View style={[styles.greetingBannerRow, isMobile && { marginVertical: 12 }]}>
-            <View style={{ flex: 1, minWidth: 260 }}>
+            <View style={{ flex: 1, minWidth: 240 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                 <View style={[styles.clientBadge, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
                   <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 11 }}>
@@ -586,7 +586,11 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           </View>
 
           {/* BEDIMCODE SIGNATURE PLANT HERO SHOWCASE (.home / .home__container / .home__shape / .home__car) */}
-          <View style={[styles.bedimHeroSection, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          <View style={[
+            styles.bedimHeroSection,
+            { backgroundColor: cardBg, borderColor: cardBorder },
+            isMobile && { paddingVertical: 20, paddingHorizontal: 14, borderRadius: 24, marginBottom: 18 }
+          ]}>
             {/* 1. .home__data HEADER */}
             <View style={styles.bedimHeroHeader}>
               <View style={[styles.bedimHeroSubtitlePill, { backgroundColor: 'rgba(0, 227, 253, 0.12)' }]}>
@@ -596,50 +600,54 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
                 </Text>
               </View>
 
-              <Text style={[styles.bedimHeroTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+              <Text style={[styles.bedimHeroTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 22 : 30 }]}>
                 {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Blue Power Generation C125'}
               </Text>
 
               <View style={styles.bedimHeroDescriptionRow}>
-                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 13 }]}>
                   Serial: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{myMoto?.serialNumber || myMoto?.plate || 'HL-GEN-001'}</Text>
                 </Text>
                 <Text style={{ color: textSecondary }}>•</Text>
-                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 13 }]}>
                   Motor: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{specs?.engineType || 'Cummins 3.9L Diésel'}</Text>
                 </Text>
                 <Text style={{ color: textSecondary }}>•</Text>
-                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.bedimHeroDescText, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 13 }]}>
                   Ubicación: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{plantLocation}</Text>
                 </Text>
               </View>
             </View>
 
             {/* 2. .home__img WITH AMBIENT GLOW (.home__shape) */}
-            <View style={styles.bedimCenterpieceArea}>
-              <View style={styles.bedimShapeGlow} />
-              <View style={styles.bedimShapeGlowInner} />
+            <View style={[styles.bedimCenterpieceArea, isMobile && { marginVertical: 10, minHeight: 180 }]}>
+              <View style={[styles.bedimShapeGlow, isMobile && { width: 210, height: 210 }]} />
+              <View style={[styles.bedimShapeGlowInner, isMobile && { width: 140, height: 140 }]} />
               <Image
                 source={plantImageSource}
-                style={styles.bedimHeroImg}
+                style={[styles.bedimHeroImg, isMobile && { width: 260, height: 165, maxWidth: '100%' }]}
                 resizeMode="contain"
               />
               <View style={[styles.bedimFloatingPillStatus, { backgroundColor: isDark ? 'rgba(18, 22, 34, 0.94)' : 'rgba(255, 255, 255, 0.94)', borderColor: cardBorder }]}>
                 <View style={styles.greenLiveDot} />
-                <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 11, letterSpacing: 0.6 }}>
-                  OPERATIVA EN LÍNEA · MONITOREO ACTIVO ISO 8528
+                <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: isMobile ? 9.5 : 11, letterSpacing: 0.6 }}>
+                  OPERATIVA EN LÍNEA · ISO 8528
                 </Text>
               </View>
             </View>
 
             {/* 3. .home__car: 4 FLOATING TELEMETRY SPEC CARDS (Bedimcode exact pattern) */}
-            <View style={styles.bedimTelemetryStrip}>
+            <View style={[styles.bedimTelemetryStrip, isMobile && { gap: 10, marginVertical: 14 }]}>
               {/* Card 1: Temperatura */}
-              <View style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+              <View style={[
+                styles.bedimTelemetryCard,
+                { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+              ]}>
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(0, 227, 253, 0.15)' }]}>
                   <MaterialCommunityIcons name="thermometer" size={18} color={accentCyan} />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   85°C
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -650,13 +658,17 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
               {/* Card 2: Horas Motor */}
               <TouchableOpacity
                 onPress={onOpenQuickHours}
-                style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimTelemetryCard,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+                ]}
                 activeOpacity={0.8}
               >
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
                   <MaterialIcons name="speed" size={18} color="#22c55e" />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   {currentHours.toLocaleString()}h
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -665,11 +677,15 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
               </TouchableOpacity>
 
               {/* Card 3: Sistema Eléctrico 24V */}
-              <View style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+              <View style={[
+                styles.bedimTelemetryCard,
+                { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+              ]}>
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
                   <MaterialIcons name="bolt" size={18} color="#f59e0b" />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   {myMoto?.systemVoltage || '24.2V'}
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -680,13 +696,17 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
               {/* Card 4: Nivel Diésel / Cargas */}
               <TouchableOpacity
                 onPress={onOpenQuickFuel}
-                style={[styles.bedimTelemetryCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimTelemetryCard,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '47%', minWidth: undefined, paddingVertical: 12, paddingHorizontal: 8 }
+                ]}
                 activeOpacity={0.8}
               >
                 <View style={[styles.bedimIconCircle, { backgroundColor: 'rgba(37, 99, 235, 0.15)' }]}>
                   <MaterialIcons name="local-gas-station" size={18} color={accentCyan} />
                 </View>
-                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold }]}>
+                <Text style={[styles.bedimCardValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
                   {totalFuelLiters > 0 ? `${totalFuelLiters} L` : '100%'}
                 </Text>
                 <Text style={[styles.bedimCardLabel, { color: textSecondary, fontFamily: F.bold }]}>
@@ -696,47 +716,63 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             </View>
 
             {/* 4. .home__button / ACTION CTA ROW */}
-            <View style={styles.bedimCtaRow}>
+            <View style={[styles.bedimCtaRow, isMobile && { gap: 8 }]}>
               <TouchableOpacity
                 onPress={onOpenReport}
-                style={[styles.bedimSecondaryCta, { backgroundColor: '#ef4444' }]}
+                style={[
+                  styles.bedimSecondaryCta,
+                  { backgroundColor: '#ef4444' },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="qr-code-2" size={18} color="#ffffff" />
-                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold }]}>
+                <MaterialIcons name="qr-code-2" size={16} color="#ffffff" />
+                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
                   EXPEDIENTE QR
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={onOpenOperatorModal}
-                style={[styles.bedimPrimaryCta, { backgroundColor: accentBlue }]}
+                style={[
+                  styles.bedimPrimaryCta,
+                  { backgroundColor: accentBlue },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="support-agent" size={18} color="#ffffff" />
-                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold }]}>
-                  CONTACTAR OPERADOR
+                <MaterialIcons name="support-agent" size={16} color="#ffffff" />
+                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
+                  OPERADOR
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={() => setInquiryModalVisible(true)}
-                style={[styles.bedimSecondaryCta, { backgroundColor: '#10b981' }]}
+                style={[
+                  styles.bedimSecondaryCta,
+                  { backgroundColor: '#10b981' },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialCommunityIcons name="calendar-clock" size={18} color="#ffffff" />
-                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold }]}>
+                <MaterialCommunityIcons name="calendar-clock" size={16} color="#ffffff" />
+                <Text style={[styles.bedimCtaText, { color: '#ffffff', fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
                   AGENDAR CITA
                 </Text>
               </TouchableOpacity>
 
               <TouchableOpacity
                 onPress={onOpenSpecs}
-                style={[styles.bedimGhostCta, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
+                style={[
+                  styles.bedimGhostCta,
+                  { backgroundColor: pillDarkBg, borderColor: cardBorder },
+                  isMobile && { width: '48%', height: 42, paddingHorizontal: 10, justifyContent: 'center' }
+                ]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="menu-book" size={18} color={textPrimary} />
-                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold }]}>
+                <MaterialIcons name="menu-book" size={16} color={textPrimary} />
+                <Text style={[styles.bedimCtaText, { color: textPrimary, fontFamily: F.bold, fontSize: isMobile ? 11 : 12 }]}>
                   FICHA TÉCNICA
                 </Text>
               </TouchableOpacity>
@@ -801,13 +837,13 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           </View>
 
           {/* 5. BALANCE OPERATIVO & CONTROL DE DIÉSEL */}
-          <View style={[styles.balanceCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.balanceHeaderRow}>
-              <View>
-                <Text style={[styles.balanceTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+          <View style={[styles.balanceCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { padding: 16 }]}>
+            <View style={[styles.balanceHeaderRow, isMobile && { alignItems: 'flex-start' }]}>
+              <View style={{ flex: 1, paddingRight: 8 }}>
+                <Text style={[styles.balanceTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 15 : 16 }]}>
                   Balance Operativo & Control de Diésel
                 </Text>
-                <Text style={[styles.balanceSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.balanceSubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 12 }]}>
                   Monitorea el combustible cargado y el respaldo generado en tu instalación
                 </Text>
               </View>
@@ -825,39 +861,39 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             </View>
 
             {/* KPI ROW FOR CLIENT */}
-            <View style={styles.balanceKpiRow}>
-              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }]}>
-                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium }]}>
+            <View style={[styles.balanceKpiRow, isMobile && { gap: 10 }]}>
+              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }, isMobile && { width: '47%', minWidth: undefined, padding: 12 }]}>
+                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 10.5 : 11.5 }]}>
                   Horas Acumuladas
                 </Text>
-                <Text style={[styles.kpiBoxValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  {currentHours.toLocaleString()} <Text style={{ fontSize: 14 }}>hrs</Text>
+                <Text style={[styles.kpiBoxValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 18 : 20 }]}>
+                  {currentHours.toLocaleString()} <Text style={{ fontSize: isMobile ? 12 : 14 }}>hrs</Text>
                 </Text>
               </View>
 
-              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }]}>
-                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium }]}>
+              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }, isMobile && { width: '47%', minWidth: undefined, padding: 12 }]}>
+                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 10.5 : 11.5 }]}>
                   Diésel Cargado
                 </Text>
-                <Text style={[styles.kpiBoxValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  {totalFuelLiters} <Text style={{ fontSize: 14 }}>L</Text>
+                <Text style={[styles.kpiBoxValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 18 : 20 }]}>
+                  {totalFuelLiters} <Text style={{ fontSize: isMobile ? 12 : 14 }}>L</Text>
                 </Text>
               </View>
 
-              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }]}>
-                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium }]}>
+              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }, isMobile && { width: '47%', minWidth: undefined, padding: 12 }]}>
+                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 10.5 : 11.5 }]}>
                   Gasto en Diésel
                 </Text>
-                <Text style={[styles.kpiBoxValue, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  ${totalFuelUSD.toFixed(2)} <Text style={{ fontSize: 14 }}>USD</Text>
+                <Text style={[styles.kpiBoxValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 18 : 20 }]}>
+                  ${totalFuelUSD.toFixed(0)} <Text style={{ fontSize: isMobile ? 12 : 14 }}>USD</Text>
                 </Text>
               </View>
 
-              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }]}>
-                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium }]}>
+              <View style={[styles.balanceKpiBox, { backgroundColor: pillDarkBg }, isMobile && { width: '47%', minWidth: undefined, padding: 12 }]}>
+                <Text style={[styles.kpiBoxLabel, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 10.5 : 11.5 }]}>
                   Salud Operativa
                 </Text>
-                <Text style={[styles.kpiBoxValue, { color: '#22c55e', fontFamily: F.extrabold }]}>
+                <Text style={[styles.kpiBoxValue, { color: '#22c55e', fontFamily: F.extrabold, fontSize: isMobile ? 18 : 20 }]}>
                   {generalHealth}%
                 </Text>
               </View>
@@ -865,11 +901,11 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
           </View>
 
           {/* 6. TELEMETRÍA DE LOS 10 SUBSISTEMAS EN TIEMPO REAL (MODO LECTURA EXCLUSIVA / READ-ONLY) */}
-          <View style={[styles.telemetrySectionCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-            <View style={styles.telemetryHeaderRow}>
-              <View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                  <Text style={[styles.telemetryTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+          <View style={[styles.telemetrySectionCard, { backgroundColor: cardBg, borderColor: cardBorder }, isMobile && { padding: 16 }]}>
+            <View style={[styles.telemetryHeaderRow, isMobile && { flexDirection: 'column', alignItems: 'flex-start', gap: 10 }]}>
+              <View style={{ flex: 1, width: '100%' }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
+                  <Text style={[styles.telemetryTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 17 }]}>
                     Desgaste y Ciclos de Mantenimiento en Tiempo Real
                   </Text>
                   <View style={[styles.readOnlyBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
@@ -879,7 +915,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
                     </Text>
                   </View>
                 </View>
-                <Text style={[styles.telemetrySubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                <Text style={[styles.telemetrySubtitle, { color: textSecondary, fontFamily: F.medium, fontSize: isMobile ? 11 : 12 }]}>
                   Monitoreo de telemetría de los 10 subsistemas. Las intervenciones técnicas son ejecutadas por el operador certificado.
                 </Text>
               </View>
@@ -894,7 +930,7 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
             </View>
 
             {/* SUBSYSTEMS PROGRESS BARS GRID (READ-ONLY) */}
-            <View style={styles.subsystemsCardsGrid}>
+            <View style={[styles.subsystemsCardsGrid, isMobile && { gap: 10 }]}>
               {filteredSubsystems.map((sub) => {
                 const statusColor = !sub.isInspected
                   ? '#94a3b8'
@@ -908,7 +944,11 @@ export const ClientDashboardView: React.FC<ClientDashboardViewProps> = ({
                   <TouchableOpacity
                     key={sub.id}
                     onPress={() => setSelectedSubsystemInfo(sub)}
-                    style={[styles.subsystemMiniCard, { backgroundColor: pillDarkBg }]}
+                    style={[
+                      styles.subsystemMiniCard,
+                      { backgroundColor: pillDarkBg },
+                      isMobile && { minWidth: '100%', width: '100%', padding: 14 }
+                    ]}
                     activeOpacity={0.8}
                   >
                     <View style={styles.subsystemCardHeader}>
