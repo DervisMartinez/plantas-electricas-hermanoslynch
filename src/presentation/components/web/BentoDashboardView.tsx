@@ -181,8 +181,11 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     isAdmin,
     isSuperAdmin,
     userRoleTitle,
+    superAdminsList,
     operatorsList,
-    clientsList
+    clientsList,
+    pendingUsersList,
+    setIsAddingMoto
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -196,12 +199,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         Animated.timing(pulseAnim, {
           toValue: 0.35,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(pulseAnim, {
           toValue: 1,
           duration: 1000,
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ])
     ).start();
@@ -226,6 +229,47 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   // Super Admin Fleet & Operators Supervision
   const allPlants = useMemo(() => motos.filter(isPlanta), [motos]);
 
+  // Helper to resolve geographical & categorical metadata
+  const resolveZone = (st: string) => {
+    const s = (st || '').toLowerCase();
+    if (s.includes('capital') || s.includes('caracas') || s.includes('miranda')) return 'Zona Capital';
+    if (s.includes('zulia') || s.includes('lara')) return 'Zona Occidental';
+    if (s.includes('anzo') || s.includes('bol')) return 'Zona Oriental';
+    if (s.includes('táchira') || s.includes('tachira')) return 'Zona Andina';
+    return 'Zona Central';
+  };
+
+  // Plant classification filters (Section 2)
+  const [plantCategoryFilter, setPlantCategoryFilter] = useState('Todas');
+  const [plantZoneFilter, setPlantZoneFilter] = useState('Todas');
+  const [plantCountryFilter, setPlantCountryFilter] = useState('Todos');
+
+  const PLANT_CATEGORIES = ['Todas', 'Alta Capacidad (≥100 kVA)', 'Media Capacidad (50-99 kVA)', 'Compactas (<50 kVA)', 'Diésel Industrial'];
+  const PLANT_ZONES = ['Todas', 'Zona Central', 'Zona Capital', 'Zona Occidental', 'Zona Oriental'];
+  const COUNTRIES = ['Todos', 'Venezuela', 'Colombia', 'Panamá', 'EE.UU.'];
+
+  const filteredFleetPlants = useMemo(() => {
+    return allPlants.filter((plant, idx) => {
+      const loc = (plant.location || '').toLowerCase();
+      const country = (plant as any).country || (loc.includes('colombia') ? 'Colombia' : loc.includes('panam') ? 'Panamá' : loc.includes('miami') ? 'EE.UU.' : 'Venezuela');
+      const state = (plant as any).state || (loc.includes('caracas') || loc.includes('capital') ? 'Distrito Capital' : loc.includes('miranda') ? 'Miranda' : loc.includes('zulia') ? 'Zulia' : idx % 3 === 1 ? 'Distrito Capital' : idx % 3 === 2 ? 'Miranda' : 'Carabobo');
+      const zone = (plant as any).zone || resolveZone(state);
+      const kva = plant.powerKva || 35;
+      const cat = kva >= 100 ? 'Alta Capacidad (≥100 kVA)' : kva >= 50 ? 'Media Capacidad (50-99 kVA)' : 'Compactas (<50 kVA)';
+
+      if (plantCountryFilter !== 'Todos' && country !== plantCountryFilter) return false;
+      if (plantZoneFilter !== 'Todas' && zone !== plantZoneFilter) return false;
+      if (plantCategoryFilter !== 'Todas') {
+        if (plantCategoryFilter === 'Diésel Industrial') {
+          if (!(plant.fuelType || 'Diesel').toLowerCase().includes('diesel')) return false;
+        } else if (cat !== plantCategoryFilter) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [allPlants, plantCountryFilter, plantZoneFilter, plantCategoryFilter]);
+
   const fleetStats = useMemo(() => {
     const total = allPlants.length;
     const online = allPlants.length;
@@ -238,31 +282,76 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return allPlants.reduce((acc, p) => acc + (p.powerKva || 35), 0);
   }, [allPlants]);
 
+  // Personnel & Users classification filters (Section 3)
+  const [selectedUserCategory, setSelectedUserCategory] = useState('Todos los Usuarios');
+  const [selectedCountryFilter, setSelectedCountryFilter] = useState('Todos');
+  const [selectedZoneFilter, setSelectedZoneFilter] = useState('Todas');
   const [selectedStateFilter, setSelectedStateFilter] = useState('Todos');
   const [selectedDeptFilter, setSelectedDeptFilter] = useState('Todos');
   const [operatorSearch, setOperatorSearch] = useState('');
 
-  const VENEZUELA_STATES = ['Todos', 'Carabobo', 'Distrito Capital', 'Aragua', 'Zulia', 'Miranda', 'Lara'];
-  const DEPARTMENTS = ['Todos', 'Generación Eléctrica', 'Mantenimiento Preventivo', 'Media Tensión', 'Electrónica ComAp'];
+  const USER_CATEGORIES = ['Todos los Usuarios', 'Personal Operador', 'Super Admins', 'Clientes / Titulares'];
+  const VENEZUELA_STATES = ['Todos', 'Carabobo', 'Distrito Capital', 'Aragua', 'Zulia', 'Miranda', 'Lara', 'Anzoátegui', 'Táchira', 'Bolívar'];
+  const DEPARTMENTS = ['Todos', 'Generación Eléctrica', 'Mantenimiento Preventivo', 'Media Tensión', 'Electrónica ComAp', 'Dirección Ejecutiva', 'Clientes Corporativos'];
+
+  const allCombinedUsers = useMemo(() => {
+    const map = new Map<string, any>();
+    (superAdminsList || []).forEach((u: any) => map.set(u.id, { ...u, resolvedRole: 'superadmin' }));
+    (operatorsList || []).forEach((u: any) => {
+      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: 'operator' });
+    });
+    (clientsList || []).forEach((u: any) => {
+      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: 'client' });
+    });
+    (pendingUsersList || []).forEach((u: any) => {
+      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: u.role || 'operator' });
+    });
+    return Array.from(map.values());
+  }, [superAdminsList, operatorsList, clientsList, pendingUsersList]);
 
   const filteredOperators = useMemo(() => {
-    let list = operatorsList || [];
+    let list = allCombinedUsers;
+    if (selectedUserCategory === 'Personal Operador') {
+      list = list.filter((u: any) => u.resolvedRole === 'operator');
+    } else if (selectedUserCategory === 'Super Admins') {
+      list = list.filter((u: any) => u.resolvedRole === 'superadmin');
+    } else if (selectedUserCategory === 'Clientes / Titulares') {
+      list = list.filter((u: any) => u.resolvedRole === 'client');
+    }
+
+    if (selectedCountryFilter !== 'Todos') {
+      list = list.filter((op: any) => {
+        const loc = (op.country || op.state || op.city || '').toLowerCase();
+        const c = op.country || (loc.includes('colombia') ? 'Colombia' : loc.includes('panam') ? 'Panamá' : loc.includes('miami') ? 'EE.UU.' : 'Venezuela');
+        return c.toLowerCase() === selectedCountryFilter.toLowerCase();
+      });
+    }
+    if (selectedZoneFilter !== 'Todas') {
+      list = list.filter((op: any) => {
+        const z = op.zone || resolveZone(op.state || op.city || 'Carabobo');
+        return z.toLowerCase() === selectedZoneFilter.toLowerCase();
+      });
+    }
     if (selectedStateFilter !== 'Todos') {
-      list = list.filter((op: any) => (op.state || 'Carabobo').toLowerCase() === selectedStateFilter.toLowerCase());
+      list = list.filter((op: any) => (op.state || op.city || 'Carabobo').toLowerCase().includes(selectedStateFilter.toLowerCase()));
     }
     if (selectedDeptFilter !== 'Todos') {
-      list = list.filter((op: any) => (op.department || op.specialty || '').toLowerCase().includes(selectedDeptFilter.toLowerCase()));
+      list = list.filter((op: any) => {
+        const d = op.department || op.specialty || (op.resolvedRole === 'superadmin' ? 'Dirección Ejecutiva' : op.resolvedRole === 'client' ? 'Clientes Corporativos' : 'Generación Eléctrica');
+        return d.toLowerCase().includes(selectedDeptFilter.toLowerCase());
+      });
     }
     if (operatorSearch.trim()) {
       const q = operatorSearch.toLowerCase().trim();
       list = list.filter((op: any) =>
         (op.full_name || '').toLowerCase().includes(q) ||
         (op.email || '').toLowerCase().includes(q) ||
-        (op.operator_code || '').toLowerCase().includes(q)
+        (op.operator_code || '').toLowerCase().includes(q) ||
+        (op.state || op.city || '').toLowerCase().includes(q)
       );
     }
     return list;
-  }, [operatorsList, selectedStateFilter, selectedDeptFilter, operatorSearch]);
+  }, [allCombinedUsers, selectedUserCategory, selectedCountryFilter, selectedZoneFilter, selectedStateFilter, selectedDeptFilter, operatorSearch]);
 
   const isDesktop = windowWidth >= 1024;
   const isTablet = windowWidth >= 768 && windowWidth < 1024;
@@ -1033,17 +1122,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 <View style={{ flex: 1, minWidth: 260 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                      Flota de Plantas Eléctricas en Red
+                      Catálogo Global de Máquinas y Plantas Disponibles
                     </Text>
                     <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
                       <View style={styles.greenPulseDot} />
                       <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>
-                        {fleetStats.total} EN RED
+                        {filteredFleetPlants.length} / {fleetStats.total} DISPONIBLES
                       </Text>
                     </View>
                   </View>
                   <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                    Supervisión y control en tiempo real de todos los grupos electrógenos industriales Hermanos Lynch.
+                    Clasificación corporativa de grupos electrógenos y maquinaria disponible por País, Zona y Categoría de potencia.
                   </Text>
                 </View>
 
@@ -1067,12 +1156,88 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
               </View>
 
+              {/* Clasificador de Máquinas por País, Zona y Categoría */}
+              <View style={[styles.filterSectionBox, { marginBottom: 14 }]}>
+                <View style={styles.filterGroupRow}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>PAÍS:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {COUNTRIES.map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        onPress={() => setPlantCountryFilter(c)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: plantCountryFilter === c ? accentCyan : pillDarkBg,
+                            borderColor: plantCountryFilter === c ? accentCyan : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontFamily: plantCountryFilter === c ? F.bold : F.medium, color: plantCountryFilter === c ? '#0c0e14' : textSecondary, fontSize: 11 }}>
+                          {c}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.filterGroupRow, { marginTop: 6 }]}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>ZONA:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {PLANT_ZONES.map((z) => (
+                      <TouchableOpacity
+                        key={z}
+                        onPress={() => setPlantZoneFilter(z)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: plantZoneFilter === z ? accentBlue : pillDarkBg,
+                            borderColor: plantZoneFilter === z ? accentBlue : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontFamily: plantZoneFilter === z ? F.bold : F.medium, color: plantZoneFilter === z ? '#ffffff' : textSecondary, fontSize: 11 }}>
+                          {z}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.filterGroupRow, { marginTop: 6 }]}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>CATEGORÍA:</Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {PLANT_CATEGORIES.map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        onPress={() => setPlantCategoryFilter(cat)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: plantCategoryFilter === cat ? '#22c55e' : pillDarkBg,
+                            borderColor: plantCategoryFilter === cat ? '#22c55e' : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontFamily: plantCategoryFilter === cat ? F.bold : F.medium, color: plantCategoryFilter === cat ? '#0c0e14' : textSecondary, fontSize: 11 }}>
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              </View>
+
               {/* Plant Cards Scroll */}
               <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fleetCardsScroll}>
-                {allPlants.map((plant) => {
+                {filteredFleetPlants.map((plant, idx) => {
                   const isSelected = myMoto?.id === plant.id;
                   const opName = plant.assignedOperatorName || 'Por Asignar';
                   const kva = plant.powerKva || 35;
+                  const catLabel = kva >= 100 ? 'Alta Capacidad' : kva >= 50 ? 'Media Capacidad' : 'Compacta';
+                  const loc = (plant.location || '').toLowerCase();
+                  const stateLabel = (plant as any).state || (loc.includes('caracas') ? 'Distrito Capital' : loc.includes('miranda') ? 'Miranda' : idx % 3 === 1 ? 'Distrito Capital' : idx % 3 === 2 ? 'Miranda' : 'Carabobo');
+                  const zoneLabel = (plant as any).zone || resolveZone(stateLabel);
 
                   return (
                     <TouchableOpacity
@@ -1094,18 +1259,18 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                             {plant.model} · {kva} kVA
                           </Text>
                           <Text style={[styles.fleetPlantBrand, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
-                            {plant.brand}
+                            {plant.brand} · {catLabel}
                           </Text>
                         </View>
                         <View style={[styles.onlineStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                          <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 9 }}>EN LÍNEA</Text>
+                          <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 9 }}>DISPONIBLE</Text>
                         </View>
                       </View>
 
                       <View style={styles.fleetPlantLocationRow}>
                         <MaterialIcons name="place" size={14} color={accentCyan} />
                         <Text style={[styles.fleetPlantLocationText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
-                          {plant.location || 'Sede Principal'}
+                          {stateLabel} · {zoneLabel} (Venezuela)
                         </Text>
                       </View>
 
@@ -1134,7 +1299,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           )}
 
           {/* ========================================================= */}
-          {/* SECTION 3: SUPERVISIÓN DE OPERADORES Y FLOTA DE VEHÍCULOS */}
+          {/* SECTION 3: DIRECTORIO GLOBAL DE USUARIOS, OPERADORES Y FLOTA */}
           {/* ========================================================= */}
           {hasSuperAccess && (
             <View style={[
@@ -1145,17 +1310,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                      Supervisión de Operadores y Flota de Vehículos
+                      Directorio Global de Usuarios, Personal Operador y Flota
                     </Text>
                     <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
                       <MaterialIcons name="badge" size={13} color={accentBlue} />
                       <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10 }}>
-                        {operatorsList.length} OPERADORES ACTIVOS
+                        {filteredOperators.length} REGISTROS EN VISTA
                       </Text>
                     </View>
                   </View>
                   <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                    Organización territorial por Estado, Departamento técnico y consumo de combustible corporativo.
+                    Clasificación integral de usuarios y personal por Categoría, País, Zona, Estado y Departamento técnico.
                   </Text>
                 </View>
 
@@ -1169,14 +1334,107 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 >
                   <MaterialIcons name="person-add" size={16} color="#ffffff" />
                   <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                    Gestionar / Crear Operador
+                    Gestionar / Crear Usuario
                   </Text>
                 </TouchableOpacity>
               </View>
 
-              {/* Filtros Geográficos y Departamentales */}
+              {/* Filtros Multi-Nivel: Categoría, País, Zona, Estado y Departamento */}
               <View style={styles.filterSectionBox}>
                 <View style={styles.filterGroupRow}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    CATEGORÍA:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {USER_CATEGORIES.map((cat) => (
+                      <TouchableOpacity
+                        key={cat}
+                        onPress={() => setSelectedUserCategory(cat)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedUserCategory === cat ? '#22c55e' : pillDarkBg,
+                            borderColor: selectedUserCategory === cat ? '#22c55e' : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedUserCategory === cat ? F.bold : F.medium,
+                            color: selectedUserCategory === cat ? '#0c0e14' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {cat}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    PAÍS:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {COUNTRIES.map((c) => (
+                      <TouchableOpacity
+                        key={c}
+                        onPress={() => setSelectedCountryFilter(c)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedCountryFilter === c ? accentCyan : pillDarkBg,
+                            borderColor: selectedCountryFilter === c ? accentCyan : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedCountryFilter === c ? F.bold : F.medium,
+                            color: selectedCountryFilter === c ? '#0c0e14' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {c}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    ZONA:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {PLANT_ZONES.map((z) => (
+                      <TouchableOpacity
+                        key={z}
+                        onPress={() => setSelectedZoneFilter(z)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedZoneFilter === z ? accentBlue : pillDarkBg,
+                            borderColor: selectedZoneFilter === z ? accentBlue : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedZoneFilter === z ? F.bold : F.medium,
+                            color: selectedZoneFilter === z ? '#ffffff' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {z}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
                   <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
                     ESTADO:
                   </Text>
@@ -1243,7 +1501,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   <TextInput
                     value={operatorSearch}
                     onChangeText={setOperatorSearch}
-                    placeholder="Buscar operador por nombre, carnet HL o correo..."
+                    placeholder="Buscar usuario u operador por nombre, carnet HL, correo, estado o país..."
                     placeholderTextColor={textSecondary}
                     style={{ flex: 1, fontFamily: F.medium, color: textPrimary, fontSize: 12 }}
                   />

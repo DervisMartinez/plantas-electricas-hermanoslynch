@@ -67,7 +67,7 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ onNavigateToServices }) => {
     { id: 'all' as const, label: 'TODAS LAS ESPECIFICACIONES', icon: 'tune' },
     { id: 'engine' as const, label: 'MOTOR Y POTENCIA', icon: 'speed' },
     { id: 'transmission' as const, label: 'TRANSMISIÓN Y EMBRAGUE', icon: 'settings' },
-    { id: 'chassis' as const, label: 'FRENOS Y CAUCHOS', icon: 'disc-alert' },
+    { id: 'chassis' as const, label: 'FRENOS Y CAUCHOS', icon: 'album' },
     { id: 'fluids' as const, label: 'FLUIDOS Y CAPACIDADES', icon: 'opacity' },
   ];
 
@@ -308,9 +308,9 @@ export const SpecsTab: React.FC<SpecsTabProps> = ({ onNavigateToServices }) => {
               <View style={styles.specRowsList}>
                 <SpecRow label="Freno Delantero" value={specs?.brakesFront || 'Disco hidráulico ventilado'} icon="lens" color="#00ae78" />
                 <SpecRow label="Freno Trasero" value={specs?.brakesRear || 'Disco / Tambor'} icon="adjust" />
-                <SpecRow label="Neumático Delantero (Medida)" value={specs?.frontTireSize || '195/55 R15'} icon="tire" />
+                <SpecRow label="Neumático Delantero (Medida)" value={specs?.frontTireSize || '195/55 R15'} icon="radio-button-checked" />
                 <SpecRow label="Presión Inflado Delantero (Frío)" value={specs?.frontTirePressure || '30 PSI'} icon="compress" color="#00e3fd" />
-                <SpecRow label="Neumático Trasero (Medida)" value={specs?.rearTireSize || '195/55 R15'} icon="tire" />
+                <SpecRow label="Neumático Trasero (Medida)" value={specs?.rearTireSize || '195/55 R15'} icon="radio-button-checked" />
                 <SpecRow label="Presión Inflado Trasero (Frío)" value={specs?.rearTirePressure || '32 PSI'} icon="compress" color="#00e3fd" />
                 {specs?.suspensionFront && (
                   <SpecRow label="Suspensión Delantera" value={specs.suspensionFront} icon="build" />
