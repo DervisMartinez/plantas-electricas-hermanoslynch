@@ -502,13 +502,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   // Futuristic SaaS Dark Theme Tokens matching reference screenshot
   const bgMain = isDark ? '#0c0d12' : '#f8fafc';
   const cardBg = isDark ? '#12151e' : '#ffffff';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.06)';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.09)';
   const railBg = isDark ? '#0a0b10' : '#ffffff';
-  const railBorder = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.05)';
+  const railBorder = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)';
   const textPrimary = isDark ? '#f8fafc' : '#0f172a';
-  const textSecondary = isDark ? '#94a3b8' : '#64748b';
+  const textSecondary = isDark ? '#94a3b8' : '#475569';
   const accentBlue = '#2563eb';
-  const accentCyan = '#00e3fd';
+  const accentCyan = isDark ? '#00e3fd' : '#0284c7';
   const pillDarkBg = isDark ? '#181d29' : '#f1f5f9';
 
   return (
@@ -915,7 +915,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                     GRUPO ELECTRÓGENO INDUSTRIAL
                   </Text>
                   
-                  <Text style={[styles.heroBigTitle, { color: '#ffffff', fontFamily: F.extrabold, fontSize: isMobile ? 24 : 32 }]}>
+                  <Text style={[styles.heroBigTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 24 : 32 }]}>
                     Potencia Continua{'\n'}& Control Total
                   </Text>
 
@@ -923,14 +923,19 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                     {myMoto ? (myMoto.brand + ' ' + myMoto.model + ' · ' + (myMoto.serialNumber || 'HL-GEN-001')) : 'Blue Power Generation C125'}
                   </Text>
 
-                  {/* White pill button matching template "Start Now" */}
+                  {/* Action pill button matching template "Start Now" with full Light/Dark contrast */}
                   <TouchableOpacity
                     onPress={onOpenQuickHours}
-                    style={styles.whitePillActionBtn}
+                    style={[
+                      styles.whitePillActionBtn,
+                      {
+                        backgroundColor: isDark ? '#ffffff' : '#0f172a',
+                      },
+                    ]}
                     activeOpacity={0.85}
                   >
-                    <MaterialIcons name="add" size={18} color="#0c0e14" />
-                    <Text style={[styles.whitePillActionText, { fontFamily: F.bold }]}>
+                    <MaterialIcons name="add" size={18} color={isDark ? '#0c0e14' : '#ffffff'} />
+                    <Text style={[styles.whitePillActionText, { fontFamily: F.bold, color: isDark ? '#0c0e14' : '#ffffff' }]}>
                       + Registrar Horas / Diésel
                     </Text>
                   </TouchableOpacity>
@@ -1173,7 +1178,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           },
                         ]}
                       >
-                        <Text style={{ fontFamily: plantCountryFilter === c ? F.bold : F.medium, color: plantCountryFilter === c ? '#0c0e14' : textSecondary, fontSize: 11 }}>
+                        <Text style={{ fontFamily: plantCountryFilter === c ? F.bold : F.medium, color: plantCountryFilter === c ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary, fontSize: 11 }}>
                           {c}
                         </Text>
                       </TouchableOpacity>
@@ -1392,7 +1397,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                         <Text
                           style={{
                             fontFamily: selectedCountryFilter === c ? F.bold : F.medium,
-                            color: selectedCountryFilter === c ? '#0c0e14' : textSecondary,
+                            color: selectedCountryFilter === c ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary,
                             fontSize: 11,
                           }}
                         >
@@ -1485,7 +1490,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                         <Text
                           style={{
                             fontFamily: selectedDeptFilter === dept ? F.bold : F.medium,
-                            color: selectedDeptFilter === dept ? '#0c0e14' : textSecondary,
+                            color: selectedDeptFilter === dept ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary,
                             fontSize: 11,
                           }}
                         >

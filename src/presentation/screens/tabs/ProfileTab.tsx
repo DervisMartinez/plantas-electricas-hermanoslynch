@@ -722,12 +722,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
           {/* CENTRO DE MANDO & CLASIFICADOR GLOBAL (EXCLUSIVO DEL JEFE / SUPER ADMIN) */}
           {/* ======================================================================== */}
           {isSuperAdmin && (
-            <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: 'rgba(0, 227, 253, 0.35)', borderWidth: 1 }]}>
+            <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: isDark ? 'rgba(0, 227, 253, 0.35)' : 'rgba(2, 132, 199, 0.35)', borderWidth: 1 }]}>
               {/* Header Ejecutivo */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                 <View style={{ flex: 1, minWidth: 240 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <MaterialIcons name="admin-panel-settings" size={22} color="#00e3fd" />
+                    <MaterialIcons name="admin-panel-settings" size={22} color={isDark ? '#00e3fd' : '#0284c7'} />
                     <Text style={{ fontSize: 16, fontFamily: F.extrabold, color: colors.onSurface }}>
                       Centro de Mando & Clasificador Global
                     </Text>
@@ -766,8 +766,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                       flexDirection: 'row',
                       alignItems: 'center',
                       gap: 6,
-                      backgroundColor: 'rgba(0, 227, 253, 0.14)',
-                      borderColor: '#00e3fd',
+                      backgroundColor: isDark ? 'rgba(0, 227, 253, 0.14)' : 'rgba(2, 132, 199, 0.12)',
+                      borderColor: isDark ? '#00e3fd' : '#0284c7',
                       borderWidth: 1,
                       paddingHorizontal: 12,
                       paddingVertical: 8,
@@ -775,8 +775,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                     }}
                     activeOpacity={0.85}
                   >
-                    <MaterialIcons name="add-circle-outline" size={16} color="#00e3fd" />
-                    <Text style={{ fontFamily: F.bold, color: '#00e3fd', fontSize: 11.5 }}>
+                    <MaterialIcons name="add-circle-outline" size={16} color={isDark ? '#00e3fd' : '#0284c7'} />
+                    <Text style={{ fontFamily: F.bold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 11.5 }}>
                       Incorporar Máquina
                     </Text>
                   </TouchableOpacity>
@@ -787,7 +787,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
                   <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Total Usuarios</Text>
-                  <Text style={{ fontFamily: F.extrabold, color: '#00e3fd', fontSize: 20, marginTop: 2 }}>{allSystemUsers.length}</Text>
+                  <Text style={{ fontFamily: F.extrabold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 20, marginTop: 2 }}>{allSystemUsers.length}</Text>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Directorio global</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
@@ -797,12 +797,12 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                 </View>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
                   <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Máquinas / Plantas</Text>
-                  <Text style={{ fontFamily: F.extrabold, color: '#22c55e', fontSize: 20, marginTop: 2 }}>{enrichedPlants.length}</Text>
+                  <Text style={{ fontFamily: F.extrabold, color: '#16a34a', fontSize: 20, marginTop: 2 }}>{enrichedPlants.length}</Text>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Disponibles en red</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
                   <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Super Admins</Text>
-                  <Text style={{ fontFamily: F.extrabold, color: '#f59e0b', fontSize: 20, marginTop: 2 }}>{Math.max((superAdminsList || []).length, 1)}</Text>
+                  <Text style={{ fontFamily: F.extrabold, color: '#d97706', fontSize: 20, marginTop: 2 }}>{Math.max((superAdminsList || []).length, 1)}</Text>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Jefes / Directores</Text>
                 </View>
               </View>
@@ -1048,13 +1048,13 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                             padding: 14,
                             borderRadius: 14,
                             borderWidth: 1,
-                            borderColor: isAudited ? '#00e3fd' : colors.outlineVariant,
+                            borderColor: isAudited ? (isDark ? '#00e3fd' : '#0284c7') : colors.outlineVariant,
                             gap: 8,
                           }}
                         >
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <MaterialCommunityIcons name="generator-portable" size={22} color="#00e3fd" />
+                              <MaterialCommunityIcons name="generator-portable" size={22} color={isDark ? '#00e3fd' : '#0284c7'} />
                               <View>
                                 <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 14 }}>
                                   {m.brand} {m.model} • {m.powerKva || 35} kVA
@@ -1067,18 +1067,18 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                                <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>DISPONIBLE EN RED</Text>
+                                <Text style={{ fontFamily: F.bold, color: '#16a34a', fontSize: 10 }}>DISPONIBLE EN RED</Text>
                               </View>
                               <TouchableOpacity
                                 onPress={() => selectMoto(m.id)}
                                 style={{
-                                  backgroundColor: isAudited ? '#00e3fd' : '#2563eb',
+                                  backgroundColor: isAudited ? (isDark ? '#00e3fd' : '#0284c7') : '#2563eb',
                                   paddingHorizontal: 10,
                                   paddingVertical: 5,
                                   borderRadius: 8,
                                 }}
                               >
-                                <Text style={{ fontFamily: F.bold, color: isAudited ? '#0c0d12' : '#ffffff', fontSize: 10.5 }}>
+                                <Text style={{ fontFamily: F.bold, color: isAudited ? (isDark ? '#0c0d12' : '#ffffff') : '#ffffff', fontSize: 10.5 }}>
                                   {isAudited ? 'AUDITANDO TELEMETRÍA' : 'AUDITAR PLANTA'}
                                 </Text>
                               </TouchableOpacity>
@@ -1087,20 +1087,20 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
 
                           {/* Etiquetas de Clasificación Territorial y Categoría */}
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-                            <View style={{ backgroundColor: 'rgba(0, 227, 253, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#00e3fd', fontSize: 10 }}>🌍 País: {m.metaCountry}</Text>
+                            <View style={{ backgroundColor: isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(2, 132, 199, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 10 }}>🌍 País: {m.metaCountry}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#60a5fa', fontSize: 10 }}>🗺️ {m.metaZone}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#60a5fa' : '#1d4ed8', fontSize: 10 }}>🗺️ {m.metaZone}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#fbbf24', fontSize: 10 }}>📍 Estado: {m.metaState}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#fbbf24' : '#b45309', fontSize: 10 }}>📍 Estado: {m.metaState}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#c4b5fd', fontSize: 10 }}>🏢 Dpto: {m.metaDept}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#c4b5fd' : '#6d28d9', fontSize: 10 }}>🏢 Dpto: {m.metaDept}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#4ade80', fontSize: 10 }}>🏷️ {m.metaCategory}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#4ade80' : '#15803d', fontSize: 10 }}>🏷️ {m.metaCategory}</Text>
                             </View>
                           </View>
                         </View>
@@ -1119,7 +1119,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                     </View>
                   ) : (
                     filteredExecUsers.map((u: any) => {
-                      const roleBadgeColor = u.resolvedRole === 'superadmin' ? '#00e3fd' : u.resolvedRole === 'operator' ? '#2563eb' : '#22c55e';
+                      const roleBadgeColor = u.resolvedRole === 'superadmin' ? (isDark ? '#00e3fd' : '#0284c7') : u.resolvedRole === 'operator' ? '#2563eb' : '#16a34a';
                       const roleLabel = u.resolvedRole === 'superadmin' ? 'JEFE / SUPER ADMIN' : u.resolvedRole === 'operator' ? 'PERSONAL OPERADOR' : 'CLIENTE / TITULAR';
                       return (
                         <View
@@ -1136,7 +1136,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                               <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: roleBadgeColor, justifyContent: 'center', alignItems: 'center' }}>
-                                <Text style={{ fontFamily: F.bold, color: u.resolvedRole === 'superadmin' ? '#0c0d12' : '#ffffff', fontSize: 13 }}>
+                                <Text style={{ fontFamily: F.bold, color: u.resolvedRole === 'superadmin' && isDark ? '#0c0d12' : '#ffffff', fontSize: 13 }}>
                                   {(u.full_name || u.email || 'U').slice(0, 2).toUpperCase()}
                                 </Text>
                               </View>
@@ -1151,7 +1151,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                             </View>
 
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <View style={{ backgroundColor: 'rgba(255,255,255,0.06)', borderColor: roleBadgeColor, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.05)', borderColor: roleBadgeColor, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
                                 <Text style={{ fontFamily: F.bold, color: roleBadgeColor, fontSize: 9.5 }}>{roleLabel}</Text>
                               </View>
                               {u.phone && (
@@ -1170,20 +1170,20 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                           </View>
 
                           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                            <View style={{ backgroundColor: 'rgba(0, 227, 253, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#00e3fd', fontSize: 10 }}>🌍 País: {u.metaCountry}</Text>
+                            <View style={{ backgroundColor: isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(2, 132, 199, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 10 }}>🌍 País: {u.metaCountry}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#60a5fa', fontSize: 10 }}>🗺️ {u.metaZone}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#60a5fa' : '#1d4ed8', fontSize: 10 }}>🗺️ {u.metaZone}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#fbbf24', fontSize: 10 }}>📍 Estado: {u.metaState}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#fbbf24' : '#b45309', fontSize: 10 }}>📍 Estado: {u.metaState}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#c4b5fd', fontSize: 10 }}>🏢 Dpto: {u.metaDept}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#c4b5fd' : '#6d28d9', fontSize: 10 }}>🏢 Dpto: {u.metaDept}</Text>
                             </View>
                             <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: '#4ade80', fontSize: 10 }}>🏷️ {u.metaCategory}</Text>
+                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#4ade80' : '#15803d', fontSize: 10 }}>🏷️ {u.metaCategory}</Text>
                             </View>
                           </View>
                         </View>
