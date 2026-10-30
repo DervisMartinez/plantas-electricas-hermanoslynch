@@ -178,12 +178,15 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     systemMetrics,
     loadSystemUsers,
     userName,
+    isAdmin,
     isSuperAdmin,
     userRoleTitle,
     operatorsList,
     clientsList
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
+
+  const hasSuperAccess = isSuperAdmin || isAdmin;
 
   // Pulsing animation for live indicators
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -229,6 +232,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     const attentionNeeded = allPlants.filter(p => !p.assignedOperatorId && !p.assignedOperatorName).length;
     const totalHours = allPlants.reduce((acc, p) => acc + (p.currentHours || p.currentOdometer || 0), 0);
     return { total, online, attentionNeeded, totalHours };
+  }, [allPlants]);
+
+  const fleetTotalKva = useMemo(() => {
+    return allPlants.reduce((acc, p) => acc + (p.powerKva || 35), 0);
   }, [allPlants]);
 
   const [selectedStateFilter, setSelectedStateFilter] = useState('Todos');
@@ -335,10 +342,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return list.map((item) => {
       const typeRecords = records.filter((r) => r.type === item.id);
       const isInspected = typeRecords.length > 0;
-      let wear = 0;
+      let wear = 100;
       let hoursSince = 0;
       let hoursRemaining = item.interval;
-      let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' | 'SIN CALIBRAR' = 'SIN CALIBRAR';
+      let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' = 'ÓPTIMO';
 
       if (isInspected) {
         const lastHours = Math.max(...typeRecords.map((r) => r.odometer || 0));
@@ -348,10 +355,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         hoursRemaining = Math.max(0, item.interval - hoursSince);
         status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
       } else {
-        wear = 0;
-        hoursSince = 0;
-        hoursRemaining = item.interval;
-        status = 'SIN CALIBRAR';
+        // Ciclo inicial o sin registro previo: desgaste según horas transcurridas en el intervalo actual
+        hoursSince = currentHours > 0 ? (currentHours % item.interval) : 0;
+        hoursRemaining = Math.max(0, item.interval - hoursSince);
+        const ratio = Math.max(0, 1 - hoursSince / item.interval);
+        wear = Math.min(100, Math.round(ratio * 100));
+        status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
       }
 
       return {
@@ -367,10 +376,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
   // Overall General Health
   const generalHealth = useMemo(() => {
-    const inspected = plantSubsystems.filter((s) => s.isInspected);
-    if (inspected.length === 0) return 0;
-    const sum = inspected.reduce((acc, c) => acc + c.wear, 0);
-    return Math.round(sum / inspected.length);
+    if (plantSubsystems.length === 0) return 100;
+    const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
+    return Math.round(sum / plantSubsystems.length);
   }, [plantSubsystems]);
 
   // Filtered subsystems for Bottom Table Section
@@ -725,12 +733,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             {/* LARGE TITLE (TEMPLATE "Channel Analytics") */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Text style={[styles.channelAnalyticsTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                Telemetría & Analítica
+                {activeTab === 'moto' ? 'Telemetría & Analítica' :
+                 activeTab === 'specs' ? 'Ficha Técnica de Planta' :
+                 activeTab === 'services' ? 'Mantenimiento & Servicios' :
+                 activeTab === 'history' ? 'Historial de Registros' :
+                 activeTab === 'wallet' ? 'Flota de Vehículos & Gastos' :
+                 activeTab === 'profile' ? 'Perfil del Administrador' : 'Panel de Control'}
               </Text>
               <View style={[styles.liveNetBadge, { backgroundColor: 'rgba(0, 227, 253, 0.12)' }]}>
                 <Animated.View style={[styles.pulsingGreenDot, { opacity: pulseAnim }]} />
                 <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11, letterSpacing: 0.6 }}>
-                  SISTEMA EN VIVO
+                  SISTEMA EN VIVO · ISO 8528
                 </Text>
               </View>
             </View>
@@ -895,18 +908,18 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   <View style={[styles.metricAccentUnderline, { backgroundColor: '#22c55e' }]} />
                 </TouchableOpacity>
 
-                {/* Metric 4: Salud (Coral / Orange Dot) */}
+                {/* Metric 4: Salud Global */}
                 <View style={styles.frostedMetricCol}>
                   <Text style={[styles.frostedMetricValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 20 }]}>
-                    {generalHealth > 0 ? (generalHealth + '%') : '10'}
+                    {generalHealth}%
                   </Text>
                   <View style={styles.frostedLabelRow}>
-                    <View style={[styles.metricDotIndicator, { backgroundColor: '#f97316' }]} />
+                    <View style={[styles.metricDotIndicator, { backgroundColor: generalHealth >= 60 ? '#22c55e' : generalHealth >= 30 ? '#f59e0b' : '#ef4444' }]} />
                     <Text style={[styles.frostedMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Subsistemas
+                      Salud Global
                     </Text>
                   </View>
-                  <View style={[styles.metricAccentUnderline, { backgroundColor: '#f97316' }]} />
+                  <View style={[styles.metricAccentUnderline, { backgroundColor: generalHealth >= 60 ? '#22c55e' : generalHealth >= 30 ? '#f59e0b' : '#ef4444' }]} />
                 </View>
 
                 {/* Next Action Circular Arrow Button ( > ) */}
@@ -1012,9 +1025,400 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           </View>
 
           {/* ========================================================= */}
-          {/* ROW 2: SUBSISTEMAS INDUSTRIALES & TELEMETRÍA (TABLE VIEW) */}
+          {/* SECTION 2: FLOTA DE PLANTAS ELÉCTRICAS EN RED (BENTO ROW 2) */}
           {/* ========================================================= */}
-          <View style={[styles.modernSubsystemsTableCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+          {hasSuperAccess && (
+            <View style={[styles.superFleetContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+              <View style={styles.superFleetHeader}>
+                <View style={{ flex: 1, minWidth: 260 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                      Flota de Plantas Eléctricas en Red
+                    </Text>
+                    <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                      <View style={styles.greenPulseDot} />
+                      <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>
+                        {fleetStats.total} EN RED
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                    Supervisión y control en tiempo real de todos los grupos electrógenos industriales Hermanos Lynch.
+                  </Text>
+                </View>
+
+                <View style={styles.fleetKpiChipsRow}>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10 }}>Total Plantas</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: textPrimary, fontSize: 16 }}>{fleetStats.total}</Text>
+                  </View>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>Operativas</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: '#22c55e', fontSize: 16 }}>{fleetStats.online}</Text>
+                  </View>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 10 }}>Horas Flota</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: accentCyan, fontSize: 16 }}>{fleetStats.totalHours.toLocaleString()}h</Text>
+                  </View>
+                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
+                    <Text style={{ fontFamily: F.bold, color: '#f59e0b', fontSize: 10 }}>Capacidad</Text>
+                    <Text style={{ fontFamily: F.extrabold, color: '#f59e0b', fontSize: 16 }}>{fleetTotalKva} kVA</Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* Plant Cards Scroll */}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fleetCardsScroll}>
+                {allPlants.map((plant) => {
+                  const isSelected = myMoto?.id === plant.id;
+                  const opName = plant.assignedOperatorName || 'Por Asignar';
+                  const kva = plant.powerKva || 35;
+
+                  return (
+                    <TouchableOpacity
+                      key={plant.id}
+                      onPress={() => selectMoto(plant.id)}
+                      style={[
+                        styles.fleetPlantCard,
+                        {
+                          backgroundColor: isSelected ? (isDark ? '#1a2236' : '#eff6ff') : pillDarkBg,
+                          borderColor: isSelected ? accentBlue : cardBorder,
+                          borderWidth: isSelected ? 2 : 1,
+                        },
+                      ]}
+                      activeOpacity={0.8}
+                    >
+                      <View style={styles.fleetPlantCardHeader}>
+                        <View style={{ flex: 1, paddingRight: 6 }}>
+                          <Text style={[styles.fleetPlantModel, { color: textPrimary, fontFamily: F.extrabold }]} numberOfLines={1}>
+                            {plant.model} · {kva} kVA
+                          </Text>
+                          <Text style={[styles.fleetPlantBrand, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
+                            {plant.brand}
+                          </Text>
+                        </View>
+                        <View style={[styles.onlineStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
+                          <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 9 }}>EN LÍNEA</Text>
+                        </View>
+                      </View>
+
+                      <View style={styles.fleetPlantLocationRow}>
+                        <MaterialIcons name="place" size={14} color={accentCyan} />
+                        <Text style={[styles.fleetPlantLocationText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
+                          {plant.location || 'Sede Principal'}
+                        </Text>
+                      </View>
+
+                      <View style={styles.fleetPlantOperatorRow}>
+                        <MaterialIcons name="engineering" size={14} color={textSecondary} />
+                        <Text style={[styles.fleetPlantOperatorText, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
+                          Operador: <Text style={{ fontFamily: F.bold, color: plant.assignedOperatorName ? accentBlue : '#f59e0b' }}>{opName}</Text>
+                        </Text>
+                      </View>
+
+                      <View style={styles.fleetPlantCardFooter}>
+                        <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 11 }}>
+                          Horas: <Text style={{ fontFamily: F.extrabold, color: textPrimary }}>{(plant.currentHours || 0).toLocaleString()} hrs</Text>
+                        </Text>
+                        <View style={[styles.selectPlantIndicator, { backgroundColor: isSelected ? accentBlue : 'transparent' }]}>
+                          <Text style={{ fontFamily: F.bold, color: isSelected ? '#ffffff' : textSecondary, fontSize: 10 }}>
+                            {isSelected ? 'ACTIVA' : 'SUPERVISAR →'}
+                          </Text>
+                        </View>
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* ========================================================= */}
+          {/* SECTION 3: SUPERVISIÓN DE OPERADORES Y FLOTA DE VEHÍCULOS */}
+          {/* ========================================================= */}
+          {hasSuperAccess && (
+            <View style={[
+              styles.superOperatorsContainer, 
+              { backgroundColor: cardBg, borderColor: cardBorder }
+            ]}>
+              <View style={styles.superOperatorsHeader}>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
+                      Supervisión de Operadores y Flota de Vehículos
+                    </Text>
+                    <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
+                      <MaterialIcons name="badge" size={13} color={accentBlue} />
+                      <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10 }}>
+                        {operatorsList.length} OPERADORES ACTIVOS
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                    Organización territorial por Estado, Departamento técnico y consumo de combustible corporativo.
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    loadSystemUsers();
+                    setUserMgmtVisible(true);
+                  }}
+                  style={[styles.manageUsersQuickBtn, { backgroundColor: accentBlue }]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="person-add" size={16} color="#ffffff" />
+                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                    Gestionar / Crear Operador
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Filtros Geográficos y Departamentales */}
+              <View style={styles.filterSectionBox}>
+                <View style={styles.filterGroupRow}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    ESTADO:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {VENEZUELA_STATES.map((st) => (
+                      <TouchableOpacity
+                        key={st}
+                        onPress={() => setSelectedStateFilter(st)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedStateFilter === st ? accentBlue : pillDarkBg,
+                            borderColor: selectedStateFilter === st ? accentBlue : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedStateFilter === st ? F.bold : F.medium,
+                            color: selectedStateFilter === st ? '#ffffff' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {st}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
+                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
+                    DEPARTAMENTO:
+                  </Text>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                    {DEPARTMENTS.map((dept) => (
+                      <TouchableOpacity
+                        key={dept}
+                        onPress={() => setSelectedDeptFilter(dept)}
+                        style={[
+                          styles.filterChip,
+                          {
+                            backgroundColor: selectedDeptFilter === dept ? accentCyan : pillDarkBg,
+                            borderColor: selectedDeptFilter === dept ? accentCyan : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: selectedDeptFilter === dept ? F.bold : F.medium,
+                            color: selectedDeptFilter === dept ? '#0c0e14' : textSecondary,
+                            fontSize: 11,
+                          }}
+                        >
+                          {dept}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+
+                <View style={[styles.operatorSearchInputRow, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+                  <MaterialIcons name="search" size={18} color={textSecondary} />
+                  <TextInput
+                    value={operatorSearch}
+                    onChangeText={setOperatorSearch}
+                    placeholder="Buscar operador por nombre, carnet HL o correo..."
+                    placeholderTextColor={textSecondary}
+                    style={{ flex: 1, fontFamily: F.medium, color: textPrimary, fontSize: 12 }}
+                  />
+                  {operatorSearch.length > 0 && (
+                    <TouchableOpacity onPress={() => setOperatorSearch('')}>
+                      <MaterialIcons name="clear" size={16} color={textSecondary} />
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </View>
+
+              {/* Operators Grid */}
+              <View style={styles.operatorsCardsGrid}>
+                {filteredOperators.length === 0 ? (
+                  <View style={[styles.emptyOperatorsState, { borderColor: cardBorder }]}>
+                    <MaterialIcons name="engineering" size={38} color={textSecondary} />
+                    <Text style={[styles.emptyOperatorsTitle, { color: textPrimary, fontFamily: F.bold }]}>
+                      No hay operadores registrados en este filtro
+                    </Text>
+                    <Text style={[styles.emptyOperatorsSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
+                      {operatorSearch ? 'No se encontraron operadores que coincidan con la búsqueda.' : 'Puedes dar de alta técnicos de generadores y asignarles plantas desde la consola.'}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        loadSystemUsers();
+                        setUserMgmtVisible(true);
+                      }}
+                      style={[styles.manageUsersQuickBtn, { backgroundColor: accentBlue, marginTop: 6 }]}
+                      activeOpacity={0.85}
+                    >
+                      <MaterialIcons name="person-add" size={16} color="#ffffff" />
+                      <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
+                        + Registrar Operador Técnico
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  filteredOperators.map((op: any) => {
+                    const initials = (op.full_name || 'OP')
+                      .split(' ')
+                      .map((n: string) => n[0])
+                      .slice(0, 2)
+                      .join('')
+                      .toUpperCase();
+
+                    const assignedPlants = allPlants.filter(
+                      (p) =>
+                        p.assignedOperatorId === op.id ||
+                        (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+                    );
+
+                    const hasVehicle = !!op.drives_company_vehicle || !!op.assigned_vehicle_name;
+                    const vehicleName = op.assigned_vehicle_name || (hasVehicle ? 'Toyota Hilux Soporte HL-01' : 'Sin vehículo asignado');
+                    const vehiclePlate = op.assigned_vehicle_plate || 'A10BC2D';
+
+                    return (
+                      <View key={op.id} style={[styles.operatorSuperCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
+                        <View style={styles.operatorSuperCardTop}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                            <View style={[styles.operatorSuperAvatar, { backgroundColor: accentBlue }]}>
+                              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 14 }}>{initials}</Text>
+                            </View>
+                            <View>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                                <Text style={[styles.operatorSuperName, { color: textPrimary, fontFamily: F.extrabold }]}>
+                                  {op.full_name || 'Operador Técnico'}
+                                </Text>
+                                <MaterialIcons name="verified" size={14} color="#22c55e" />
+                              </View>
+                              <Text style={{ fontFamily: F.semibold, color: accentCyan, fontSize: 11 }}>
+                                Carnet: {op.operator_code || 'HL-TECH-3018'} · {op.specialty || 'Especialista Técnico Senior'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          <View style={[styles.locationMiniTag, { backgroundColor: cardBg }]}>
+                            <MaterialIcons name="place" size={12} color={accentCyan} />
+                            <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 10 }}>
+                              {op.state || 'Carabobo'}, Venezuela
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Plantas Asignadas */}
+                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder }]}>
+                          <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5, marginBottom: 4 }}>
+                            PLANTAS BAJO SU CONTROL ({assignedPlants.length}):
+                          </Text>
+                          {assignedPlants.length === 0 ? (
+                            <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11, fontStyle: 'italic' }}>
+                              Sin plantas asignadas actualmente
+                            </Text>
+                          ) : (
+                            assignedPlants.map((ap) => (
+                              <TouchableOpacity
+                                key={ap.id}
+                                onPress={() => selectMoto(ap.id)}
+                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingVertical: 2 }}
+                              >
+                                <MaterialIcons name="bolt" size={14} color="#f59e0b" />
+                                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
+                                  {ap.brand} {ap.model} ({ap.location || 'Sede Principal'})
+                                </Text>
+                                <MaterialIcons name="arrow-forward" size={12} color={accentCyan} />
+                              </TouchableOpacity>
+                            ))
+                          )}
+                        </View>
+
+                        {/* Vehículo Asignado */}
+                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder, marginTop: 8 }]}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
+                            <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5 }}>
+                              VEHÍCULO DE EMPRESA ASIGNADO:
+                            </Text>
+                            <Text style={{ fontFamily: F.bold, color: hasVehicle ? '#22c55e' : textSecondary, fontSize: 10 }}>
+                              {hasVehicle ? 'ACTIVO' : 'NO ASIGNADO'}
+                            </Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                            <MaterialIcons name={hasVehicle ? "directions-car" : "car-crash"} size={14} color={hasVehicle ? accentBlue : textSecondary} />
+                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
+                              {vehicleName}
+                            </Text>
+                            {hasVehicle && (
+                              <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                                (Placa: {vehiclePlate})
+                              </Text>
+                            )}
+                          </View>
+                        </View>
+
+                        {/* Acciones */}
+                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              const rawDigits = (op.phone || '584143059921').replace(/\D/g, '');
+                              const phone = rawDigits.startsWith('58') ? rawDigits : ('58' + rawDigits.replace(/^0/, ''));
+                              const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent('Hola ' + op.full_name + ', te contacto desde la consola de Hermanos Lynch.');
+                              Linking.openURL(url).catch(() => {});
+                            }}
+                            style={[styles.opDirectActionBtn, { backgroundColor: '#25D366' }]}
+                            activeOpacity={0.85}
+                          >
+                            <MaterialCommunityIcons name="whatsapp" size={14} color="#ffffff" />
+                            <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>WhatsApp</Text>
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => {
+                              loadSystemUsers();
+                              setUserMgmtVisible(true);
+                            }}
+                            style={[styles.opDirectActionBtn, { backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }]}
+                            activeOpacity={0.8}
+                          >
+                            <MaterialIcons name="settings" size={14} color={textPrimary} />
+                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11 }}>Control</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    );
+                  })
+                )}
+              </View>
+            </View>
+          )}
+
+          {/* ========================================================= */}
+          {/* SECTION 4: SUBSISTEMAS INDUSTRIALES & TELEMETRÍA (ISO 8528) */}
+          {/* ========================================================= */}
+          <View style={[
+            styles.modernSubsystemsTableCard, 
+            { backgroundColor: cardBg, borderColor: cardBorder }
+          ]}>
             {/* Table Header Row: Title & Dropdown Filter */}
             <View style={styles.tableTopHeaderRow}>
               <View>
@@ -1159,367 +1563,25 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 );
               })}
             </View>
-          </View>
 
-          {/* ========================================================= */}
-          {/* ROW 3: SUPER ADMIN FLEET & OPERATORS SUPERVISION          */}
-          {/* ========================================================= */}
-          {isSuperAdmin && (
-            <View style={{ marginTop: 24, gap: 20 }}>
-              {/* FLOTA DE PLANTAS ELÉCTRICAS EN LÍNEA */}
-              <View style={[styles.superFleetContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <View style={styles.superFleetHeader}>
-                  <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                        Flota de Plantas Eléctricas en Línea
-                      </Text>
-                      <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                        <View style={styles.greenPulseDot} />
-                        <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>
-                          {fleetStats.total} EN RED
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      Selecciona cualquier planta de la red para supervisar sus parámetros y consumos en tiempo real.
-                    </Text>
-                  </View>
-
-                  <View style={styles.fleetKpiChipsRow}>
-                    <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                      <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10 }}>Total Plantas</Text>
-                      <Text style={{ fontFamily: F.extrabold, color: textPrimary, fontSize: 16 }}>{fleetStats.total}</Text>
-                    </View>
-                    <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                      <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>Operativas</Text>
-                      <Text style={{ fontFamily: F.extrabold, color: '#22c55e', fontSize: 16 }}>{fleetStats.online}</Text>
-                    </View>
-                    <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                      <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 10 }}>Horas Flota</Text>
-                      <Text style={{ fontFamily: F.extrabold, color: accentCyan, fontSize: 16 }}>{fleetStats.totalHours.toLocaleString()}h</Text>
-                    </View>
-                  </View>
-                </View>
-
-                {/* Plant Cards Scroll */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fleetCardsScroll}>
-                  {allPlants.map((plant) => {
-                    const isSelected = myMoto?.id === plant.id;
-                    const opName = plant.assignedOperatorName || 'Por Asignar';
-                    const kva = plant.powerKva || 35;
-
-                    return (
-                      <TouchableOpacity
-                        key={plant.id}
-                        onPress={() => selectMoto(plant.id)}
-                        style={[
-                          styles.fleetPlantCard,
-                          {
-                            backgroundColor: isSelected ? (isDark ? '#1a2236' : '#eff6ff') : pillDarkBg,
-                            borderColor: isSelected ? accentBlue : cardBorder,
-                            borderWidth: isSelected ? 2 : 1,
-                          },
-                        ]}
-                        activeOpacity={0.8}
-                      >
-                        <View style={styles.fleetPlantCardHeader}>
-                          <View style={{ flex: 1, paddingRight: 6 }}>
-                            <Text style={[styles.fleetPlantModel, { color: textPrimary, fontFamily: F.extrabold }]} numberOfLines={1}>
-                              {plant.model} · {kva} kVA
-                            </Text>
-                            <Text style={[styles.fleetPlantBrand, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
-                              {plant.brand}
-                            </Text>
-                          </View>
-                          <View style={[styles.onlineStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                            <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 9 }}>EN LÍNEA</Text>
-                          </View>
-                        </View>
-
-                        <View style={styles.fleetPlantLocationRow}>
-                          <MaterialIcons name="place" size={14} color={accentCyan} />
-                          <Text style={[styles.fleetPlantLocationText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
-                            {plant.location || 'Sede Principal'}
-                          </Text>
-                        </View>
-
-                        <View style={styles.fleetPlantOperatorRow}>
-                          <MaterialIcons name="engineering" size={14} color={textSecondary} />
-                          <Text style={[styles.fleetPlantOperatorText, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
-                            Operador: <Text style={{ fontFamily: F.bold, color: plant.assignedOperatorName ? accentBlue : '#f59e0b' }}>{opName}</Text>
-                          </Text>
-                        </View>
-
-                        <View style={styles.fleetPlantCardFooter}>
-                          <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 11 }}>
-                            Horas: <Text style={{ fontFamily: F.extrabold, color: textPrimary }}>{(plant.currentHours || 0).toLocaleString()} hrs</Text>
-                          </Text>
-                          <View style={[styles.selectPlantIndicator, { backgroundColor: isSelected ? accentBlue : 'transparent' }]}>
-                            <Text style={{ fontFamily: F.bold, color: isSelected ? '#ffffff' : textSecondary, fontSize: 10 }}>
-                              {isSelected ? 'ACTIVA' : 'SUPERVISAR →'}
-                            </Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
+            {/* Table Footer: ISO 8528 certification & summary note */}
+            <View style={[styles.tableFooterNote, { borderTopColor: cardBorder }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="verified" size={14} color="#22c55e" />
+                <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11 }}>
+                  Norma ISO 8528 · Monitoreo continuo de vida útil y ciclos de servicio OEM
+                </Text>
               </View>
-
-              {/* SUPERVISIÓN DE OPERADORES Y FLOTA DE VEHÍCULOS */}
-              <View style={[styles.superOperatorsContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <View style={styles.superOperatorsHeader}>
-                  <View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                        Supervisión de Operadores y Flota de Vehículos
-                      </Text>
-                      <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
-                        <MaterialIcons name="badge" size={13} color={accentBlue} />
-                        <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10 }}>
-                          {operatorsList.length} OPERADORES ACTIVOS
-                        </Text>
-                      </View>
-                    </View>
-                    <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      Organización territorial por Estado, País, Departamento técnico y consumo de combustible corporativo.
-                    </Text>
-                  </View>
-
-                  <TouchableOpacity
-                    onPress={() => {
-                      loadSystemUsers();
-                      setUserMgmtVisible(true);
-                    }}
-                    style={[styles.manageUsersQuickBtn, { backgroundColor: accentBlue }]}
-                    activeOpacity={0.8}
-                  >
-                    <MaterialIcons name="person-add" size={16} color="#ffffff" />
-                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                      Gestionar / Crear Operador
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Filtros Geográficos y Departamentales */}
-                <View style={styles.filterSectionBox}>
-                  <View style={styles.filterGroupRow}>
-                    <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                      ESTADO:
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {VENEZUELA_STATES.map((st) => (
-                        <TouchableOpacity
-                          key={st}
-                          onPress={() => setSelectedStateFilter(st)}
-                          style={[
-                            styles.filterChip,
-                            {
-                              backgroundColor: selectedStateFilter === st ? accentBlue : pillDarkBg,
-                              borderColor: selectedStateFilter === st ? accentBlue : cardBorder,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: selectedStateFilter === st ? F.bold : F.medium,
-                              color: selectedStateFilter === st ? '#ffffff' : textSecondary,
-                              fontSize: 11,
-                            }}
-                          >
-                            {st}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-
-                  <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
-                    <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                      DEPARTAMENTO:
-                    </Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {DEPARTMENTS.map((dept) => (
-                        <TouchableOpacity
-                          key={dept}
-                          onPress={() => setSelectedDeptFilter(dept)}
-                          style={[
-                            styles.filterChip,
-                            {
-                              backgroundColor: selectedDeptFilter === dept ? accentCyan : pillDarkBg,
-                              borderColor: selectedDeptFilter === dept ? accentCyan : cardBorder,
-                            },
-                          ]}
-                        >
-                          <Text
-                            style={{
-                              fontFamily: selectedDeptFilter === dept ? F.bold : F.medium,
-                              color: selectedDeptFilter === dept ? '#0c0e14' : textSecondary,
-                              fontSize: 11,
-                            }}
-                          >
-                            {dept}
-                          </Text>
-                        </TouchableOpacity>
-                      ))}
-                    </ScrollView>
-                  </View>
-
-                  <View style={[styles.operatorSearchInputRow, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
-                    <MaterialIcons name="search" size={18} color={textSecondary} />
-                    <TextInput
-                      value={operatorSearch}
-                      onChangeText={setOperatorSearch}
-                      placeholder="Buscar operador por nombre, carnet HL o correo..."
-                      placeholderTextColor={textSecondary}
-                      style={{ flex: 1, fontFamily: F.medium, color: textPrimary, fontSize: 12 }}
-                    />
-                    {operatorSearch.length > 0 && (
-                      <TouchableOpacity onPress={() => setOperatorSearch('')}>
-                        <MaterialIcons name="clear" size={16} color={textSecondary} />
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                </View>
-
-                {/* Operators Grid */}
-                <View style={styles.operatorsCardsGrid}>
-                  {filteredOperators.map((op: any) => {
-                    const initials = (op.full_name || 'OP')
-                      .split(' ')
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase();
-
-                    const assignedPlants = allPlants.filter(
-                      (p) =>
-                        p.assignedOperatorId === op.id ||
-                        (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
-                    );
-
-                    const hasVehicle = !!op.drives_company_vehicle || !!op.assigned_vehicle_name;
-                    const vehicleName = op.assigned_vehicle_name || (hasVehicle ? 'Toyota Hilux Soporte HL-01' : 'Sin vehículo asignado');
-                    const vehiclePlate = op.assigned_vehicle_plate || 'A10BC2D';
-
-                    return (
-                      <View key={op.id} style={[styles.operatorSuperCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
-                        <View style={styles.operatorSuperCardTop}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <View style={[styles.operatorSuperAvatar, { backgroundColor: accentBlue }]}>
-                              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 14 }}>{initials}</Text>
-                            </View>
-                            <View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={[styles.operatorSuperName, { color: textPrimary, fontFamily: F.extrabold }]}>
-                                  {op.full_name || 'Operador Técnico'}
-                                </Text>
-                                <MaterialIcons name="verified" size={14} color="#22c55e" />
-                              </View>
-                              <Text style={{ fontFamily: F.semibold, color: accentCyan, fontSize: 11 }}>
-                                Carnet: {op.operator_code || 'HL-TECH-3018'} · {op.specialty || 'Especialista Técnico Senior'}
-                              </Text>
-                            </View>
-                          </View>
-
-                          <View style={[styles.locationMiniTag, { backgroundColor: cardBg }]}>
-                            <MaterialIcons name="place" size={12} color={accentCyan} />
-                            <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 10 }}>
-                              {op.state || 'Carabobo'}, Venezuela
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Plantas Asignadas */}
-                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                          <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5, marginBottom: 4 }}>
-                            PLANTAS BAJO SU CONTROL ({assignedPlants.length}):
-                          </Text>
-                          {assignedPlants.length === 0 ? (
-                            <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11, fontStyle: 'italic' }}>
-                              Sin plantas asignadas actualmente
-                            </Text>
-                          ) : (
-                            assignedPlants.map((ap) => (
-                              <TouchableOpacity
-                                key={ap.id}
-                                onPress={() => selectMoto(ap.id)}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingVertical: 2 }}
-                              >
-                                <MaterialIcons name="bolt" size={14} color="#f59e0b" />
-                                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
-                                  {ap.brand} {ap.model} ({ap.location || 'Sede Principal'})
-                                </Text>
-                                <MaterialIcons name="arrow-forward" size={12} color={accentCyan} />
-                              </TouchableOpacity>
-                            ))
-                          )}
-                        </View>
-
-                        {/* Vehículo Asignado */}
-                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder, marginTop: 8 }]}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                            <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5 }}>
-                              VEHÍCULO DE EMPRESA ASIGNADO:
-                            </Text>
-                            <Text style={{ fontFamily: F.bold, color: hasVehicle ? '#22c55e' : textSecondary, fontSize: 10 }}>
-                              {hasVehicle ? 'ACTIVO' : 'NO ASIGNADO'}
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <MaterialIcons name={hasVehicle ? "directions-car" : "car-crash"} size={14} color={hasVehicle ? accentBlue : textSecondary} />
-                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
-                              {vehicleName}
-                            </Text>
-                            {hasVehicle && (
-                              <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
-                                (Placa: {vehiclePlate})
-                              </Text>
-                            )}
-                          </View>
-                        </View>
-
-                        {/* Acciones */}
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              const rawDigits = (op.phone || '584143059921').replace(/\D/g, '');
-                              const phone = rawDigits.startsWith('58') ? rawDigits : ('58' + rawDigits.replace(/^0/, ''));
-                              const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent('Hola ' + op.full_name + ', te contacto desde la consola de Hermanos Lynch.');
-                              Linking.openURL(url).catch(() => {});
-                            }}
-                            style={[styles.opDirectActionBtn, { backgroundColor: '#25D366' }]}
-                            activeOpacity={0.85}
-                          >
-                            <MaterialCommunityIcons name="whatsapp" size={14} color="#ffffff" />
-                            <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>WhatsApp</Text>
-                          </TouchableOpacity>
-
-                          <TouchableOpacity
-                            onPress={() => {
-                              loadSystemUsers();
-                              setUserMgmtVisible(true);
-                            }}
-                            style={[styles.opDirectActionBtn, { backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }]}
-                            activeOpacity={0.8}
-                          >
-                            <MaterialIcons name="settings" size={14} color={textPrimary} />
-                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11 }}>Control</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })}
-                </View>
-              </View>
+              <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
+                Mostrando {filteredSubsystems.length} de {plantSubsystems.length} componentes certificados
+              </Text>
             </View>
-          )}
+          </View>
 
         </ScrollView>
 
         {/* PERSISTENT SUB-TABS (SPECS, SERVICES, HISTORY, WALLET, PROFILE) */}
-        <View style={[{ flex: 1 }, activeTab !== 'moto' && { display: 'none' }]}>
+        <View style={[{ flex: 1 }, activeTab === 'moto' && { display: 'none' }]}>
           {children}
         </View>
       </View>
@@ -2140,7 +2202,8 @@ const styles = StyleSheet.create({
 
   bentoScrollContent: {
     paddingHorizontal: 28,
-    paddingBottom: 60,
+    paddingBottom: 80,
+    gap: 24,
   },
 
   // =========================================================
@@ -2148,7 +2211,6 @@ const styles = StyleSheet.create({
   // =========================================================
   row1MasterContainer: {
     gap: 20,
-    marginBottom: 20,
   },
 
   // 1.1 HERO CARD STYLES
@@ -2463,6 +2525,7 @@ const styles = StyleSheet.create({
     borderRadius: 26,
     borderWidth: 1,
     padding: 24,
+    width: '100%',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.2,
@@ -2554,6 +2617,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
+  tableFooterNote: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderTopWidth: 1,
+    paddingTop: 16,
+    marginTop: 16,
+    flexWrap: 'wrap',
+    gap: 10,
+  },
 
   // =========================================================
   // ROW 3: SUPER ADMIN FLEET & OPERATORS STYLES
@@ -2562,6 +2635,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     borderWidth: 1,
     padding: 22,
+    width: '100%',
   },
   superFleetHeader: {
     flexDirection: 'row',
@@ -2671,9 +2745,30 @@ const styles = StyleSheet.create({
   },
 
   superOperatorsContainer: {
-    borderRadius: 22,
+    borderRadius: 24,
     borderWidth: 1,
-    padding: 20,
+    padding: 22,
+    width: '100%',
+  },
+  emptyOperatorsState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 36,
+    paddingHorizontal: 20,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderStyle: 'dashed',
+    width: '100%',
+    gap: 8,
+  },
+  emptyOperatorsTitle: {
+    fontSize: 14,
+    marginTop: 4,
+  },
+  emptyOperatorsSubtitle: {
+    fontSize: 12,
+    textAlign: 'center',
+    maxWidth: 420,
   },
   superOperatorsHeader: {
     flexDirection: 'row',

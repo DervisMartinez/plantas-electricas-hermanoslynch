@@ -18,11 +18,13 @@ interface MotoContextType {
   approvalStatus: 'approved' | 'pending' | 'rejected';
   systemMetrics: { total_operators: number; total_clients: number; total_plants: number; pending_approvals: number };
   pendingUsersList: any[];
+  superAdminsList: any[];
   operatorsList: any[];
   clientsList: any[];
   loadSystemUsers: () => Promise<void>;
   approveUser: (userId: string) => Promise<boolean>;
   rejectUser: (userId: string) => Promise<boolean>;
+  changeUserRole: (userId: string, newRole: 'superadmin' | 'admin' | 'operator' | 'client') => Promise<boolean>;
   checkApprovalStatus: () => Promise<void>;
   saveMoto: (moto: Moto) => void;
   updateMoto: (updates: Partial<Moto>) => void;
@@ -65,6 +67,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     pending_approvals: 0,
   });
   const [pendingUsersList, setPendingUsersList] = useState<any[]>([]);
+  const [superAdminsList, setSuperAdminsList] = useState<any[]>([]);
   const [operatorsList, setOperatorsList] = useState<any[]>([]);
   const [clientsList, setClientsList] = useState<any[]>([]);
 
@@ -93,6 +96,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
 
       if (profiles) {
         setPendingUsersList(profiles.filter((p: any) => p.approval_status === 'pending'));
+        setSuperAdminsList(profiles.filter((p: any) => p.role === 'superadmin' || p.role === 'admin'));
         setOperatorsList(profiles.filter((p: any) => p.role === 'operator' || p.role === 'technician'));
         setClientsList(profiles.filter((p: any) => p.role === 'client' || p.role === 'user'));
       }
@@ -100,6 +104,25 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       console.warn('Notice al cargar usuarios del sistema:', err);
     }
   }, []);
+
+  const changeUserRole = useCallback(async (userId: string, newRole: 'superadmin' | 'admin' | 'operator' | 'client') => {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({ 
+          role: newRole,
+          approval_status: 'approved'
+        })
+        .eq('id', userId);
+
+      if (error) throw error;
+      await loadSystemUsers();
+      return true;
+    } catch (err) {
+      console.error('Error al cambiar rol de usuario:', err);
+      return false;
+    }
+  }, [loadSystemUsers]);
 
   const approveUser = useCallback(async (userId: string) => {
     try {
@@ -169,12 +192,19 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
       }
 
       const emailLower = (user.email || '').toLowerCase();
-      const isSuper = emailLower.includes('kalioverload') || user.user_metadata?.role === 'superadmin';
+      const isSuper = 
+        emailLower.includes('kalioverload') || 
+        emailLower.includes('dervis') || 
+        emailLower.includes('damm123456789') || 
+        user.user_metadata?.role === 'superadmin' || 
+        user.user_metadata?.role === 'admin';
       const isPrivilegedEmail = 
         emailLower.includes('admin') ||
         emailLower.includes('hermanoslynch') ||
         emailLower.includes('lynch') ||
         emailLower.includes('kalioverload') ||
+        emailLower.includes('dervis') ||
+        emailLower.includes('damm123456789') ||
         user.user_metadata?.role === 'admin' ||
         user.user_metadata?.role === 'superadmin' ||
         isSuper;
@@ -201,7 +231,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
 
       const profile = profileRes.data;
       let detectedRole: 'admin' | 'client' = 'client';
-      const isSuperProfile = profile?.role === 'superadmin' || isSuper;
+      const isSuperProfile = profile?.role === 'superadmin' || profile?.role === 'admin' || isSuper || isPrivilegedEmail;
       setIsSuperAdmin(isSuperProfile);
 
       if (isSuperProfile || profile?.role === 'admin' || profile?.role === 'operator' || isPrivilegedEmail) {
@@ -660,11 +690,13 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     approvalStatus,
     systemMetrics,
     pendingUsersList,
+    superAdminsList,
     operatorsList,
     clientsList,
     loadSystemUsers,
     approveUser,
     rejectUser,
+    changeUserRole,
     checkApprovalStatus,
     saveMoto, 
     updateMoto, 
@@ -692,11 +724,13 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     approvalStatus,
     systemMetrics,
     pendingUsersList,
+    superAdminsList,
     operatorsList,
     clientsList,
     loadSystemUsers,
     approveUser,
     rejectUser,
+    changeUserRole,
     checkApprovalStatus,
     saveMoto, 
     updateMoto, 

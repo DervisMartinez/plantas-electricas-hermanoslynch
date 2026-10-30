@@ -318,9 +318,9 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
   const bloodTypes = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surface }}>
-      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-        <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 110 }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, width: '100%', backgroundColor: isDark ? '#0c0d12' : colors.surface }}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1, width: '100%' }}>
+        <ScrollView style={{ flex: 1, width: '100%' }} contentContainerStyle={{ padding: 20, paddingBottom: 110 }}>
           
           {/* PROFILE AVATAR & HEADER */}
           <View style={{ alignItems: 'center', marginBottom: 24 }}>

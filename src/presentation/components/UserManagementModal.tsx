@@ -29,15 +29,17 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
   const {
     systemMetrics,
     pendingUsersList,
+    superAdminsList,
     operatorsList,
     clientsList,
     loadSystemUsers,
     approveUser,
     rejectUser,
+    changeUserRole,
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
 
-  const [activeFilter, setActiveFilter] = useState<'pending' | 'operators' | 'clients' | 'fleet' | 'all'>('pending');
+  const [activeFilter, setActiveFilter] = useState<'pending' | 'superadmins' | 'operators' | 'clients' | 'fleet' | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [createOperatorVisible, setCreateOperatorVisible] = useState(false);
   const [assigningOperator, setAssigningOperator] = useState<any | null>(null);
@@ -166,9 +168,19 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
   const currentList = useMemo(() => {
     let list: any[] = [];
     if (activeFilter === 'pending') list = pendingUsersList;
+    else if (activeFilter === 'superadmins') list = superAdminsList;
     else if (activeFilter === 'operators') list = operatorsList;
     else if (activeFilter === 'clients') list = clientsList;
-    else list = [...pendingUsersList, ...operatorsList, ...clientsList];
+    else {
+      list = [...pendingUsersList, ...superAdminsList, ...operatorsList, ...clientsList];
+      // Deduplicate by id if same user appears in multiple lists
+      const seen = new Set();
+      list = list.filter((u) => {
+        if (!u?.id || seen.has(u.id)) return false;
+        seen.add(u.id);
+        return true;
+      });
+    }
 
     if (!searchQuery.trim()) return list;
     const q = searchQuery.toLowerCase().trim();
@@ -177,9 +189,10 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
         (u.email || '').toLowerCase().includes(q) ||
         (u.full_name || '').toLowerCase().includes(q) ||
         (u.operator_code || '').toLowerCase().includes(q) ||
-        (u.specialty || '').toLowerCase().includes(q)
+        (u.specialty || '').toLowerCase().includes(q) ||
+        (u.role || '').toLowerCase().includes(q)
     );
-  }, [activeFilter, pendingUsersList, operatorsList, clientsList, searchQuery]);
+  }, [activeFilter, pendingUsersList, superAdminsList, operatorsList, clientsList, searchQuery]);
 
   const totalPages = useMemo(() => Math.ceil(currentList.length / PAGE_SIZE) || 1, [currentList.length]);
   const paginatedUsers = useMemo(() => {
@@ -204,10 +217,28 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
     return filteredFleet.slice(start, start + PAGE_SIZE);
   }, [filteredFleet, currentPage]);
 
-  const handleApprove = async (userId: string) => {
+  const handleApprove = async (userId: string, asRole?: 'superadmin' | 'operator' | 'client') => {
     setActionLoadingId(userId);
     try {
-      await approveUser(userId);
+      if (asRole) {
+        await changeUserRole(userId, asRole);
+      } else {
+        await approveUser(userId);
+      }
+      await loadSystemUsers();
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handlePromoteRole = async (userId: string, newRole: 'superadmin' | 'operator' | 'client') => {
+    const roleName = newRole === 'superadmin' ? 'Super Administrador' : (newRole === 'operator' ? 'Operador Técnico' : 'Cliente');
+    if (Platform.OS === 'web') {
+      if (!window.confirm(`¿Confirmas asignar el rol de ${roleName} a este usuario?`)) return;
+    }
+    setActionLoadingId(userId);
+    try {
+      await changeUserRole(userId, newRole);
       await loadSystemUsers();
     } finally {
       setActionLoadingId(null);
@@ -250,8 +281,23 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
             </TouchableOpacity>
           </View>
 
-          {/* 4 KPI CARDS */}
+          {/* 5 KPI CARDS */}
           <View style={styles.kpiGrid}>
+            <View style={[styles.kpiCard, { backgroundColor: cardSubBg, borderColor: 'rgba(0, 227, 253, 0.3)' }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.medium }]}>
+                  Super Admins
+                </Text>
+                <MaterialIcons name="security" size={14} color="#00e3fd" />
+              </View>
+              <Text style={[styles.kpiValue, { color: '#00e3fd', fontFamily: F.extrabold }]}>
+                {superAdminsList.length}
+              </Text>
+              <Text style={[styles.kpiSub, { color: '#00e3fd', fontFamily: F.semibold }]}>
+                Control Total
+              </Text>
+            </View>
+
             <View style={[styles.kpiCard, { backgroundColor: cardSubBg, borderColor: borderModal }]}>
               <Text style={[styles.kpiLabel, { color: textSecondary, fontFamily: F.medium }]}>
                 Operadores HL
@@ -343,6 +389,24 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
               </TouchableOpacity>
 
               <TouchableOpacity
+                onPress={() => setActiveFilter('superadmins')}
+                style={[
+                  styles.tabPill,
+                  activeFilter === 'superadmins' && [styles.activeTabPill, { backgroundColor: '#00e3fd' }],
+                ]}
+              >
+                <Text
+                  style={{
+                    fontFamily: F.bold,
+                    fontSize: 11,
+                    color: activeFilter === 'superadmins' ? '#0c0e14' : textSecondary,
+                  }}
+                >
+                  Super Admins ({superAdminsList.length})
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
                 onPress={() => setActiveFilter('operators')}
                 style={[
                   styles.tabPill,
@@ -415,7 +479,7 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
               </TouchableOpacity>
             </View>
 
-            {/* BUTTON CREATE OPERATOR OR FLEET VEHICLE */}
+            {/* BUTTON CREATE USER / SUPER ADMIN OR FLEET VEHICLE */}
             {activeFilter === 'fleet' ? (
               <TouchableOpacity
                 onPress={() => setShowCreateFleetModal(true)}
@@ -430,12 +494,12 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
             ) : (
               <TouchableOpacity
                 onPress={() => setCreateOperatorVisible(true)}
-                style={[styles.createOperatorBtn, { backgroundColor: accentBlue }]}
+                style={[styles.createOperatorBtn, { backgroundColor: '#00e3fd' }]}
                 activeOpacity={0.85}
               >
-                <MaterialIcons name="person-add" size={16} color="#ffffff" />
-                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                  + Crear Operador
+                <MaterialIcons name="person-add" size={16} color="#0c0e14" />
+                <Text style={{ fontFamily: F.bold, color: '#0c0e14', fontSize: 12 }}>
+                  + Crear Super Admin / Operador
                 </Text>
               </TouchableOpacity>
             )}
@@ -571,7 +635,8 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                 const isPending = user.approval_status === 'pending';
                 const isApproved = user.approval_status === 'approved';
                 const isRejected = user.approval_status === 'rejected';
-                const isOperator = user.role === 'operator';
+                const isSuperAdminUser = user.role === 'superadmin' || user.role === 'admin';
+                const isOperator = user.role === 'operator' || user.role === 'technician';
                 const isLoading = actionLoadingId === user.id;
 
                 return (
@@ -583,7 +648,7 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                     ]}
                   >
                     <View style={{ flex: 1 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4, flexWrap: 'wrap' }}>
                         <Text style={[styles.userName, { color: textPrimary, fontFamily: F.bold }]}>
                           {user.full_name || 'Usuario'}
                         </Text>
@@ -593,10 +658,10 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                           style={[
                             styles.badgePill,
                             {
-                              backgroundColor: isOperator
+                              backgroundColor: isSuperAdminUser
+                                ? 'rgba(0, 227, 253, 0.15)'
+                                : isOperator
                                 ? 'rgba(26, 92, 255, 0.15)'
-                                : user.role === 'superadmin'
-                                ? 'rgba(0, 180, 216, 0.15)'
                                 : 'rgba(142, 150, 170, 0.15)',
                             },
                           ]}
@@ -605,17 +670,17 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                             style={{
                               fontFamily: F.bold,
                               fontSize: 10,
-                              color: isOperator
+                              color: isSuperAdminUser
+                                ? '#00e3fd'
+                                : isOperator
                                 ? accentBlue
-                                : user.role === 'superadmin'
-                                ? accentCyan
                                 : textSecondary,
                             }}
                           >
-                            {isOperator
+                            {isSuperAdminUser
+                              ? '🛡️ SUPER ADMIN'
+                              : isOperator
                               ? 'OPERADOR HL'
-                              : user.role === 'superadmin'
-                              ? 'SUPERADMIN'
                               : 'CLIENTE'}
                           </Text>
                         </View>
@@ -658,8 +723,8 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                       </Text>
 
                       {user.operator_code && (
-                        <Text style={[styles.userExtra, { color: accentCyan, fontFamily: F.semibold }]}>
-                          Carnet: {user.operator_code} • {user.specialty || 'Técnico de Generadores'}
+                        <Text style={[styles.userExtra, { color: isSuperAdminUser ? '#00e3fd' : accentCyan, fontFamily: F.semibold }]}>
+                          Carnet: {user.operator_code} • {user.specialty || (isSuperAdminUser ? 'Super Administrador' : 'Técnico de Generadores')}
                         </Text>
                       )}
 
@@ -673,7 +738,7 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                     {/* ACTIONS */}
                     <View style={styles.actionsCell}>
                       {isPending && (
-                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
                           <TouchableOpacity
                             onPress={() => handleApprove(user.id)}
                             disabled={isLoading}
@@ -684,12 +749,24 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                               <ActivityIndicator color="#ffffff" size="small" />
                             ) : (
                               <>
-                                <MaterialIcons name="check" size={16} color="#ffffff" />
+                                <MaterialIcons name="check" size={15} color="#ffffff" />
                                 <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>
                                   Aprobar
                                 </Text>
                               </>
                             )}
+                          </TouchableOpacity>
+
+                          <TouchableOpacity
+                            onPress={() => handleApprove(user.id, 'superadmin')}
+                            disabled={isLoading}
+                            style={[styles.approveBtn, { backgroundColor: '#00e3fd' }]}
+                            activeOpacity={0.85}
+                          >
+                            <MaterialIcons name="security" size={14} color="#0c0e14" />
+                            <Text style={{ fontFamily: F.bold, color: '#0c0e14', fontSize: 11 }}>
+                              Aprobar Super Admin
+                            </Text>
                           </TouchableOpacity>
 
                           <TouchableOpacity
@@ -703,31 +780,62 @@ export const UserManagementModal: React.FC<Props> = ({ visible, onClose }) => {
                         </View>
                       )}
 
-                      {/* ASIGNACIÓN DE PLANTAS Y MÓVIL AL OPERADOR */}
-                      {isApproved && (isOperator || user.role === 'superadmin') && (
-                        <TouchableOpacity
-                          onPress={() => setAssigningOperator(user)}
-                          style={[styles.assignBtn, { backgroundColor: 'rgba(26, 92, 255, 0.15)', borderColor: accentBlue }]}
-                          activeOpacity={0.8}
-                        >
-                          <MaterialIcons name="assignment" size={13} color={accentBlue} />
-                          <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10.5 }}>
-                            Asignar Plantas
-                          </Text>
-                        </TouchableOpacity>
-                      )}
+                      {/* ACCIONES PARA USUARIOS YA APROBADOS */}
+                      {isApproved && (
+                        <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+                          {/* ASIGNACIÓN DE PLANTAS AL OPERADOR O ADMIN */}
+                          {(isOperator || isSuperAdminUser) && (
+                            <TouchableOpacity
+                              onPress={() => setAssigningOperator(user)}
+                              style={[styles.assignBtn, { backgroundColor: 'rgba(26, 92, 255, 0.15)', borderColor: accentBlue }]}
+                              activeOpacity={0.8}
+                            >
+                              <MaterialIcons name="assignment" size={13} color={accentBlue} />
+                              <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10.5 }}>
+                                Asignar Plantas
+                              </Text>
+                            </TouchableOpacity>
+                          )}
 
-                      {isApproved && user.role !== 'superadmin' && (
-                        <TouchableOpacity
-                          onPress={() => handleReject(user.id)}
-                          disabled={isLoading}
-                          style={[styles.suspendBtn, { borderColor: borderModal }]}
-                          activeOpacity={0.8}
-                        >
-                          <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 10 }}>
-                            Suspender
-                          </Text>
-                        </TouchableOpacity>
+                          {/* BOTÓN HACER SUPER ADMIN SI NO LO ES */}
+                          {!isSuperAdminUser ? (
+                            <TouchableOpacity
+                              onPress={() => handlePromoteRole(user.id, 'superadmin')}
+                              disabled={isLoading}
+                              style={[styles.promoteBtn, { backgroundColor: 'rgba(0, 227, 253, 0.12)', borderColor: '#00e3fd' }]}
+                              activeOpacity={0.8}
+                            >
+                              <MaterialIcons name="security" size={13} color="#00e3fd" />
+                              <Text style={{ fontFamily: F.bold, color: '#00e3fd', fontSize: 10.5 }}>
+                                Hacer Super Admin
+                              </Text>
+                            </TouchableOpacity>
+                          ) : (
+                            <TouchableOpacity
+                              onPress={() => handlePromoteRole(user.id, 'operator')}
+                              disabled={isLoading}
+                              style={[styles.promoteBtn, { backgroundColor: 'rgba(255, 255, 255, 0.05)', borderColor: borderModal }]}
+                              activeOpacity={0.8}
+                            >
+                              <MaterialIcons name="swap-horiz" size={13} color={textSecondary} />
+                              <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 10.5 }}>
+                                Cambiar a Operador
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+
+                          {/* SUSPENDER ACCESO */}
+                          <TouchableOpacity
+                            onPress={() => handleReject(user.id)}
+                            disabled={isLoading}
+                            style={[styles.suspendBtn, { borderColor: borderModal }]}
+                            activeOpacity={0.8}
+                          >
+                            <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 10 }}>
+                              Suspender
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
                       )}
 
                       {isRejected && (
@@ -1134,6 +1242,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   assignBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    height: 28,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'center',
+  },
+  promoteBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,

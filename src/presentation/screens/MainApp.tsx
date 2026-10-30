@@ -57,7 +57,7 @@ export const MainApp = () => {
   const { colors, mode } = useTheme();
   const { myMoto, updateMoto, addRecord, drivesCompanyVehicle, isAdmin } = useMyMoto();
   const [activeTab, setActiveTab] = useState<'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile'>('moto');
-  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['moto']));
+  const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['moto', 'specs', 'services', 'wallet', 'history', 'profile']));
   const [servicesInitialComp, setServicesInitialComp] = useState<ComponentType | undefined>(undefined);
     React.useEffect(() => {
     if (!drivesCompanyVehicle && activeTab === 'wallet') {

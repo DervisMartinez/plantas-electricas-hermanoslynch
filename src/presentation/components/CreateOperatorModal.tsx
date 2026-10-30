@@ -9,6 +9,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Platform,
 } from 'react-native';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../context/ThemeContext';
@@ -27,7 +28,8 @@ export const CreateOperatorModal: React.FC<Props> = ({
 }) => {
   const { isDark } = useTheme();
 
-  // Todos los campos inician 100% vacíos
+  // Rol seleccionado: por defecto superadmin o el que el usuario elija
+  const [selectedRole, setSelectedRole] = useState<'superadmin' | 'operator' | 'client'>('superadmin');
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -53,6 +55,7 @@ export const CreateOperatorModal: React.FC<Props> = ({
   const accentCyan = '#00b4d8';
 
   const resetForm = () => {
+    setSelectedRole('superadmin');
     setFullName('');
     setEmail('');
     setPassword('');
@@ -63,12 +66,16 @@ export const CreateOperatorModal: React.FC<Props> = ({
 
   const handleCreate = async () => {
     if (!fullName.trim() || !email.trim() || !password.trim()) {
-      alert('Por favor completa al menos el nombre, correo y contraseña del operador.');
+      const msg = 'Por favor completa al menos el nombre, correo y contraseña.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else alert(msg);
       return;
     }
 
     if (password.length < 6) {
-      alert('La contraseña temporal debe tener al menos 6 caracteres.');
+      const msg = 'La contraseña temporal debe tener al menos 6 caracteres.';
+      if (Platform.OS === 'web') window.alert(msg);
+      else alert(msg);
       return;
     }
 
@@ -78,6 +85,12 @@ export const CreateOperatorModal: React.FC<Props> = ({
       const firstName = parts[0] || '';
       const lastName = parts.slice(1).join(' ') || '';
 
+      const codePrefix = selectedRole === 'superadmin' ? 'HL-SUPER' : (selectedRole === 'operator' ? 'HL-TECH' : 'HL-CLI');
+      const autoCode = operatorCode.trim() || `${codePrefix}-${Math.floor(1000 + Math.random() * 9000)}`;
+      const defaultSpec = selectedRole === 'superadmin'
+        ? 'Super Administrador Principal'
+        : (selectedRole === 'operator' ? 'Técnico de Generadores Diésel' : 'Titular de Planta Eléctrica');
+
       const { data, error } = await supabase.auth.signUp({
         email: email.trim(),
         password: password.trim(),
@@ -86,11 +99,11 @@ export const CreateOperatorModal: React.FC<Props> = ({
             first_name: firstName,
             last_name: lastName,
             full_name: fullName.trim(),
-            role: 'operator',
+            role: selectedRole,
             approval_status: 'approved',
             phone: phone.trim() || undefined,
-            operator_code: operatorCode.trim() || `HL-TECH-${Math.floor(1000 + Math.random() * 9000)}`,
-            specialty: specialty.trim() || 'Técnico de Generadores Diésel',
+            operator_code: autoCode,
+            specialty: specialty.trim() || defaultSpec,
           },
         },
       });
@@ -102,24 +115,33 @@ export const CreateOperatorModal: React.FC<Props> = ({
           id: data.user.id,
           email: email.trim(),
           full_name: fullName.trim(),
-          role: 'operator',
+          role: selectedRole,
           approval_status: 'approved',
           phone: phone.trim() || null,
-          operator_code: operatorCode.trim() || `HL-TECH-${Math.floor(1000 + Math.random() * 9000)}`,
-          specialty: specialty.trim() || 'Técnico de Generadores Diésel',
+          operator_code: autoCode,
+          specialty: specialty.trim() || defaultSpec,
         });
       }
 
-      alert(`¡Operador "${fullName.trim()}" registrado y acreditado exitosamente!`);
+      const roleLabel = selectedRole === 'superadmin' ? 'Super Administrador' : (selectedRole === 'operator' ? 'Operador Técnico' : 'Cliente');
+      const msg = `¡${roleLabel} "${fullName.trim()}" registrado y acreditado con éxito!`;
+      if (Platform.OS === 'web') window.alert(msg);
+      else alert(msg);
+
       resetForm();
       onOperatorCreated();
       onClose();
     } catch (err: any) {
-      alert('Error al crear operador: ' + (err.message || 'Error desconocido'));
+      const msg = 'Error al crear usuario: ' + (err.message || 'Error desconocido');
+      if (Platform.OS === 'web') window.alert(msg);
+      else alert(msg);
     } finally {
       setLoading(false);
     }
   };
+
+  const isSuper = selectedRole === 'superadmin';
+  const roleColor = isSuper ? '#00e3fd' : (selectedRole === 'operator' ? accentBlue : '#22c55e');
 
   return (
     <Modal visible={visible} transparent={true} animationType="fade" onRequestClose={onClose}>
@@ -129,15 +151,15 @@ export const CreateOperatorModal: React.FC<Props> = ({
           {/* HEADER */}
           <View style={styles.headerRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-              <View style={[styles.headerIconBadge, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
-                <MaterialIcons name="person-add" size={22} color={accentBlue} />
+              <View style={[styles.headerIconBadge, { backgroundColor: isSuper ? 'rgba(0, 227, 253, 0.15)' : 'rgba(26, 92, 255, 0.15)' }]}>
+                <MaterialIcons name={isSuper ? "security" : (selectedRole === 'operator' ? "engineering" : "person-add")} size={22} color={roleColor} />
               </View>
               <View>
                 <Text style={[styles.headerTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  Crear Nuevo Operador Técnico
+                  {isSuper ? 'Crear Super Usuario Administrador' : (selectedRole === 'operator' ? 'Crear Operador Técnico HL' : 'Crear Cuenta de Cliente')}
                 </Text>
                 <Text style={[styles.headerSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                  Registro y acreditación de personal de mantenimiento
+                  {isSuper ? 'Acceso global total, control de usuarios y supervisión de flota' : 'Registro y acreditación de personal de mantenimiento'}
                 </Text>
               </View>
             </View>
@@ -149,15 +171,89 @@ export const CreateOperatorModal: React.FC<Props> = ({
 
           <ScrollView style={{ maxHeight: 520 }} showsVerticalScrollIndicator={false}>
             
+            {/* SELECTOR DE ROL */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.bold, marginBottom: 8 }]}>
+                TIPO DE USUARIO / NIVEL DE PRIVILEGIO *
+              </Text>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={() => setSelectedRole('superadmin')}
+                  style={[
+                    styles.roleOptionBtn,
+                    {
+                      backgroundColor: selectedRole === 'superadmin' ? 'rgba(0, 227, 253, 0.15)' : cardSubBg,
+                      borderColor: selectedRole === 'superadmin' ? '#00e3fd' : borderModal,
+                    },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="security" size={18} color={selectedRole === 'superadmin' ? '#00e3fd' : textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, color: selectedRole === 'superadmin' ? '#00e3fd' : textPrimary, fontSize: 11.5 }}>
+                      Super Admin
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 9.5 }}>
+                      Control total
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setSelectedRole('operator')}
+                  style={[
+                    styles.roleOptionBtn,
+                    {
+                      backgroundColor: selectedRole === 'operator' ? 'rgba(26, 92, 255, 0.15)' : cardSubBg,
+                      borderColor: selectedRole === 'operator' ? accentBlue : borderModal,
+                    },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="engineering" size={18} color={selectedRole === 'operator' ? accentBlue : textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, color: selectedRole === 'operator' ? accentBlue : textPrimary, fontSize: 11.5 }}>
+                      Operador HL
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 9.5 }}>
+                      Mantenimiento
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setSelectedRole('client')}
+                  style={[
+                    styles.roleOptionBtn,
+                    {
+                      backgroundColor: selectedRole === 'client' ? 'rgba(34, 197, 94, 0.15)' : cardSubBg,
+                      borderColor: selectedRole === 'client' ? '#22c55e' : borderModal,
+                    },
+                  ]}
+                  activeOpacity={0.8}
+                >
+                  <MaterialIcons name="apartment" size={18} color={selectedRole === 'client' ? '#22c55e' : textSecondary} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, color: selectedRole === 'client' ? '#22c55e' : textPrimary, fontSize: 11.5 }}>
+                      Cliente
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 9.5 }}>
+                      Titular planta
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+            </View>
+
             {/* NOMBRE COMPLETO */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
-                NOMBRE Y APELLIDO DEL OPERADOR *
+                {isSuper ? 'NOMBRE Y APELLIDO DEL ADMINISTRADOR *' : 'NOMBRE Y APELLIDO DEL OPERADOR *'}
               </Text>
               <TextInput
                 value={fullName}
                 onChangeText={setFullName}
-                placeholder="Ej. Ing. Roberto Fernández"
+                placeholder={isSuper ? "Ej. Ing. Dervis Martínez" : "Ej. Ing. Roberto Fernández"}
                 placeholderTextColor={textSecondary}
                 style={[styles.input, { backgroundColor: cardSubBg, color: textPrimary, borderColor: borderModal, fontFamily: F.medium }]}
               />
@@ -166,12 +262,12 @@ export const CreateOperatorModal: React.FC<Props> = ({
             {/* CORREO ELECTRÓNICO */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
-                CORREO ELECTRÓNICO CORPORATIVO *
+                CORREO ELECTRÓNICO *
               </Text>
               <TextInput
                 value={email}
                 onChangeText={setEmail}
-                placeholder="Ej. roberto.fernandez@hermanoslynch.com"
+                placeholder={isSuper ? "admin@hermanoslynch.com" : "operaciones@hermanoslynch.com"}
                 placeholderTextColor={textSecondary}
                 keyboardType="email-address"
                 autoCapitalize="none"
@@ -212,12 +308,12 @@ export const CreateOperatorModal: React.FC<Props> = ({
             {/* CÓDIGO DE CARNET HL */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
-                CÓDIGO DE ACREDITACIÓN / CARNET HL
+                {isSuper ? 'CÓDIGO DE CARNET ADMINISTRATIVO' : 'CÓDIGO DE ACREDITACIÓN / CARNET HL'}
               </Text>
               <TextInput
                 value={operatorCode}
                 onChangeText={setOperatorCode}
-                placeholder="Ej. HL-TECH-5012 (Opcional, se genera auto)"
+                placeholder={isSuper ? "Ej. HL-SUPER-01 (Opcional, auto)" : "Ej. HL-TECH-5012 (Opcional, auto)"}
                 placeholderTextColor={textSecondary}
                 autoCapitalize="characters"
                 style={[styles.input, { backgroundColor: cardSubBg, color: textPrimary, borderColor: borderModal, fontFamily: F.medium }]}
@@ -227,22 +323,24 @@ export const CreateOperatorModal: React.FC<Props> = ({
             {/* ESPECIALIDAD TÉCNICA */}
             <View style={styles.inputGroup}>
               <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
-                ESPECIALIDAD / CERTIFICACIÓN PRINCIPAL
+                {isSuper ? 'CARGO / DEPARTAMENTO' : 'ESPECIALIDAD / CERTIFICACIÓN PRINCIPAL'}
               </Text>
               <TextInput
                 value={specialty}
                 onChangeText={setSpecialty}
-                placeholder="Ej. Cummins 3.9L & Alternadores Leroy Somer"
+                placeholder={isSuper ? "Ej. Dirección General de Operaciones" : "Ej. Cummins 3.9L & Alternadores Leroy Somer"}
                 placeholderTextColor={textSecondary}
                 style={[styles.input, { backgroundColor: cardSubBg, color: textPrimary, borderColor: borderModal, fontFamily: F.medium }]}
               />
             </View>
 
             {/* AVISO DE AUTORIZACIÓN */}
-            <View style={[styles.noticeBox, { backgroundColor: 'rgba(0, 180, 216, 0.1)', borderColor: 'rgba(0, 180, 216, 0.3)' }]}>
-              <MaterialIcons name="info-outline" size={16} color={accentCyan} />
+            <View style={[styles.noticeBox, { backgroundColor: isSuper ? 'rgba(0, 227, 253, 0.08)' : 'rgba(0, 180, 216, 0.1)', borderColor: isSuper ? 'rgba(0, 227, 253, 0.3)' : 'rgba(0, 180, 216, 0.3)' }]}>
+              <MaterialIcons name={isSuper ? "security" : "info-outline"} size={16} color={roleColor} />
               <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11, flex: 1, lineHeight: 16 }}>
-                El operador quedará automáticamente aprobado y habilitado con privilegios de mantenimiento en el sistema.
+                {isSuper
+                  ? 'Este usuario tendrá rango de Super Administrador con acceso completo a crear otros administradores, supervisar toda la flota de plantas y modificar parámetros.'
+                  : 'El usuario quedará automáticamente aprobado y habilitado con privilegios en el sistema.'}
               </Text>
             </View>
 
@@ -261,16 +359,16 @@ export const CreateOperatorModal: React.FC<Props> = ({
             <TouchableOpacity
               onPress={handleCreate}
               disabled={loading}
-              style={[styles.saveBtn, { backgroundColor: accentBlue }]}
+              style={[styles.saveBtn, { backgroundColor: isSuper ? '#00b4d8' : accentBlue }]}
               activeOpacity={0.85}
             >
               {loading ? (
                 <ActivityIndicator color="#ffffff" size="small" />
               ) : (
                 <>
-                  <MaterialIcons name="how-to-reg" size={18} color="#ffffff" />
+                  <MaterialIcons name={isSuper ? "verified-user" : "how-to-reg"} size={18} color="#ffffff" />
                   <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>
-                    Crear y Acreditar Operador
+                    {isSuper ? 'Crear Super Administrador' : (selectedRole === 'operator' ? 'Crear Operador Técnico' : 'Crear Cliente')}
                   </Text>
                 </>
               )}
@@ -330,6 +428,16 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  roleOptionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
   },
   inputGroup: {
     marginBottom: 14,
