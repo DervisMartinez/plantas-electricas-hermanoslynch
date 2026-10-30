@@ -17,15 +17,14 @@ import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useMyMoto } from '../../context/MotoContext';
 import { isCar, isPlanta, Moto } from '../../../domain/entities/Moto';
-import { getMotoSpecs } from '../../../data/specs';
-import { VEHICLE_CATALOG } from '../../../data/catalog';
 import { ComponentType } from '../../../constants/telemetry';
 import { UserManagementModal } from '../UserManagementModal';
 import { OperatorAgendaModal } from '../OperatorAgendaModal';
+import { CreateOperatorModal } from '../CreateOperatorModal';
+import { AssignOperatorModal } from '../AssignOperatorModal';
 
 // Brand Assets
 const HL_LOGO_REQUIRE = require('../../../../assets/images/logo and media coorporative/logo-sin-nombre.png');
-const PLANTA_IMG_REQUIRE = require('../../../../assets/images/plantas electricas/Blue power generation/C125-1-300x300-removebg-preview.png');
 
 interface BentoDashboardViewProps {
   activeTab: 'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile';
@@ -35,156 +34,220 @@ interface BentoDashboardViewProps {
   onOpenSpecs: () => void;
   onOpenStats: () => void;
   onOpenReport: () => void;
-  onOpenServicesTab: (comp?: ComponentType) => void;
+  onOpenServicesTab: (initialComp?: ComponentType) => void;
   children?: React.ReactNode;
 }
 
-// Subsystem thematic metadata for squircle thumbnails
-const SUBSYSTEM_META: Record<string, { icon: any; bg: string; color: string; desc: string }> = {
-  oil: { icon: 'oil', bg: 'rgba(26, 54, 93, 0.14)', color: '#1A365D', desc: 'Ciclo 250 hrs · Aceite 15W-40 CI-4' },
-  fuel_filter: { icon: 'filter-variant', bg: 'rgba(107, 70, 193, 0.14)', color: '#6B46C1', desc: 'Ciclo 250 hrs · Primario Racor & Secundario' },
-  air_filter: { icon: 'air-filter', bg: 'rgba(214, 158, 46, 0.16)', color: '#D69E2E', desc: 'Ciclo 500 hrs · Cartucho Industrial Seco' },
-  coolant: { icon: 'radiator', bg: 'rgba(16, 185, 129, 0.14)', color: '#10b981', desc: 'Ciclo 1,000 hrs · Refrigerante Glicol 50/50' },
-  battery: { icon: 'battery-charging-100', bg: 'rgba(2, 132, 199, 0.14)', color: '#0284c7', desc: 'Ciclo 2,000 hrs · Banco Baterías 24V' },
-  accessory_belt: { icon: 'cogs', bg: 'rgba(236, 72, 153, 0.14)', color: '#ec4899', desc: 'Ciclo 1,000 hrs · Correas Poli-V Ventilador' },
-  timing_belt: { icon: 'engine', bg: 'rgba(99, 102, 241, 0.14)', color: '#6366f1', desc: 'Ciclo 1,500 hrs · Calibración Balancines e Inyectores' },
-  clutch: { icon: 'shield-car', bg: 'rgba(20, 184, 166, 0.14)', color: '#14b8a6', desc: 'Ciclo 3,000 hrs · Aisladores Antivibración' },
-  transmission_fluid: { icon: 'generator-portable', bg: 'rgba(249, 115, 22, 0.14)', color: '#f97316', desc: 'Ciclo 2,500 hrs · Bobinado Estator & Megado' },
-  cabin_filter: { icon: 'gauge', bg: 'rgba(6, 182, 212, 0.14)', color: '#06b6d4', desc: 'Ciclo 1,200 hrs · Panel ComAp & Sensores' },
+/**
+ * Helper to resolve geographic taxonomy (País, Zona, Estado) strictly from real DB strings
+ * without inventing random data. If a real Venezuelan state/city is present in `state`, `city`, or `location`,
+ * it resolves its official Zone and Country (`Venezuela`); otherwise it preserves the exact DB text.
+ */
+const resolveRealGeo = (raw: {
+  location?: string;
+  state?: string;
+  city?: string;
+  country?: string;
+  zone?: string;
+}) => {
+  const combined = `${raw.state || ''} ${raw.city || ''} ${raw.location || ''} ${raw.country || ''}`.toLowerCase();
+
+  let detectedState = (raw.state || raw.city || raw.location || '').trim();
+  let detectedZone = (raw.zone || '').trim();
+  let detectedCountry = (raw.country || '').trim();
+
+  if (combined.includes('carabobo') || combined.includes('valencia') || combined.includes('puerto cabello') || combined.includes('guacara')) {
+    detectedState = 'Carabobo';
+    detectedZone = detectedZone || 'Zona Central';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('distrito capital') || combined.includes('caracas') || combined.includes('libertador')) {
+    detectedState = 'Distrito Capital';
+    detectedZone = detectedZone || 'Zona Capital';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('miranda') || combined.includes('chacao') || combined.includes('baruta') || combined.includes('guarenas') || combined.includes('los teques')) {
+    detectedState = 'Miranda';
+    detectedZone = detectedZone || 'Zona Capital';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('aragua') || combined.includes('maracay') || combined.includes('cagua') || combined.includes('turmero')) {
+    detectedState = 'Aragua';
+    detectedZone = detectedZone || 'Zona Central';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('zulia') || combined.includes('maracaibo') || combined.includes('cabimas')) {
+    detectedState = 'Zulia';
+    detectedZone = detectedZone || 'Zona Occidental';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('lara') || combined.includes('barquisimeto') || combined.includes('cabudare')) {
+    detectedState = 'Lara';
+    detectedZone = detectedZone || 'Zona Occidental';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('anzoátegui') || combined.includes('anzoategui') || combined.includes('barcelona') || combined.includes('lechería') || combined.includes('puerto la cruz')) {
+    detectedState = 'Anzoátegui';
+    detectedZone = detectedZone || 'Zona Oriental';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('táchira') || combined.includes('tachira') || combined.includes('san cristóbal') || combined.includes('san cristobal')) {
+    detectedState = 'Táchira';
+    detectedZone = detectedZone || 'Zona Los Andes';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('bolívar') || combined.includes('bolivar') || combined.includes('puerto ordaz') || combined.includes('ciudad guayana')) {
+    detectedState = 'Bolívar';
+    detectedZone = detectedZone || 'Zona Guayana';
+    detectedCountry = detectedCountry || 'Venezuela';
+  } else if (combined.includes('colombia') || combined.includes('bogotá') || combined.includes('medellín')) {
+    detectedCountry = detectedCountry || 'Colombia';
+  } else if (combined.includes('panamá') || combined.includes('panama')) {
+    detectedCountry = detectedCountry || 'Panamá';
+  } else if (combined.includes('ee.uu') || combined.includes('usa') || combined.includes('miami') || combined.includes('estados unidos')) {
+    detectedCountry = detectedCountry || 'EE.UU.';
+  }
+
+  return {
+    country: detectedCountry || 'Sin País en BD',
+    zone: detectedZone || 'Sin Zona en BD',
+    state: detectedState || 'Sin Estado en BD',
+  };
 };
 
-// Real Data SVG Bar Chart plotting actual registered plants (Power kVA & Operating Hours)
-const RealFleetBarChart: React.FC<{
+/**
+ * Real SVG Comparative Bar Chart (100% Real Data from `allPlants`):
+ * Compares each registered plant's Real Power Capacity (kVA) and Real Operating Hours (Horómetro).
+ */
+const RealFleetBarChart = ({
+  plants,
+  isDark,
+  primaryColor,
+  goldColor,
+  textSecondary,
+}: {
   plants: Moto[];
   isDark: boolean;
   primaryColor: string;
   goldColor: string;
   textSecondary: string;
-}> = ({ plants, isDark, primaryColor, goldColor, textSecondary }) => {
-  const displayPlants = plants.slice(0, 7);
+}) => {
+  const displayPlants = plants.slice(0, 8);
   const maxVal = useMemo(() => {
     if (displayPlants.length === 0) return 100;
-    let m = 0;
+    let m = 10;
     displayPlants.forEach((p) => {
       const kva = p.powerKva || 0;
       const hrs = p.currentHours || p.currentOdometer || 0;
       if (kva > m) m = kva;
       if (hrs > m) m = hrs;
     });
-    return m > 0 ? Math.ceil(m * 1.15) : 100;
+    return Math.ceil(m / 25) * 25;
   }, [displayPlants]);
 
+  const yTicks = [maxVal, Math.round(maxVal * 0.75), Math.round(maxVal * 0.5), Math.round(maxVal * 0.25), 0];
+
+  if (displayPlants.length === 0) {
+    return (
+      <View style={{ height: 220, justifyContent: 'center', alignItems: 'center' }}>
+        <MaterialCommunityIcons name="generator-portable" size={38} color={textSecondary} />
+        <Text style={{ fontFamily: 'Montserrat_600SemiBold', fontSize: 13, color: textSecondary, marginTop: 8 }}>
+          No hay plantas registradas en la base de datos.
+        </Text>
+      </View>
+    );
+  }
+
   if (Platform.OS === 'web') {
-    const gridColor = isDark ? 'rgba(255,255,255,0.07)' : '#e2e8f0';
-    const baseLineColor = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1';
-    const labelFill = isDark ? '#94a3b8' : '#64748b';
-    const count = Math.max(displayPlants.length, 1);
-    const slotWidth = 680 / count;
+    const chartHeight = 190;
+    const chartWidth = 680;
+    const leftPad = 48;
+    const bottomPad = 32;
+    const topPad = 14;
+    const usableW = chartWidth - leftPad - 16;
+    const slotW = usableW / displayPlants.length;
 
-    return React.createElement(
-      'svg',
-      {
-        viewBox: '0 0 760 220',
-        width: '100%',
-        height: '190',
-        style: { overflow: 'visible' },
-      },
-      React.createElement(
-        'defs',
-        null,
-        React.createElement(
-          'linearGradient',
-          { id: 'barGradPrimary', x1: '0', y1: '0', x2: '0', y2: '1' },
-          React.createElement('stop', { offset: '0%', stopColor: isDark ? '#2563eb' : '#002045', stopOpacity: '0.95' }),
-          React.createElement('stop', { offset: '100%', stopColor: isDark ? '#1d4ed8' : '#1a365d', stopOpacity: '0.75' })
-        ),
-        React.createElement(
-          'linearGradient',
-          { id: 'barGradGold', x1: '0', y1: '0', x2: '0', y2: '1' },
-          React.createElement('stop', { offset: '0%', stopColor: '#ffc250', stopOpacity: '0.95' }),
-          React.createElement('stop', { offset: '100%', stopColor: '#d69e2e', stopOpacity: '0.78' })
-        )
-      ),
-      // Horizontal Gridlines
-      React.createElement('line', { x1: '45', x2: '750', y1: '30', y2: '30', stroke: gridColor, strokeDasharray: '4 4', strokeWidth: '1' }),
-      React.createElement('line', { x1: '45', x2: '750', y1: '80', y2: '80', stroke: gridColor, strokeDasharray: '4 4', strokeWidth: '1' }),
-      React.createElement('line', { x1: '45', x2: '750', y1: '130', y2: '130', stroke: gridColor, strokeDasharray: '4 4', strokeWidth: '1' }),
-      React.createElement('line', { x1: '45', x2: '750', y1: '180', y2: '180', stroke: baseLineColor, strokeWidth: '1' }),
-      // Y-Axis Ticks (Real Scale)
-      React.createElement('text', { x: '0', y: '34', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, String(maxVal)),
-      React.createElement('text', { x: '0', y: '84', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, String(Math.round(maxVal * 0.66))),
-      React.createElement('text', { x: '0', y: '134', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, String(Math.round(maxVal * 0.33))),
-      React.createElement('text', { x: '0', y: '180', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, '0'),
-      // Bars per Real Plant
-      ...displayPlants.map((plant, idx) => {
-        const kva = plant.powerKva || 0;
-        const hrs = plant.currentHours || plant.currentOdometer || 0;
-        const kvaHeight = Math.max(4, Math.min(150, Math.round((kva / maxVal) * 150)));
-        const hrsHeight = Math.max(4, Math.min(150, Math.round((hrs / maxVal) * 150)));
-        const centerX = 65 + idx * slotWidth + slotWidth * 0.35;
-        const label = `${plant.model} (${kva}kVA)`;
+    return (
+      <View style={{ width: '100%', height: 235 }}>
+        <svg viewBox={`0 0 ${chartWidth} ${chartHeight + bottomPad + topPad}`} width="100%" height="100%">
+          {yTicks.map((tick, idx) => {
+            const y = topPad + (idx / (yTicks.length - 1)) * chartHeight;
+            return (
+              <g key={idx}>
+                <line
+                  x1={leftPad}
+                  y1={y}
+                  x2={chartWidth - 10}
+                  y2={y}
+                  stroke={isDark ? 'rgba(255,255,255,0.07)' : '#e6e8ea'}
+                  strokeDasharray={idx === yTicks.length - 1 ? undefined : '4 4'}
+                  strokeWidth="1"
+                />
+                <text
+                  x={leftPad - 8}
+                  y={y + 4}
+                  textAnchor="end"
+                  fill={textSecondary}
+                  fontSize="10"
+                  fontFamily="Montserrat, sans-serif"
+                  fontWeight="600"
+                >
+                  {tick}
+                </text>
+              </g>
+            );
+          })}
 
-        return React.createElement(
-          'g',
-          { key: plant.id },
-          React.createElement('rect', {
-            x: String(centerX - 24),
-            y: String(180 - kvaHeight),
-            width: '22',
-            height: String(kvaHeight),
-            rx: '4',
-            fill: 'url(#barGradPrimary)',
-          }),
-          React.createElement('text', {
-            x: String(centerX - 13),
-            y: String(175 - kvaHeight),
-            fill: labelFill,
-            fontSize: '9',
-            textAnchor: 'middle',
-            fontWeight: 'bold',
-          }, `${kva}`),
-          React.createElement('rect', {
-            x: String(centerX + 2),
-            y: String(180 - hrsHeight),
-            width: '22',
-            height: String(hrsHeight),
-            rx: '4',
-            fill: 'url(#barGradGold)',
-          }),
-          React.createElement('text', {
-            x: String(centerX + 13),
-            y: String(175 - hrsHeight),
-            fill: '#d69e2e',
-            fontSize: '9',
-            textAnchor: 'middle',
-            fontWeight: 'bold',
-          }, `${hrs}h`),
-          React.createElement('text', {
-            x: String(centerX),
-            y: '202',
-            fill: labelFill,
-            fontSize: '11',
-            fontWeight: '600',
-            textAnchor: 'middle',
-            fontFamily: 'Montserrat, sans-serif',
-          }, label)
-        );
-      })
+          {displayPlants.map((plant, idx) => {
+            const kva = plant.powerKva || 0;
+            const hrs = plant.currentHours || plant.currentOdometer || 0;
+            const kvaH = maxVal > 0 ? Math.max(4, (kva / maxVal) * chartHeight) : 4;
+            const hrsH = maxVal > 0 ? Math.max(4, (hrs / maxVal) * chartHeight) : 4;
+            const centerX = leftPad + idx * slotW + slotW / 2;
+            const barW = Math.min(24, Math.max(12, slotW * 0.26));
+            const label = `${plant.model || 'Planta'} (${plant.serialNumber || plant.plate || `#${idx + 1}`})`.slice(0, 14);
+
+            return (
+              <g key={plant.id}>
+                <rect
+                  x={centerX - barW - 2}
+                  y={topPad + chartHeight - kvaH}
+                  width={barW}
+                  height={kvaH}
+                  rx="4"
+                  fill={primaryColor}
+                />
+                <rect
+                  x={centerX + 2}
+                  y={topPad + chartHeight - hrsH}
+                  width={barW}
+                  height={hrsH}
+                  rx="4"
+                  fill={goldColor}
+                />
+                <text
+                  x={centerX}
+                  y={topPad + chartHeight + 18}
+                  textAnchor="middle"
+                  fill={textSecondary}
+                  fontSize="10"
+                  fontFamily="Montserrat, sans-serif"
+                  fontWeight="600"
+                >
+                  {label}
+                </text>
+              </g>
+            );
+          })}
+        </svg>
+      </View>
     );
   }
 
   return (
-    <View style={{ height: 150, justifyContent: 'flex-end', flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 12 }}>
+    <View style={{ height: 200, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-around', paddingTop: 20 }}>
       {displayPlants.map((plant) => {
         const kva = plant.powerKva || 0;
         const hrs = plant.currentHours || plant.currentOdometer || 0;
-        const kvaH = Math.max(8, Math.round((kva / maxVal) * 110));
-        const hrsH = Math.max(8, Math.round((hrs / maxVal) * 110));
+        const kvaPct = maxVal > 0 ? Math.max(5, Math.round((kva / maxVal) * 100)) : 5;
+        const hrsPct = maxVal > 0 ? Math.max(5, Math.round((hrs / maxVal) * 100)) : 5;
         return (
           <View key={plant.id} style={{ alignItems: 'center', flex: 1 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
-              <View style={{ width: 14, height: kvaH, backgroundColor: primaryColor, borderRadius: 4 }} />
-              <View style={{ width: 14, height: hrsH, backgroundColor: goldColor, borderRadius: 4 }} />
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 140, gap: 4 }}>
+              <View style={{ width: 12, height: `${kvaPct}%`, backgroundColor: primaryColor, borderRadius: 3 }} />
+              <View style={{ width: 12, height: `${hrsPct}%`, backgroundColor: goldColor, borderRadius: 3 }} />
             </View>
             <Text style={{ fontSize: 10, color: textSecondary, marginTop: 6 }} numberOfLines={1}>
               {plant.model}
@@ -196,44 +259,58 @@ const RealFleetBarChart: React.FC<{
   );
 };
 
-// Real Percentage Donut Ring matching template's "Acreditación en Puerta" ring
-const RealDonutRing: React.FC<{ percent: number; primaryColor: string; trackColor: string; textColor: string }> = ({
+/**
+ * Real SVG Circular Progress Ring
+ */
+const RealDonutRing = ({
   percent,
   primaryColor,
   trackColor,
   textColor,
+}: {
+  percent: number;
+  primaryColor: string;
+  trackColor: string;
+  textColor: string;
 }) => {
   const clamped = Math.max(0, Math.min(100, Math.round(percent)));
   if (Platform.OS === 'web') {
+    const r = 15.9155;
+    const dash = `${clamped}, 100`;
     return (
-      <View style={{ width: 64, height: 64, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
-        {React.createElement(
-          'svg',
-          { viewBox: '0 0 36 36', width: 64, height: 64, style: { transform: 'rotate(-90deg)' } },
-          React.createElement('path', {
-            d: 'M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831',
-            fill: 'none',
-            stroke: trackColor,
-            strokeWidth: '4',
-          }),
-          React.createElement('path', {
-            d: 'M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831',
-            fill: 'none',
-            stroke: primaryColor,
-            strokeWidth: '4',
-            strokeDasharray: `${clamped}, 100`,
-            strokeLinecap: 'round',
-          })
-        )}
-        <Text style={{ position: 'absolute', fontFamily: 'Montserrat_700Bold', fontSize: 12, color: textColor }}>
+      <View style={{ width: 64, height: 64, position: 'relative', justifyContent: 'center', alignItems: 'center' }}>
+        <svg viewBox="0 0 36 36" width="64" height="64" style={{ transform: 'rotate(-90deg)' }}>
+          <path
+            d={`M18 2.0845 a ${r} ${r} 0 0 1 0 31.831 a ${r} ${r} 0 0 1 0 -31.831`}
+            fill="none"
+            stroke={trackColor}
+            strokeWidth="3.8"
+          />
+          <path
+            d={`M18 2.0845 a ${r} ${r} 0 0 1 0 31.831 a ${r} ${r} 0 0 1 0 -31.831`}
+            fill="none"
+            stroke={primaryColor}
+            strokeDasharray={dash}
+            strokeLinecap="round"
+            strokeWidth="3.8"
+          />
+        </svg>
+        <Text
+          style={{
+            position: 'absolute',
+            fontFamily: 'Montserrat_700Bold',
+            fontSize: 13,
+            color: textColor,
+          }}
+        >
           {clamped}%
         </Text>
       </View>
     );
   }
   return (
-    <View style={{ width: 56, height: 56, borderRadius: 28, borderWidth: 4, borderColor: primaryColor, justifyContent: 'center', alignItems: 'center' }}>
-      <Text style={{ fontFamily: 'Montserrat_700Bold', fontSize: 12, color: textColor }}>{clamped}%</Text>
+    <View style={{ width: 64, height: 64, borderRadius: 32, borderWidth: 4, borderColor: primaryColor, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontFamily: 'Montserrat_700Bold', fontSize: 13, color: textColor }}>{clamped}%</Text>
     </View>
   );
 };
@@ -243,7 +320,6 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   onSelectTab,
   onOpenQuickHours,
   onOpenQuickFuel,
-  onOpenSpecs,
   onOpenStats,
   onOpenReport,
   onOpenServicesTab,
@@ -257,8 +333,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     records,
     drivesCompanyVehicle,
     logout,
-    systemMetrics,
     loadSystemUsers,
+    approveUser,
+    rejectUser,
     userName,
     userEmail,
     isAdmin,
@@ -280,7 +357,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     }
   }, [hasSuperAccess, loadSystemUsers]);
 
-  // Pulsing animation for live indicators
+  // Live indicator pulse
   const pulseAnim = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.loop(
@@ -308,47 +385,128 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return name.slice(0, 2).toUpperCase();
   }, [userName, userEmail]);
 
+  // Dedicated Super Admin Tabs (Each domain has its own independent tab — nothing piled up together!)
+  // 'overview' = Resumen Ejecutivo
+  // 'plants'   = Disponibilidad de Plantas
+  // 'personnel'= Personal Operador & Técnicos
+  // 'users'    = Usuarios / Clientes & Solicitudes
+  const [perspectiveTab, setPerspectiveTab] = useState<'overview' | 'plants' | 'personnel' | 'users'>('overview');
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [plantTableSearch, setPlantTableSearch] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+
+  // Modals
   const [userMgmtVisible, setUserMgmtVisible] = useState(false);
   const [agendaVisible, setAgendaVisible] = useState(false);
-  const [subsystemFilter, setSubsystemFilter] = useState<'TODOS' | 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO'>('TODOS');
-  const [perspectiveTab, setPerspectiveTab] = useState<'all' | 'plants' | 'users' | 'subsystems'>('all');
+  const [createOperatorVisible, setCreateOperatorVisible] = useState(false);
+  const [assigningOperator, setAssigningOperator] = useState<any | null>(null);
 
-  // 100% Real Plants & Vehicles from Database
-  const allPlants = useMemo(() => (motos || []).filter(isPlanta), [motos]);
-  const allFleetCars = useMemo(() => (motos || []).filter((m) => isCar(m) || m.vehicleType === 'car'), [motos]);
+  // =========================================================================
+  // 100% REAL DATA FROM SUPABASE / MOTOCONTEXT
+  // =========================================================================
+  const allPlants = useMemo(() => {
+    return (motos || []).filter(isPlanta).map((p) => {
+      const geo = resolveRealGeo({ location: p.location });
+      const isAssigned = !!(p.assignedOperatorId || (p.assignedOperatorName && p.assignedOperatorName.trim()));
+      const kva = p.powerKva || 0;
+      const category =
+        kva >= 100
+          ? 'Alta Capacidad (≥100 kVA)'
+          : kva >= 50
+          ? 'Media Capacidad (50-99 kVA)'
+          : 'Compactas (<50 kVA)';
+      return {
+        ...p,
+        geoCountry: geo.country,
+        geoZone: geo.zone,
+        geoState: geo.state,
+        isAssigned,
+        category,
+      };
+    });
+  }, [motos]);
 
-  // 100% Real Users from Database
-  const allCombinedUsers = useMemo(() => {
+  // 1. Dedicated Personnel List (ONLY Operators & Super Admins)
+  const allPersonnelList = useMemo(() => {
     const map = new Map<string, any>();
-    (superAdminsList || []).forEach((u: any) => map.set(u.id, { ...u, resolvedRole: 'superadmin' }));
+    (superAdminsList || []).forEach((u: any) => {
+      const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
+      map.set(u.id, {
+        ...u,
+        resolvedRole: 'superadmin',
+        geoCountry: geo.country,
+        geoZone: geo.zone,
+        geoState: geo.state,
+        deptLabel: (u.department || u.specialty || 'Dirección Ejecutiva').trim(),
+      });
+    });
     (operatorsList || []).forEach((u: any) => {
-      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: 'operator' });
-    });
-    (clientsList || []).forEach((u: any) => {
-      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: 'client' });
-    });
-    (pendingUsersList || []).forEach((u: any) => {
-      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: u.role || 'operator', isPending: true });
-    });
-    return Array.from(map.values());
-  }, [superAdminsList, operatorsList, clientsList, pendingUsersList]);
-
-  // Classification Filters (100% derived from real data + standard categories)
-  const [plantCategoryFilter, setPlantCategoryFilter] = useState('Todas');
-  const [plantLocationFilter, setPlantLocationFilter] = useState('Todas');
-
-  const uniquePlantLocations = useMemo(() => {
-    const locs = new Set<string>(['Todas']);
-    allPlants.forEach((p) => {
-      if (p.location && p.location.trim()) {
-        locs.add(p.location.trim());
+      if (!map.has(u.id)) {
+        const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
+        map.set(u.id, {
+          ...u,
+          resolvedRole: 'operator',
+          geoCountry: geo.country,
+          geoZone: geo.zone,
+          geoState: geo.state,
+          deptLabel: (u.department || u.specialty || 'Soporte Técnico').trim(),
+        });
       }
     });
-    return Array.from(locs);
+    return Array.from(map.values());
+  }, [superAdminsList, operatorsList]);
+
+  // 2. Dedicated Users / Clients List (ONLY Regular Clients & Pending Approvals)
+  const allUsersAndClientsList = useMemo(() => {
+    const map = new Map<string, any>();
+    (clientsList || []).forEach((u: any) => {
+      const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
+      map.set(u.id, {
+        ...u,
+        resolvedRole: 'client',
+        isPending: u.approval_status === 'pending',
+        geoCountry: geo.country,
+        geoZone: geo.zone,
+        geoState: geo.state,
+      });
+    });
+    (pendingUsersList || []).forEach((u: any) => {
+      if (!map.has(u.id)) {
+        const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
+        map.set(u.id, {
+          ...u,
+          resolvedRole: u.role || 'client',
+          isPending: true,
+          geoCountry: geo.country,
+          geoZone: geo.zone,
+          geoState: geo.state,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [clientsList, pendingUsersList]);
+
+  // =========================================================================
+  // TAB 2 FILTERS: DISPONIBILIDAD DE PLANTAS (País, Zona, Estado, Capacidad, Disponibilidad)
+  // =========================================================================
+  const [plantAvailabilityFilter, setPlantAvailabilityFilter] = useState<'Todas' | 'Disponibles' | 'Asignadas'>('Todas');
+  const [plantCategoryFilter, setPlantCategoryFilter] = useState('Todas');
+  const [plantCountryFilter, setPlantCountryFilter] = useState('Todos');
+  const [plantZoneFilter, setPlantZoneFilter] = useState('Todas');
+  const [plantStateFilter, setPlantStateFilter] = useState('Todos');
+  const [plantSearch, setPlantSearch] = useState('');
+
+  const COUNTRIES_LIST = ['Todos', 'Venezuela', 'Colombia', 'Panamá', 'EE.UU.'];
+  const ZONES_LIST = ['Todas', 'Zona Central', 'Zona Capital', 'Zona Occidental', 'Zona Oriental', 'Zona Los Andes', 'Zona Guayana'];
+  const STATES_LIST = useMemo(() => {
+    const base = ['Todos', 'Carabobo', 'Distrito Capital', 'Miranda', 'Aragua', 'Zulia', 'Lara', 'Anzoátegui', 'Táchira', 'Bolívar'];
+    const set = new Set<string>(base);
+    allPlants.forEach((p) => {
+      if (p.location && p.location.trim()) set.add(p.location.trim());
+      if (p.geoState && p.geoState !== 'Sin Estado en BD') set.add(p.geoState);
+    });
+    return Array.from(set);
   }, [allPlants]);
 
   const PLANT_CATEGORIES = [
@@ -360,35 +518,159 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
   const filteredFleetPlants = useMemo(() => {
     return allPlants.filter((plant) => {
-      const kva = plant.powerKva || 0;
-      const cat =
-        kva >= 100
-          ? 'Alta Capacidad (≥100 kVA)'
-          : kva >= 50
-          ? 'Media Capacidad (50-99 kVA)'
-          : 'Compactas (<50 kVA)';
+      if (plantAvailabilityFilter === 'Disponibles' && plant.isAssigned) return false;
+      if (plantAvailabilityFilter === 'Asignadas' && !plant.isAssigned) return false;
+      if (plantCategoryFilter !== 'Todas' && plant.category !== plantCategoryFilter) return false;
+      if (plantCountryFilter !== 'Todos' && plant.geoCountry.toLowerCase() !== plantCountryFilter.toLowerCase()) return false;
+      if (plantZoneFilter !== 'Todas' && plant.geoZone.toLowerCase() !== plantZoneFilter.toLowerCase()) return false;
+      if (
+        plantStateFilter !== 'Todos' &&
+        plant.geoState.toLowerCase() !== plantStateFilter.toLowerCase() &&
+        !(plant.location || '').toLowerCase().includes(plantStateFilter.toLowerCase())
+      ) {
+        return false;
+      }
 
-      if (plantCategoryFilter !== 'Todas' && cat !== plantCategoryFilter) return false;
-      if (plantLocationFilter !== 'Todas' && (plant.location || '').trim() !== plantLocationFilter) return false;
-
-      const combinedQuery = (plantTableSearch || searchQuery).toLowerCase().trim();
-      if (combinedQuery) {
+      const q = (plantSearch || searchQuery).toLowerCase().trim();
+      if (q) {
         const match =
-          (plant.brand || '').toLowerCase().includes(combinedQuery) ||
-          (plant.model || '').toLowerCase().includes(combinedQuery) ||
-          (plant.serialNumber || plant.plate || '').toLowerCase().includes(combinedQuery) ||
-          (plant.location || '').toLowerCase().includes(combinedQuery) ||
-          (plant.assignedOperatorName || '').toLowerCase().includes(combinedQuery);
+          (plant.brand || '').toLowerCase().includes(q) ||
+          (plant.model || '').toLowerCase().includes(q) ||
+          (plant.serialNumber || plant.plate || '').toLowerCase().includes(q) ||
+          (plant.location || '').toLowerCase().includes(q) ||
+          (plant.assignedOperatorName || '').toLowerCase().includes(q) ||
+          plant.geoState.toLowerCase().includes(q) ||
+          plant.geoZone.toLowerCase().includes(q);
         if (!match) return false;
       }
       return true;
     });
-  }, [allPlants, plantCategoryFilter, plantLocationFilter, plantTableSearch, searchQuery]);
+  }, [
+    allPlants,
+    plantAvailabilityFilter,
+    plantCategoryFilter,
+    plantCountryFilter,
+    plantZoneFilter,
+    plantStateFilter,
+    plantSearch,
+    searchQuery,
+  ]);
 
-  // 100% Real Fleet Metrics
+  // =========================================================================
+  // TAB 3 FILTERS: PERSONAL OPERADOR & TÉCNICOS (Rol, País, Zona, Estado, Departamento)
+  // =========================================================================
+  const [personnelRoleFilter, setPersonnelRoleFilter] = useState<'Todo el Personal' | 'Operadores Técnicos' | 'Super Administradores'>('Todo el Personal');
+  const [personnelAssignFilter, setPersonnelAssignFilter] = useState<'Todos' | 'Con Plantas a Cargo' | 'Disponibles (0 Plantas)' | 'Con Vehículo de Flota'>('Todos');
+  const [personnelCountryFilter, setPersonnelCountryFilter] = useState('Todos');
+  const [personnelZoneFilter, setPersonnelZoneFilter] = useState('Todas');
+  const [personnelStateFilter, setPersonnelStateFilter] = useState('Todos');
+  const [personnelDeptFilter, setPersonnelDeptFilter] = useState('Todos');
+  const [personnelSearch, setPersonnelSearch] = useState('');
+
+  const personnelDeptsList = useMemo(() => {
+    const set = new Set<string>([
+      'Todos',
+      'Plantas Eléctricas',
+      'Especialista Técnico Senior',
+      'Mantenimiento Preventivo',
+      'Dirección Ejecutiva',
+    ]);
+    allPersonnelList.forEach((p: any) => {
+      if (p.deptLabel) set.add(p.deptLabel);
+    });
+    return Array.from(set);
+  }, [allPersonnelList]);
+
+  const filteredPersonnelList = useMemo(() => {
+    return allPersonnelList.filter((op: any) => {
+      if (personnelRoleFilter === 'Operadores Técnicos' && op.resolvedRole !== 'operator') return false;
+      if (personnelRoleFilter === 'Super Administradores' && op.resolvedRole !== 'superadmin') return false;
+
+      const opPlants = allPlants.filter(
+        (p) =>
+          p.assignedOperatorId === op.id ||
+          (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+      );
+
+      if (personnelAssignFilter === 'Con Plantas a Cargo' && opPlants.length === 0) return false;
+      if (personnelAssignFilter === 'Disponibles (0 Plantas)' && opPlants.length > 0) return false;
+      if (personnelAssignFilter === 'Con Vehículo de Flota' && !op.assigned_vehicle_name && !op.drives_company_vehicle) return false;
+
+      if (personnelCountryFilter !== 'Todos' && op.geoCountry.toLowerCase() !== personnelCountryFilter.toLowerCase()) return false;
+      if (personnelZoneFilter !== 'Todas' && op.geoZone.toLowerCase() !== personnelZoneFilter.toLowerCase()) return false;
+      if (personnelStateFilter !== 'Todos' && op.geoState.toLowerCase() !== personnelStateFilter.toLowerCase()) return false;
+      if (personnelDeptFilter !== 'Todos' && op.deptLabel.toLowerCase() !== personnelDeptFilter.toLowerCase()) return false;
+
+      const q = (personnelSearch || searchQuery).toLowerCase().trim();
+      if (q) {
+        const match =
+          (op.full_name || '').toLowerCase().includes(q) ||
+          (op.email || '').toLowerCase().includes(q) ||
+          (op.operator_code || '').toLowerCase().includes(q) ||
+          (op.deptLabel || '').toLowerCase().includes(q) ||
+          op.geoState.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [
+    allPersonnelList,
+    allPlants,
+    personnelRoleFilter,
+    personnelAssignFilter,
+    personnelCountryFilter,
+    personnelZoneFilter,
+    personnelStateFilter,
+    personnelDeptFilter,
+    personnelSearch,
+    searchQuery,
+  ]);
+
+  // =========================================================================
+  // TAB 4 FILTERS: USUARIOS Y CLIENTES (Estado de Cuenta, País, Zona, Estado)
+  // =========================================================================
+  const [userStatusFilter, setUserStatusFilter] = useState<'Todos los Usuarios' | 'Usuarios Activos' | 'Solicitudes Pendientes'>('Todos los Usuarios');
+  const [userCountryFilter, setUserCountryFilter] = useState('Todos');
+  const [userZoneFilter, setUserZoneFilter] = useState('Todas');
+  const [userStateFilter, setUserStateFilter] = useState('Todos');
+  const [userSearch, setUserSearch] = useState('');
+
+  const filteredUsersList = useMemo(() => {
+    return allUsersAndClientsList.filter((u: any) => {
+      if (userStatusFilter === 'Usuarios Activos' && u.isPending) return false;
+      if (userStatusFilter === 'Solicitudes Pendientes' && !u.isPending) return false;
+      if (userCountryFilter !== 'Todos' && u.geoCountry.toLowerCase() !== userCountryFilter.toLowerCase()) return false;
+      if (userZoneFilter !== 'Todas' && u.geoZone.toLowerCase() !== userZoneFilter.toLowerCase()) return false;
+      if (userStateFilter !== 'Todos' && u.geoState.toLowerCase() !== userStateFilter.toLowerCase()) return false;
+
+      const q = (userSearch || searchQuery).toLowerCase().trim();
+      if (q) {
+        const match =
+          (u.full_name || '').toLowerCase().includes(q) ||
+          (u.email || '').toLowerCase().includes(q) ||
+          (u.phone || '').toLowerCase().includes(q) ||
+          u.geoState.toLowerCase().includes(q) ||
+          u.geoCountry.toLowerCase().includes(q);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [
+    allUsersAndClientsList,
+    userStatusFilter,
+    userCountryFilter,
+    userZoneFilter,
+    userStateFilter,
+    userSearch,
+    searchQuery,
+  ]);
+
+  // =========================================================================
+  // REAL FLEET & FINANCIAL METRICS
+  // =========================================================================
   const fleetStats = useMemo(() => {
     const total = allPlants.length;
-    const assigned = allPlants.filter((p) => !!(p.assignedOperatorId || (p.assignedOperatorName && p.assignedOperatorName.trim()))).length;
+    const assigned = allPlants.filter((p) => p.isAssigned).length;
     const unassigned = Math.max(0, total - assigned);
     const totalHours = allPlants.reduce((acc, p) => acc + (p.currentHours || p.currentOdometer || 0), 0);
     return { total, assigned, unassigned, totalHours };
@@ -398,7 +680,20 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return allPlants.reduce((acc, p) => acc + (p.powerKva || 0), 0);
   }, [allPlants]);
 
-  // Real Tier Breakdown of Registered Plants
+  const filteredPlantsKva = useMemo(() => {
+    return filteredFleetPlants.reduce((acc, p) => acc + (p.powerKva || 0), 0);
+  }, [filteredFleetPlants]);
+
+  const personnelWithPlantsCount = useMemo(() => {
+    return allPersonnelList.filter((op: any) =>
+      allPlants.some(
+        (p) =>
+          p.assignedOperatorId === op.id ||
+          (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+      )
+    ).length;
+  }, [allPersonnelList, allPlants]);
+
   const fleetTiers = useMemo(() => {
     const total = allPlants.length;
     const high = allPlants.filter((p) => (p.powerKva || 0) >= 100);
@@ -418,86 +713,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     };
   }, [allPlants]);
 
-  // Personnel & Users classification filters (100% derived from real DB values)
-  const [selectedUserCategory, setSelectedUserCategory] = useState('Todos los Usuarios');
-  const [selectedStateFilter, setSelectedStateFilter] = useState('Todos');
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState('Todos');
-  const [operatorSearch, setOperatorSearch] = useState('');
-
-  const USER_CATEGORIES = ['Todos los Usuarios', 'Personal Operador', 'Super Admins', 'Clientes / Titulares'];
-
-  const dynamicUserStates = useMemo(() => {
-    const s = new Set<string>(['Todos']);
-    allCombinedUsers.forEach((u: any) => {
-      const st = (u.state || u.city || '').trim();
-      if (st) s.add(st);
-    });
-    return Array.from(s);
-  }, [allCombinedUsers]);
-
-  const dynamicUserDepts = useMemo(() => {
-    const d = new Set<string>(['Todos']);
-    allCombinedUsers.forEach((u: any) => {
-      const dp = (u.department || u.specialty || '').trim();
-      if (dp) d.add(dp);
-    });
-    return Array.from(d);
-  }, [allCombinedUsers]);
-
-  const filteredOperators = useMemo(() => {
-    let list = allCombinedUsers;
-    if (selectedUserCategory === 'Personal Operador') {
-      list = list.filter((u: any) => u.resolvedRole === 'operator');
-    } else if (selectedUserCategory === 'Super Admins') {
-      list = list.filter((u: any) => u.resolvedRole === 'superadmin');
-    } else if (selectedUserCategory === 'Clientes / Titulares') {
-      list = list.filter((u: any) => u.resolvedRole === 'client');
-    }
-
-    if (selectedStateFilter !== 'Todos') {
-      list = list.filter((op: any) => (op.state || op.city || '').toLowerCase() === selectedStateFilter.toLowerCase());
-    }
-    if (selectedDeptFilter !== 'Todos') {
-      list = list.filter((op: any) => (op.department || op.specialty || '').toLowerCase() === selectedDeptFilter.toLowerCase());
-    }
-    const q = (operatorSearch || searchQuery).toLowerCase().trim();
-    if (q) {
-      list = list.filter((op: any) =>
-        (op.full_name || '').toLowerCase().includes(q) ||
-        (op.email || '').toLowerCase().includes(q) ||
-        (op.operator_code || '').toLowerCase().includes(q) ||
-        (op.state || op.city || '').toLowerCase().includes(q) ||
-        (op.department || op.specialty || '').toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [allCombinedUsers, selectedUserCategory, selectedStateFilter, selectedDeptFilter, operatorSearch, searchQuery]);
-
   const isDesktop = windowWidth >= 1024;
   const isMobile = windowWidth < 768;
 
-  const currentHours = useMemo(() => {
-    if (!myMoto) return 0;
-    return myMoto.currentHours || myMoto.currentOdometer || 0;
-  }, [myMoto]);
-
-  const specs = useMemo(() => {
-    if (!myMoto) return null;
-    return getMotoSpecs(myMoto.brand, myMoto.model);
-  }, [myMoto]);
-
-  // 100% Real Financial & Fuel Statistics from `records`
   const fuelRecords = useMemo(() => (records || []).filter((r) => r.type === 'fuel'), [records]);
   const serviceRecords = useMemo(() => (records || []).filter((r) => r.type !== 'fuel'), [records]);
 
-  const totalFuelUSD = useMemo(
-    () => fuelRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0),
-    [fuelRecords]
-  );
-  const totalServicesUSD = useMemo(
-    () => serviceRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0),
-    [serviceRecords]
-  );
+  const totalFuelUSD = useMemo(() => fuelRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0), [fuelRecords]);
+  const totalServicesUSD = useMemo(() => serviceRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0), [serviceRecords]);
   const totalCostUSD = totalFuelUSD + totalServicesUSD;
 
   const totalFuelLiters = useMemo(() => {
@@ -508,84 +731,6 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     }, 0);
   }, [fuelRecords]);
 
-  // 10 Industrial Subsystems for Active Plant (ISO 8528)
-  const plantSubsystems = useMemo(() => {
-    const list = [
-      { id: 'oil' as ComponentType, name: 'Aceite 15W-40 & Filtro', interval: 250, color: '#1A365D' },
-      { id: 'fuel_filter' as ComponentType, name: 'Filtros Diésel & Racor', interval: 250, color: '#6B46C1' },
-      { id: 'air_filter' as ComponentType, name: 'Filtro Aire Industrial', interval: 500, color: '#D69E2E' },
-      { id: 'coolant' as ComponentType, name: 'Circuito Refrigerante & Radiador', interval: 1000, color: '#10b981' },
-      { id: 'battery' as ComponentType, name: 'Alternador & Baterías 24V', interval: 2000, color: '#0284c7' },
-      { id: 'accessory_belt' as ComponentType, name: 'Correas Ventilador & Poleas', interval: 1000, color: '#ec4899' },
-      { id: 'timing_belt' as ComponentType, name: 'Válvulas e Inyectores', interval: 1500, color: '#6366f1' },
-      { id: 'clutch' as ComponentType, name: 'Aisladores Antivibratorios', interval: 3000, color: '#14b8a6' },
-      { id: 'transmission_fluid' as ComponentType, name: 'Aislamiento Alternador Leroy', interval: 2500, color: '#f97316' },
-      { id: 'cabin_filter' as ComponentType, name: 'Panel ComAp & Sensores', interval: 1200, color: '#06b6d4' },
-    ];
-
-    return list.map((item) => {
-      const typeRecords = (records || []).filter((r) => r.type === item.id);
-      const isInspected = typeRecords.length > 0;
-      let wear = 100;
-      let hoursSince = 0;
-      let hoursRemaining = item.interval;
-      let status: 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO' = 'ÓPTIMO';
-
-      if (isInspected) {
-        const lastHours = Math.max(...typeRecords.map((r) => r.odometer || 0));
-        hoursSince = Math.max(0, currentHours - lastHours);
-        const ratio = Math.max(0, 1 - hoursSince / item.interval);
-        wear = Math.min(100, Math.round(ratio * 100));
-        hoursRemaining = Math.max(0, item.interval - hoursSince);
-        status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
-      } else {
-        hoursSince = currentHours > 0 ? currentHours % item.interval : 0;
-        hoursRemaining = Math.max(0, item.interval - hoursSince);
-        const ratio = Math.max(0, 1 - hoursSince / item.interval);
-        wear = Math.min(100, Math.round(ratio * 100));
-        status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
-      }
-
-      return {
-        ...item,
-        wear,
-        hoursSince,
-        hoursRemaining,
-        isInspected,
-        status,
-      };
-    });
-  }, [records, currentHours]);
-
-  const generalHealth = useMemo(() => {
-    if (plantSubsystems.length === 0) return 100;
-    const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
-    return Math.round(sum / plantSubsystems.length);
-  }, [plantSubsystems]);
-
-  const optimalSubsystemsCount = useMemo(() => {
-    return plantSubsystems.filter((s) => s.wear >= 60).length;
-  }, [plantSubsystems]);
-
-  const filteredSubsystems = useMemo(() => {
-    let list = plantSubsystems;
-    if (subsystemFilter === 'ÓPTIMO') {
-      list = list.filter((s) => s.wear >= 60);
-    } else if (subsystemFilter === 'PREVENTIVO') {
-      list = list.filter((s) => s.wear < 60 && s.wear >= 30);
-    } else if (subsystemFilter === 'CRÍTICO') {
-      list = list.filter((s) => s.wear < 30);
-    }
-
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase().trim();
-      list = list.filter(
-        (sub) => sub.name.toLowerCase().includes(q) || sub.id.toLowerCase().includes(q)
-      );
-    }
-    return list;
-  }, [plantSubsystems, subsystemFilter, searchQuery]);
-
   // Font family tokens
   const F = {
     bold: 'Montserrat_700Bold',
@@ -595,7 +740,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     extrabold: 'Montserrat_800ExtraBold',
   };
 
-  // Template Design Tokens (UniEvents / Executive Navy & Academic Gold adapted for Light & Dark)
+  // Template Design Tokens
   const bgSurface = isDark ? '#0c0d12' : '#f7f9fb';
   const cardLowest = isDark ? '#131722' : '#ffffff';
   const surfaceLow = isDark ? '#1a2030' : '#f2f4f6';
@@ -611,24 +756,105 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const textVariant = isDark ? '#94a3b8' : '#43474e';
   const textOutline = isDark ? '#64748b' : '#74777f';
 
-  const cycleNextPlant = () => {
-    if (allPlants.length <= 1) return;
-    const idx = allPlants.findIndex((p) => p.id === myMoto?.id);
-    const next = allPlants[(idx + 1) % allPlants.length];
-    if (next) selectMoto(next.id);
+  // Helper to navigate to a specific Super Admin perspective tab
+  const goToPerspective = (tab: 'overview' | 'plants' | 'personnel' | 'users') => {
+    onSelectTab('moto');
+    setPerspectiveTab(tab);
   };
+
+  // Sidebar items — Each section separated cleanly, NO 'Ficha Técnica OEM' for Super Admin!
+  const sidebarNavItems = useMemo(() => {
+    return [
+      {
+        id: 'nav_overview',
+        label: 'Resumen Ejecutivo',
+        icon: 'dashboard',
+        isActive: activeTab === 'moto' && perspectiveTab === 'overview',
+        action: () => goToPerspective('overview'),
+      },
+      {
+        id: 'nav_plants',
+        label: 'Disponibilidad de Plantas',
+        icon: 'bolt',
+        badge: allPlants.length,
+        badgeColor: '#16a34a',
+        isActive: activeTab === 'moto' && perspectiveTab === 'plants',
+        action: () => goToPerspective('plants'),
+      },
+      {
+        id: 'nav_personnel',
+        label: 'Personal Operador',
+        icon: 'engineering',
+        badge: allPersonnelList.length,
+        badgeColor: '#2563eb',
+        isActive: activeTab === 'moto' && perspectiveTab === 'personnel',
+        action: () => goToPerspective('personnel'),
+      },
+      {
+        id: 'nav_users',
+        label: 'Usuarios y Clientes',
+        icon: 'groups',
+        badge: (pendingUsersList?.length || 0) > 0 ? pendingUsersList.length : allUsersAndClientsList.length,
+        badgeColor: (pendingUsersList?.length || 0) > 0 ? '#ef4444' : innovationPurple,
+        isActive: activeTab === 'moto' && perspectiveTab === 'users',
+        action: () => goToPerspective('users'),
+      },
+      {
+        id: 'nav_services',
+        label: 'Mantenimiento & Servicios',
+        icon: 'build',
+        isActive: activeTab === 'services',
+        action: () => onSelectTab('services'),
+      },
+      {
+        id: 'nav_history',
+        label: 'Bitácora & Finanzas',
+        icon: 'payments',
+        isActive: activeTab === 'history',
+        action: () => onSelectTab('history'),
+      },
+      ...(drivesCompanyVehicle && !isSuperAdmin
+        ? [
+            {
+              id: 'nav_wallet',
+              label: 'Guantera de Flota',
+              icon: 'account-balance-wallet',
+              isActive: activeTab === 'wallet',
+              action: () => onSelectTab('wallet'),
+            },
+          ]
+        : []),
+      {
+        id: 'nav_profile',
+        label: 'Mi Perfil Ejecutivo',
+        icon: 'person',
+        isActive: activeTab === 'profile',
+        action: () => onSelectTab('profile'),
+      },
+    ];
+  }, [
+    activeTab,
+    perspectiveTab,
+    allPlants.length,
+    allPersonnelList.length,
+    allUsersAndClientsList.length,
+    pendingUsersList,
+    drivesCompanyVehicle,
+    isSuperAdmin,
+    innovationPurple,
+  ]);
 
   return (
     <View style={[styles.rootLayout, { backgroundColor: bgSurface }]}>
       {/* ===================================================================== */}
-      {/* 1. LEFT EXECUTIVE SIDEBAR (w-72 inspired by template <aside>)        */}
+      {/* 1. LEFT EXECUTIVE SIDEBAR (Dedicated tabs for each module)            */}
       {/* ===================================================================== */}
       {!isMobile && (
         <View style={[styles.sidebarAside, { backgroundColor: cardLowest, borderRightColor: cardBorder }]}>
-          <View style={{ gap: 20, paddingHorizontal: 16 }}>
+          <View style={{ gap: 18, paddingHorizontal: 16 }}>
             {/* Brand Header */}
             <TouchableOpacity
-              onPress={() => onSelectTab('moto')}
+              onPress={() => goToPerspective('overview')}
               style={styles.sidebarBrandRow}
               activeOpacity={0.8}
             >
@@ -645,56 +871,28 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </View>
             </TouchableOpacity>
 
-            {/* Active Plant Switcher Box (Template "Campus Central / Facultad de Ingeniería") */}
-            <TouchableOpacity
-              onPress={cycleNextPlant}
-              activeOpacity={0.8}
-              style={[styles.sidebarPlantSelector, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
-            >
+            {/* Executive Scope Box */}
+            <View style={[styles.sidebarPlantSelector, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
               <View style={[styles.sidebarSelectorIcon, { backgroundColor: cardLowest }]}>
-                <MaterialIcons name="bolt" size={18} color={academicGold} />
+                <MaterialIcons name="domain" size={18} color={academicGold} />
               </View>
               <View style={{ flex: 1, minWidth: 0 }}>
                 <Text style={{ fontFamily: F.semibold, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
-                  {myMoto?.location || 'Planta en Supervisión'}
+                  Dirección General
                 </Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }} numberOfLines={1}>
-                  {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Sin planta registrada'}
+                <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }} numberOfLines={1}>
+                  Control Global de Flota y Red
                 </Text>
               </View>
-              <MaterialIcons name="unfold-more" size={18} color={textVariant} />
-            </TouchableOpacity>
+            </View>
 
-            {/* Navigation Links */}
+            {/* Navigation Links — Clean & Separated */}
             <View style={{ gap: 4 }}>
-              {[
-                { id: 'moto' as const, label: 'Dashboard', icon: 'dashboard', action: () => onSelectTab('moto') },
-                { id: 'services' as const, label: 'Mantenimiento & Servicios', icon: 'build', action: () => onSelectTab('services') },
-                { id: 'history' as const, label: 'Bitácora & Finanzas', icon: 'payments', action: () => onSelectTab('history') },
-                { id: 'specs' as const, label: 'Ficha Técnica OEM', icon: 'qr-code-scanner', action: () => onSelectTab('specs') },
-                ...(hasSuperAccess
-                  ? [
-                      {
-                        id: 'users_mgmt' as const,
-                        label: 'Usuarios y Operadores',
-                        icon: 'group',
-                        badge: pendingUsersList?.length || 0,
-                        action: () => {
-                          loadSystemUsers();
-                          setUserMgmtVisible(true);
-                        },
-                      },
-                    ]
-                  : []),
-                ...(drivesCompanyVehicle && !isSuperAdmin
-                  ? [{ id: 'wallet' as const, label: 'Guantera de Flota', icon: 'account-balance-wallet', action: () => onSelectTab('wallet') }]
-                  : []),
-                { id: 'report' as const, label: 'Reportes PDF', icon: 'analytics', action: onOpenReport },
-                { id: 'profile' as const, label: 'Configuración & Perfil', icon: 'settings', action: () => onSelectTab('profile') },
-              ].map((navItem) => {
-                const isActive =
-                  (navItem.id === 'users_mgmt' && userMgmtVisible) ||
-                  activeTab === navItem.id;
+              <Text style={{ fontFamily: F.bold, fontSize: 10, color: textOutline, letterSpacing: 1, paddingHorizontal: 10, marginBottom: 4 }}>
+                MÓDULOS DE DIRECCIÓN
+              </Text>
+              {sidebarNavItems.map((navItem) => {
+                const isActive = navItem.isActive;
                 return (
                   <TouchableOpacity
                     key={navItem.id}
@@ -716,17 +914,22 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       style={{
                         flex: 1,
                         fontFamily: isActive ? F.bold : F.medium,
-                        fontSize: 13.5,
+                        fontSize: 13,
                         color: isActive ? '#ffffff' : textVariant,
                       }}
                       numberOfLines={1}
                     >
                       {navItem.label}
                     </Text>
-                    {!!(navItem as any).badge && (navItem as any).badge > 0 && (
-                      <View style={styles.sidebarNavBadge}>
+                    {typeof navItem.badge === 'number' && (
+                      <View
+                        style={[
+                          styles.sidebarNavBadge,
+                          { backgroundColor: isActive ? 'rgba(255,255,255,0.22)' : (navItem.badgeColor || primaryContainer) },
+                        ]}
+                      >
                         <Text style={{ fontFamily: F.bold, fontSize: 10, color: '#ffffff' }}>
-                          {(navItem as any).badge}
+                          {navItem.badge}
                         </Text>
                       </View>
                     )}
@@ -745,8 +948,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   Base de Datos en Tiempo Real
                 </Text>
               </View>
-              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, lineHeight: 16 }}>
-                {allPlants.length} plantas registradas · {allCombinedUsers.length} usuarios sincronizados.
+              <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, lineHeight: 16 }}>
+                {allPlants.length} plantas · {allPersonnelList.length} personal · {allUsersAndClientsList.length} usuarios
               </Text>
             </View>
 
@@ -776,10 +979,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       )}
 
       {/* ===================================================================== */}
-      {/* 2. MAIN WORKSPACE AREA (Header + Scrollable Content)                  */}
+      {/* 2. MAIN WORKSPACE AREA (Header + Dedicated Tab Content)               */}
       {/* ===================================================================== */}
       <View style={styles.mainContentArea}>
-        {/* TOP HEADER BAR (Inspired by template <header>) */}
+        {/* TOP HEADER BAR */}
         {isMobile ? (
           <View style={[styles.topHeaderBarMobile, { backgroundColor: cardLowest, borderBottomColor: cardBorder }]}>
             {mobileSearchOpen ? (
@@ -788,7 +991,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 <TextInput
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Buscar planta, serial, operador..."
+                  placeholder="Buscar planta, operador o usuario..."
                   placeholderTextColor={textOutline}
                   style={[styles.mobileSearchInput, { color: textOnSurface, fontFamily: F.medium }]}
                   autoFocus={true}
@@ -812,7 +1015,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   <MaterialIcons name="menu" size={22} color={textOnSurface} />
                 </TouchableOpacity>
 
-                <TouchableOpacity onPress={() => onSelectTab('moto')} style={styles.mobileBrandCenter}>
+                <TouchableOpacity onPress={() => goToPerspective('overview')} style={styles.mobileBrandCenter}>
                   <Image source={HL_LOGO_REQUIRE} style={styles.mobileBrandLogo} resizeMode="contain" />
                   <View style={{ marginLeft: 8 }}>
                     <Text style={{ fontFamily: F.extrabold, fontSize: 13, color: primaryNavy }}>HERMANOS LYNCH</Text>
@@ -838,14 +1041,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           </View>
         ) : (
           <View style={[styles.topHeaderBarDesktop, { backgroundColor: cardLowest, borderBottomColor: cardBorder }]}>
-            {/* Left: Search + Active Period/Plant Pill */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
               <View style={[styles.headerSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
                 <MaterialIcons name="search" size={18} color={textOutline} />
                 <TextInput
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Buscar planta, serial, operador o componente..."
+                  placeholder="Buscar planta, serial, operador o cliente..."
                   placeholderTextColor={textOutline}
                   style={{ flex: 1, fontFamily: F.medium, fontSize: 13, color: textOnSurface, paddingVertical: 4 }}
                 />
@@ -857,25 +1059,41 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </View>
 
               <View style={[styles.headerMetaPill, { backgroundColor: surfaceLow }]}>
-                <MaterialIcons name="bolt" size={16} color={academicGold} />
+                <MaterialIcons name="verified-user" size={16} color={academicGold} />
                 <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
-                  Unidad Activa:{' '}
+                  Vista Activa:{' '}
                   <Text style={{ fontFamily: F.bold, color: primaryNavy }}>
-                    {myMoto ? `${myMoto.brand} ${myMoto.model} (${myMoto.serialNumber || myMoto.plate || 'S/N'})` : 'Ninguna'}
+                    {perspectiveTab === 'overview'
+                      ? 'Resumen Ejecutivo'
+                      : perspectiveTab === 'plants'
+                      ? 'Disponibilidad de Plantas'
+                      : perspectiveTab === 'personnel'
+                      ? 'Personal Operador'
+                      : 'Usuarios y Clientes'}
                   </Text>
                 </Text>
               </View>
             </View>
 
-            {/* Right: CTA Button + Notifications + Real User Profile */}
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setCreateOperatorVisible(true)}
+                activeOpacity={0.85}
+                style={[styles.headerPrimaryCta, { backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder }]}
+              >
+                <MaterialIcons name="person-add" size={17} color={primaryNavy} />
+                <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }}>
+                  Nuevo Usuario / Personal
+                </Text>
+              </TouchableOpacity>
+
               <TouchableOpacity
                 onPress={() => setIsAddingMoto(true)}
                 activeOpacity={0.85}
                 style={[styles.headerPrimaryCta, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}
               >
                 <MaterialIcons name="add-circle" size={17} color="#ffc250" />
-                <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: '#ffffff' }}>
                   Incorporar Planta
                 </Text>
               </TouchableOpacity>
@@ -894,7 +1112,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 onPress={onOpenStats}
                 style={[styles.headerSquareIconBtn, { backgroundColor: surfaceLow }]}
               >
-                <MaterialIcons name="help-outline" size={20} color={textVariant} />
+                <MaterialIcons name="calendar-today" size={18} color={textVariant} />
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -919,7 +1137,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         )}
 
         {/* ===================================================================== */}
-        {/* 3. SCROLLABLE DASHBOARD BODY (100% Real Data, Template Structure)     */}
+        {/* 3. DEDICATED MODULE BODY (Each tab cleanly separated!)                */}
         {/* ===================================================================== */}
         <ScrollView
           style={[{ flex: 1 }, activeTab !== 'moto' && { display: 'none' }]}
@@ -929,93 +1147,68 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* 3.1 TOP UTILITY BAR: Operational Meta & Action Toolbar */}
+          {/* TOP HEADER & DEDICATED MODULE SWITCHER BAR */}
           <View style={styles.topUtilityBar}>
             <View style={{ flex: 1, minWidth: 260 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
                 <View style={[styles.utilityStatusBadge, { backgroundColor: secondaryFixed }]}>
                   <Animated.View style={[styles.utilityPulseDot, { backgroundColor: '#7d5700', opacity: pulseAnim }]} />
                   <Text style={{ fontFamily: F.bold, fontSize: 11, color: onSecondaryFixed }}>
-                    Sistema de Telemetría ISO 8528 Activo
+                    Dirección Ejecutiva · Datos 100% en Vivo
                   </Text>
                 </View>
                 <Text style={{ color: textOutline, fontSize: 12 }}>•</Text>
                 <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textVariant }}>
-                  {allPlants.length} Plantas en BD · {records.length} Registros Reales
+                  {allPlants.length} Plantas · {allPersonnelList.length} Personal · {allUsersAndClientsList.length} Usuarios
                 </Text>
               </View>
-              <Text style={[styles.utilityHeadline, { color: primaryNavy, fontFamily: F.bold, fontSize: isMobile ? 22 : 30 }]}>
-                Centro de Control & Operaciones
+              <Text style={[styles.utilityHeadline, { color: primaryNavy, fontFamily: F.bold, fontSize: isMobile ? 22 : 28 }]}>
+                {perspectiveTab === 'overview'
+                  ? 'Resumen Ejecutivo & Analítica Global'
+                  : perspectiveTab === 'plants'
+                  ? 'Disponibilidad de Plantas Eléctricas'
+                  : perspectiveTab === 'personnel'
+                  ? 'Personal Operador & Administradores'
+                  : 'Directorio de Usuarios y Clientes'}
               </Text>
             </View>
 
-            {/* Filters & Action Toolbar */}
+            {/* Quick Contextual Actions */}
             <View style={styles.utilityActionsRow}>
-              {/* Real Location Filter Selector */}
               <TouchableOpacity
                 onPress={() => {
-                  const nextIdx = (uniquePlantLocations.indexOf(plantLocationFilter) + 1) % uniquePlantLocations.length;
-                  setPlantLocationFilter(uniquePlantLocations[nextIdx]);
+                  loadSystemUsers();
+                  setUserMgmtVisible(true);
                 }}
-                style={[styles.toolbarSelectBtn, { backgroundColor: cardLowest, borderColor: cardBorder }]}
+                style={[styles.toolbarSecondaryBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="place" size={17} color={textOutline} />
-                <Text style={{ fontFamily: F.semibold, fontSize: 13, color: textOnSurface }}>
-                  Sede: {plantLocationFilter}
+                <MaterialIcons name="manage-accounts" size={17} color={primaryNavy} />
+                <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }}>
+                  Panel de Control de Roles
                 </Text>
-                <MaterialIcons name="expand-more" size={18} color={textVariant} />
               </TouchableOpacity>
 
-              {/* Real Category Filter Selector */}
-              <TouchableOpacity
-                onPress={() => {
-                  const nextIdx = (PLANT_CATEGORIES.indexOf(plantCategoryFilter) + 1) % PLANT_CATEGORIES.length;
-                  setPlantCategoryFilter(PLANT_CATEGORIES[nextIdx]);
-                }}
-                style={[styles.toolbarSelectBtn, { backgroundColor: cardLowest, borderColor: cardBorder }]}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="bolt" size={17} color={academicGold} />
-                <Text style={{ fontFamily: F.semibold, fontSize: 13, color: textOnSurface }}>
-                  {plantCategoryFilter}
-                </Text>
-                <MaterialIcons name="expand-more" size={18} color={textVariant} />
-              </TouchableOpacity>
-
-              {/* Export Report Button */}
               <TouchableOpacity
                 onPress={onOpenReport}
                 style={[styles.toolbarSecondaryBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
                 activeOpacity={0.8}
               >
-                <MaterialIcons name="download" size={17} color={primaryNavy} />
-                <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }}>
-                  Exportar Reporte
-                </Text>
-              </TouchableOpacity>
-
-              {/* Register Hours / Fuel CTA */}
-              <TouchableOpacity
-                onPress={onOpenQuickHours}
-                style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}
-                activeOpacity={0.85}
-              >
-                <MaterialIcons name="add-circle" size={17} color="#ffc250" />
-                <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
-                  Registrar Horas / Diésel
+                <MaterialIcons name="picture-as-pdf" size={17} color={primaryNavy} />
+                <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }}>
+                  Exportar PDF
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
 
-          {/* 3.2 PERSPECTIVE TABS (Inspired by template's B9 Ticketing Tabs) */}
+          {/* 4 DEDICATED PERSPECTIVE TABS BAR */}
           <View style={[styles.perspectiveTabContainer, { backgroundColor: surfaceLow }]}>
             {[
-              { id: 'all' as const, label: 'Vista Integral Ejecutiva', icon: 'dashboard', color: academicGold },
-              { id: 'plants' as const, label: `Máquinas & Plantas (${allPlants.length})`, icon: 'bolt', color: '#2563eb' },
-              { id: 'users' as const, label: `Usuarios & Operadores (${allCombinedUsers.length})`, icon: 'groups', color: innovationPurple },
-              { id: 'subsystems' as const, label: `Subsistemas ISO 8528 (${plantSubsystems.length})`, icon: 'build', color: '#10b981' },
+              { id: 'overview' as const, label: '1. Resumen Ejecutivo', icon: 'dashboard', color: academicGold },
+              { id: 'plants' as const, label: `2. Disponibilidad de Plantas (${allPlants.length})`, icon: 'bolt', color: '#16a34a' },
+              { id: 'personnel' as const, label: `3. Personal Operador (${allPersonnelList.length})`, icon: 'engineering', color: '#2563eb' },
+              { id: 'users' as const, label: `4. Usuarios y Clientes (${allUsersAndClientsList.length})`, icon: 'groups', color: innovationPurple },
             ].map((tab) => {
               const active = perspectiveTab === tab.id;
               return (
@@ -1047,1030 +1240,1513 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             })}
           </View>
 
-          {/* 3.3 KEY METRICS ROW (4 KPI Cards — 100% REAL DATA, NO FAKE NUMBERS) */}
-          <View style={styles.kpiGridRow}>
-            {/* KPI 1: Inversión Operativa Real */}
-            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.kpiCardTopRow}>
-                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
-                  INVERSIÓN OPERATIVA REAL
-                </Text>
-                <View style={[styles.kpiIconBox, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : 'rgba(0, 32, 69, 0.06)' }]}>
-                  <MaterialIcons name="account-balance-wallet" size={20} color={primaryNavy} />
-                </View>
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
-                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
-                    ${Math.floor(totalCostUSD).toLocaleString('en-US')}
-                  </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 18, color: textOutline }}>
-                    .{totalCostUSD.toFixed(2).split('.')[1]}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  <View style={{ backgroundColor: secondaryFixed, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: onSecondaryFixed }}>
-                      {records.length} registros en BD
+          {/* ===================================================================== */}
+          {/* PESTAÑA 1: RESUMEN EJECUTIVO (Limpio, sin amontonar tablas abajo)     */}
+          {/* ===================================================================== */}
+          {perspectiveTab === 'overview' && (
+            <View style={{ gap: 22 }}>
+              {/* 4 Executive KPI Cards */}
+              <View style={styles.kpiGridRow}>
+                {/* KPI 1: Inversión Operativa Real */}
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                  <View style={styles.kpiCardTopRow}>
+                    <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                      INVERSIÓN OPERATIVA REAL
                     </Text>
+                    <View style={[styles.kpiIconBox, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : 'rgba(0, 32, 69, 0.06)' }]}>
+                      <MaterialIcons name="account-balance-wallet" size={20} color={primaryNavy} />
+                    </View>
                   </View>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                    Diésel: ${totalFuelUSD.toFixed(2)} ({totalFuelLiters} L)
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* KPI 2: Flota de Plantas & Capacidad Real */}
-            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.kpiCardTopRow}>
-                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
-                  PLANTAS & CAPACIDAD EN BD
-                </Text>
-                <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(214, 158, 46, 0.18)' }]}>
-                  <MaterialCommunityIcons name="generator-portable" size={20} color={academicGold} />
-                </View>
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
-                    {allPlants.length}
-                  </Text>
-                  <Text style={{ fontFamily: F.semibold, fontSize: 14, color: textVariant }}>
-                    / {fleetTotalKva.toLocaleString()} kVA totales
-                  </Text>
-                </View>
-                <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow }]}>
-                  <View
-                    style={[
-                      styles.kpiProgressBarFill,
-                      {
-                        backgroundColor: isDark ? '#2563eb' : '#002045',
-                        width: `${allPlants.length > 0 ? Math.round((fleetStats.assigned / allPlants.length) * 100) : 0}%`,
-                      },
-                    ]}
-                  />
-                </View>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: primaryNavy }}>
-                    {fleetStats.assigned} con operador
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                    {fleetStats.unassigned} por asignar
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* KPI 3: Usuarios & Personal Operador Real */}
-            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.kpiCardTopRow}>
-                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
-                  DIRECTORIO DE USUARIOS EN BD
-                </Text>
-                <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(107, 70, 193, 0.14)' }]}>
-                  <MaterialIcons name="groups" size={20} color={innovationPurple} />
-                </View>
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
-                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
-                    {allCombinedUsers.length}
-                  </Text>
-                  <Text style={{ fontFamily: F.semibold, fontSize: 16, color: textVariant }}>
-                    Perfiles
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: academicGold }} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: textOnSurface }}>
-                      {(operatorsList || []).length} Operadores
-                    </Text>
-                  </View>
-                  <Text style={{ color: textOutline, fontSize: 11 }}>•</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                    {(superAdminsList || []).length} Admins
-                  </Text>
-                  <Text style={{ color: textOutline, fontSize: 11 }}>•</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                    {(clientsList || []).length} Clientes
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* KPI 4: Salud Global & Horómetro Real */}
-            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.kpiCardTopRow}>
-                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
-                  SALUD ISO 8528 PLANTA ACTIVA
-                </Text>
-                <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.14)' }]}>
-                  <MaterialIcons name="verified" size={20} color="#16a34a" />
-                </View>
-              </View>
-              <View style={{ marginTop: 14 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
-                    {generalHealth}%
-                  </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: generalHealth >= 60 ? '#16a34a' : '#d97706' }}>
-                    {generalHealth >= 60 ? 'Óptimo' : generalHealth >= 30 ? 'Preventivo' : 'Crítico'}
-                  </Text>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                    Horómetro actual: <Text style={{ fontFamily: F.bold, color: textOnSurface }}>{currentHours.toLocaleString()} hrs</Text> ({fleetStats.totalHours.toLocaleString()}h flota)
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* 3.4 BENTO SECTION: 8 Cols Analytics & Tiers + 4 Cols Live Unit Inspector */}
-          {(perspectiveTab === 'all' || perspectiveTab === 'plants') && (
-            <View style={[styles.bento12Grid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-              {/* LEFT 8 COLS: Real Fleet Chart + 4 Tier Breakdown Cards */}
-              <View style={[styles.bento8Col, isDesktop ? { flex: 8 } : { width: '100%' }]}>
-                {/* Primary Chart Card */}
-                <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                  <View style={styles.chartHeaderRow}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ fontFamily: F.bold, fontSize: 19, color: primaryNavy }}>
-                        Capacidad Nominal (kVA) vs. Horas Reales de Operación
+                  <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                      <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                        ${Math.floor(totalCostUSD).toLocaleString('en-US')}
                       </Text>
-                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                        Comparativa directa de las {allPlants.length} plantas eléctricas registradas en la base de datos
+                      <Text style={{ fontFamily: F.bold, fontSize: 18, color: textOutline }}>
+                        .{totalCostUSD.toFixed(2).split('.')[1]}
                       </Text>
                     </View>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: isDark ? '#2563eb' : '#002045' }} />
-                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Potencia (kVA)</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                        <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#ffc250' }} />
-                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Horómetro (hrs)</Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  <View style={{ paddingTop: 12, paddingBottom: 6 }}>
-                    <RealFleetBarChart
-                      plants={allPlants}
-                      isDark={isDark}
-                      primaryColor={isDark ? '#2563eb' : '#002045'}
-                      goldColor="#ffc250"
-                      textSecondary={textVariant}
-                    />
-                  </View>
-
-                  <View style={[styles.chartFooterRow, { borderTopColor: cardBorder }]}>
-                    <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                      * Valores leídos directamente del inventario activo en Supabase sin proyecciones simuladas.
-                    </Text>
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                      Capacidad Total: {fleetTotalKva.toLocaleString()} kVA · Uso Flota: {fleetStats.totalHours.toLocaleString()} hrs
-                    </Text>
-                  </View>
-                </View>
-
-                {/* 4 Tier Distribution Cards (100% Real Data) */}
-                <View style={styles.tiers4Grid}>
-                  {/* Tier 1: Alta Capacidad */}
-                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Alta Capacidad (≥100 kVA)</Text>
-                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: isDark ? '#2563eb' : '#002045' }} />
-                    </View>
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.highCount}</Text>
-                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
-                        {fleetTiers.highPct}% de la flota registrada
-                      </Text>
-                    </View>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
-                      {fleetTiers.highKva.toLocaleString()} kVA instalados
-                    </Text>
-                  </View>
-
-                  {/* Tier 2: Media Capacidad */}
-                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Media Capacidad (50-99)</Text>
-                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: academicGold }} />
-                    </View>
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.midCount}</Text>
-                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
-                        {fleetTiers.midPct}% de la flota registrada
-                      </Text>
-                    </View>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
-                      {fleetTiers.midKva.toLocaleString()} kVA instalados
-                    </Text>
-                  </View>
-
-                  {/* Tier 3: Compactas */}
-                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Compactas (&lt;50 kVA)</Text>
-                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: innovationPurple }} />
-                    </View>
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.compactCount}</Text>
-                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
-                        {fleetTiers.compactPct}% de la flota registrada
-                      </Text>
-                    </View>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
-                      {fleetTiers.compactKva.toLocaleString()} kVA instalados
-                    </Text>
-                  </View>
-
-                  {/* Tier 4: Móviles de Flota & Servicios */}
-                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Bitácora de Servicios</Text>
-                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a' }} />
-                    </View>
-                    <View style={{ marginTop: 10 }}>
-                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{serviceRecords.length}</Text>
-                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
-                        {fuelRecords.length} cargas de diésel
-                      </Text>
-                    </View>
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#16a34a', marginTop: 10 }}>
-                      ${totalServicesUSD.toFixed(2)} en mtto.
-                    </Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* RIGHT 4 COLS: Live Active Plant Card & Subsystems Breakdown */}
-              <View style={[styles.bento4Col, isDesktop ? { flex: 4 } : { width: '100%' }]}>
-                {/* Card 1: Live Active Plant Status (Template "Acreditación en Puerta") */}
-                <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a', opacity: pulseAnim }} />
-                      <Text style={{ fontFamily: F.bold, fontSize: 16, color: primaryNavy }}>
-                        Unidad en Supervisión
-                      </Text>
-                    </View>
-                    <View style={{ backgroundColor: surfaceHigh, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
-                      <Text style={{ fontFamily: F.semibold, fontSize: 11, color: textVariant }}>
-                        {myMoto?.location || 'Sede Principal'}
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={{ backgroundColor: surfaceLow, padding: 14, borderRadius: 12, gap: 10 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Serial / Placa en BD</Text>
-                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                        {myMoto?.serialNumber || myMoto?.plate || 'Sin serial registrado'}
-                      </Text>
-                    </View>
-
-                    <View style={{ backgroundColor: cardLowest, padding: 12, borderRadius: 10, gap: 6, borderWidth: 1, borderColor: cardBorder }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Marca y Modelo</Text>
-                        <Text style={{ fontFamily: F.bold, fontSize: 13, color: innovationPurple }}>
-                          {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Ninguna'}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      <View style={{ backgroundColor: secondaryFixed, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 }}>
+                        <Text style={{ fontFamily: F.bold, fontSize: 11, color: onSecondaryFixed }}>
+                          {records.length} registros en BD
                         </Text>
                       </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Capacidad / Combustible</Text>
-                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                          {myMoto?.powerKva || 0} kVA · {myMoto?.fuelType || 'Diesel'}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Operador Responsable</Text>
-                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: myMoto?.assignedOperatorName ? '#16a34a' : academicGold }}>
-                          {myMoto?.assignedOperatorName || 'Sin operador asignado'}
-                        </Text>
-                      </View>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                        Diésel: ${totalFuelUSD.toFixed(2)} ({totalFuelLiters} L)
+                      </Text>
                     </View>
+                  </View>
+                </View>
 
-                    {/* Donut Ring & Subsystem Health Count */}
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
-                      <View>
-                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Componentes Óptimos</Text>
-                        <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: primaryNavy }}>
-                          {optimalSubsystemsCount} de {plantSubsystems.length}
-                        </Text>
-                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textOutline }}>
-                          Horómetro: {currentHours.toLocaleString()} hrs
-                        </Text>
-                      </View>
-                      <RealDonutRing
-                        percent={generalHealth}
-                        primaryColor={isDark ? '#2563eb' : '#002045'}
-                        trackColor={surfaceHigh}
-                        textColor={primaryNavy}
+                {/* KPI 2: Disponibilidad de Plantas */}
+                <TouchableOpacity
+                  onPress={() => setPerspectiveTab('plants')}
+                  activeOpacity={0.85}
+                  style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}
+                >
+                  <View style={styles.kpiCardTopRow}>
+                    <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                      DISPONIBILIDAD DE PLANTAS
+                    </Text>
+                    <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(22, 163, 74, 0.14)' }]}>
+                      <MaterialCommunityIcons name="generator-portable" size={20} color="#16a34a" />
+                    </View>
+                  </View>
+                  <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                        {allPlants.length}
+                      </Text>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 14, color: textVariant }}>
+                        / {fleetTotalKva.toLocaleString()} kVA
+                      </Text>
+                    </View>
+                    <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow }]}>
+                      <View
+                        style={[
+                          styles.kpiProgressBarFill,
+                          {
+                            backgroundColor: '#16a34a',
+                            width: `${allPlants.length > 0 ? Math.round((fleetStats.unassigned / allPlants.length) * 100) : 0}%`,
+                          },
+                        ]}
                       />
                     </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#16a34a' }}>
+                        {fleetStats.unassigned} Disponibles
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                        {fleetStats.assigned} Asignadas →
+                      </Text>
+                    </View>
                   </View>
+                </TouchableOpacity>
 
-                  <TouchableOpacity
-                    onPress={onOpenSpecs}
-                    activeOpacity={0.85}
-                    style={[styles.purpleScannerBtn, { backgroundColor: isDark ? '#6B46C1' : '#6B46C1' }]}
-                  >
-                    <MaterialIcons name="qr-code-scanner" size={18} color="#ffffff" />
-                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
-                      Abrir Ficha Técnica & Especificaciones OEM
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {/* Card 2: Critical Subsystems Matrix (Template "Métodos de Pago") */}
-                <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder, gap: 12 }]}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 16, color: primaryNavy }}>
-                      Estado de Subsistemas Críticos
-                    </Text>
-                    <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>
-                      Vida Útil Remanente
-                    </Text>
-                  </View>
-
-                  <View style={{ gap: 10 }}>
-                    {plantSubsystems.slice(0, 4).map((sub) => (
-                      <TouchableOpacity
-                        key={sub.id}
-                        onPress={() => onOpenServicesTab(sub.id)}
-                        activeOpacity={0.8}
-                      >
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                          <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }}>
-                            {sub.name}
-                          </Text>
-                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                            {sub.hoursRemaining}h rest. ({sub.wear}%)
-                          </Text>
-                        </View>
-                        <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow, height: 6, marginTop: 0 }]}>
-                          <View
-                            style={{
-                              height: 6,
-                              borderRadius: 99,
-                              backgroundColor: sub.color,
-                              width: `${sub.wear}%`,
-                            }}
-                          />
-                        </View>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* ===================================================================== */}
-          {/* 3.5 OPERATIONAL INTERACTIVE DATA TABLE 1: PLANTAS ELÉCTRICAS EN BD    */}
-          {/* ===================================================================== */}
-          {(perspectiveTab === 'all' || perspectiveTab === 'plants') && (
-            <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.tableCardHeader}>
-                <View style={{ flex: 1, minWidth: 240 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
-                    Grupos Electrógenos y Máquinas en Gestión ({filteredFleetPlants.length})
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                    Listado operativo real de plantas registradas en base de datos, ubicación, horómetro y operador asignado
-                  </Text>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
-                    <MaterialIcons name="filter-list" size={18} color={textOutline} />
-                    <TextInput
-                      value={plantTableSearch}
-                      onChangeText={setPlantTableSearch}
-                      placeholder="Filtrar planta, serial o sede..."
-                      placeholderTextColor={textOutline}
-                      style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 180, paddingVertical: 4 }}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => setIsAddingMoto(true)}
-                    style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
-                  >
-                    <MaterialIcons name="add" size={16} color="#ffc250" />
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Nueva Planta</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Category & Location Filter Chips */}
-              <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 8 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {PLANT_CATEGORIES.map((cat) => {
-                    const active = plantCategoryFilter === cat;
-                    return (
-                      <TouchableOpacity
-                        key={cat}
-                        onPress={() => setPlantCategoryFilter(cat)}
-                        style={[
-                          styles.filterPillChip,
-                          {
-                            backgroundColor: active ? primaryContainer : surfaceLow,
-                            borderColor: active ? primaryContainer : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {uniquePlantLocations.map((loc) => {
-                    if (loc === 'Todas') return null;
-                    const active = plantLocationFilter === loc;
-                    return (
-                      <TouchableOpacity
-                        key={loc}
-                        onPress={() => setPlantLocationFilter(active ? 'Todas' : loc)}
-                        style={[
-                          styles.filterPillChip,
-                          {
-                            backgroundColor: active ? academicGold : surfaceLow,
-                            borderColor: active ? academicGold : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                          📍 {loc}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* Table Header Bar (Desktop) */}
-              {!isMobile && (
-                <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
-                  <Text style={[styles.tableHeadCell, { flex: 2.2, color: textVariant, fontFamily: F.bold }]}>PLANTA & MARCA</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>SERIAL / AÑO</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>RECINTO / SEDE</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>OPERADOR ASIGNADO</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.2, color: textVariant, fontFamily: F.bold }]}>POTENCIA & USO</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.1, color: textVariant, fontFamily: F.bold }]}>ESTADO</Text>
-                  <Text style={[styles.tableHeadCell, { width: 110, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
-                </View>
-              )}
-
-              {/* Table Body Rows */}
-              <View>
-                {filteredFleetPlants.length === 0 ? (
-                  <View style={{ padding: 32, alignItems: 'center' }}>
-                    <MaterialCommunityIcons name="generator-portable" size={36} color={textOutline} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
-                      No hay plantas registradas que coincidan con el filtro actual
-                    </Text>
-                  </View>
-                ) : (
-                  filteredFleetPlants.map((plant) => {
-                    const isSelected = myMoto?.id === plant.id;
-                    const kva = plant.powerKva || 0;
-                    const hrs = plant.currentHours || plant.currentOdometer || 0;
-
-                    return (
-                      <TouchableOpacity
-                        key={plant.id}
-                        onPress={() => selectMoto(plant.id)}
-                        activeOpacity={0.85}
-                        style={[
-                          styles.tableDataRow,
-                          {
-                            backgroundColor: isSelected ? (isDark ? 'rgba(37, 99, 235, 0.12)' : '#f0f7ff') : cardLowest,
-                            borderBottomColor: cardBorder,
-                            flexDirection: isMobile ? 'column' : 'row',
-                            alignItems: isMobile ? 'flex-start' : 'center',
-                          },
-                        ]}
-                      >
-                        {/* Col 1: Plant & Brand */}
-                        <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <View style={[styles.tablePlantThumb, { backgroundColor: surfaceLow }]}>
-                            <MaterialCommunityIcons name="generator-portable" size={22} color={isSelected ? '#2563eb' : primaryNavy} />
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: primaryNavy }} numberOfLines={1}>
-                              {plant.brand} {plant.model}
-                            </Text>
-                            <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: innovationPurple }} numberOfLines={1}>
-                              {kva >= 100 ? 'Alta Capacidad' : kva >= 50 ? 'Media Capacidad' : 'Compacta'} · {plant.fuelType || 'Diesel'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Col 2: Serial & Year */}
-                        <View style={{ flex: 1.3 }}>
-                          <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>
-                            {plant.serialNumber || plant.plate || 'Sin serial'}
-                          </Text>
-                          <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                            Año: {plant.year || '-'}
-                          </Text>
-                        </View>
-
-                        {/* Col 3: Location / Sede */}
-                        <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <MaterialIcons name="location-on" size={16} color={textOutline} />
-                          <Text style={{ fontFamily: F.medium, fontSize: 13, color: textOnSurface }} numberOfLines={1}>
-                            {plant.location || 'Sin sede registrada'}
-                          </Text>
-                        </View>
-
-                        {/* Col 4: Assigned Operator */}
-                        <View style={{ flex: 1.6 }}>
-                          <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: plant.assignedOperatorName ? primaryNavy : academicGold }}>
-                            {plant.assignedOperatorName || 'Sin operador asignado'}
-                          </Text>
-                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
-                            {plant.assignedOperatorId ? 'Vinculado en BD' : 'Disponible para asignar'}
-                          </Text>
-                        </View>
-
-                        {/* Col 5: Power & Hours */}
-                        <View style={{ flex: 1.2 }}>
-                          <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: primaryNavy }}>
-                            {kva} kVA
-                          </Text>
-                          <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>
-                            {hrs.toLocaleString()} hrs uso
-                          </Text>
-                        </View>
-
-                        {/* Col 6: Status Badge */}
-                        <View style={{ flex: 1.1 }}>
-                          <View
-                            style={{
-                              alignSelf: 'flex-start',
-                              flexDirection: 'row',
-                              alignItems: 'center',
-                              gap: 6,
-                              backgroundColor: isSelected ? secondaryFixed : surfaceLow,
-                              paddingHorizontal: 10,
-                              paddingVertical: 4,
-                              borderRadius: 99,
-                            }}
-                          >
-                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isSelected ? '#7d5700' : '#16a34a' }} />
-                            <Text style={{ fontFamily: F.bold, fontSize: 11, color: isSelected ? onSecondaryFixed : textOnSurface }}>
-                              {isSelected ? 'En Supervisión' : 'En Red'}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Col 7: Actions */}
-                        <View style={{ width: isMobile ? '100%' : 110, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              selectMoto(plant.id);
-                              onOpenQuickHours();
-                            }}
-                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                          >
-                            <MaterialIcons name="more-time" size={18} color={primaryNavy} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => {
-                              selectMoto(plant.id);
-                              onOpenSpecs();
-                            }}
-                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                          >
-                            <MaterialIcons name="analytics" size={18} color={primaryNavy} />
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            onPress={() => {
-                              selectMoto(plant.id);
-                              onOpenReport();
-                            }}
-                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                          >
-                            <MaterialIcons name="picture-as-pdf" size={18} color={primaryNavy} />
-                          </TouchableOpacity>
-                        </View>
-                      </TouchableOpacity>
-                    );
-                  })
-                )}
-              </View>
-
-              {/* Table Footer */}
-              <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
-                  Mostrando {filteredFleetPlants.length} de {allPlants.length} plantas eléctricas registradas en la base de datos
-                </Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                  Capacidad Acumulada: {fleetTotalKva.toLocaleString()} kVA
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* ===================================================================== */}
-          {/* 3.6 OPERATIONAL INTERACTIVE DATA TABLE 2: USUARIOS & OPERADORES EN BD */}
-          {/* ===================================================================== */}
-          {hasSuperAccess && (perspectiveTab === 'all' || perspectiveTab === 'users') && (
-            <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.tableCardHeader}>
-                <View style={{ flex: 1, minWidth: 240 }}>
-                  <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
-                    Directorio Real de Usuarios, Personal Operador y Roles ({filteredOperators.length})
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                    Clasificación por rol, ubicación registrada, departamento, plantas bajo supervisión y vehículo asignado en BD
-                  </Text>
-                </View>
-
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                  <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
-                    <MaterialIcons name="search" size={18} color={textOutline} />
-                    <TextInput
-                      value={operatorSearch}
-                      onChangeText={setOperatorSearch}
-                      placeholder="Buscar usuario, correo, carnet o estado..."
-                      placeholderTextColor={textOutline}
-                      style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 190, paddingVertical: 4 }}
-                    />
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => {
-                      loadSystemUsers();
-                      setUserMgmtVisible(true);
-                    }}
-                    style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
-                  >
-                    <MaterialIcons name="person-add" size={16} color="#ffc250" />
-                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
-                      Gestionar / Crear Usuario
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-
-              {/* Real Multi-Criteria Filters for Users */}
-              <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 8 }}>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                  {USER_CATEGORIES.map((cat) => {
-                    const active = selectedUserCategory === cat;
-                    return (
-                      <TouchableOpacity
-                        key={cat}
-                        onPress={() => setSelectedUserCategory(cat)}
-                        style={[
-                          styles.filterPillChip,
-                          {
-                            backgroundColor: active ? primaryContainer : surfaceLow,
-                            borderColor: active ? primaryContainer : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {dynamicUserStates.map((st) => {
-                    if (st === 'Todos') return null;
-                    const active = selectedStateFilter === st;
-                    return (
-                      <TouchableOpacity
-                        key={st}
-                        onPress={() => setSelectedStateFilter(active ? 'Todos' : st)}
-                        style={[
-                          styles.filterPillChip,
-                          {
-                            backgroundColor: active ? academicGold : surfaceLow,
-                            borderColor: active ? academicGold : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                          📍 {st}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {dynamicUserDepts.map((dp) => {
-                    if (dp === 'Todos') return null;
-                    const active = selectedDeptFilter === dp;
-                    return (
-                      <TouchableOpacity
-                        key={dp}
-                        onPress={() => setSelectedDeptFilter(active ? 'Todos' : dp)}
-                        style={[
-                          styles.filterPillChip,
-                          {
-                            backgroundColor: active ? innovationPurple : surfaceLow,
-                            borderColor: active ? innovationPurple : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                          🏢 {dp}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </ScrollView>
-              </View>
-
-              {/* Users Table Header (Desktop) */}
-              {!isMobile && (
-                <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
-                  <Text style={[styles.tableHeadCell, { flex: 2, color: textVariant, fontFamily: F.bold }]}>USUARIO & CORREO</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.2, color: textVariant, fontFamily: F.bold }]}>ROL EN BD</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.4, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN / DPTO</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>PLANTAS SUPERVISADAS</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>MÓVIL DE FLOTA</Text>
-                  <Text style={[styles.tableHeadCell, { width: 120, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
-                </View>
-              )}
-
-              {/* Users Rows (100% Real Data from Supabase) */}
-              <View>
-                {filteredOperators.length === 0 ? (
-                  <View style={{ padding: 32, alignItems: 'center' }}>
-                    <MaterialIcons name="groups" size={36} color={textOutline} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
-                      No hay usuarios registrados en este filtro
-                    </Text>
-                  </View>
-                ) : (
-                  filteredOperators.map((op: any) => {
-                    const initials = (op.full_name || op.email || 'U')
-                      .split(' ')
-                      .map((n: string) => n[0])
-                      .slice(0, 2)
-                      .join('')
-                      .toUpperCase();
-
-                    const assignedPlants = allPlants.filter(
-                      (p) =>
-                        p.assignedOperatorId === op.id ||
-                        (p.assignedOperatorName &&
-                          op.full_name &&
-                          p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
-                    );
-
-                    const roleLabel =
-                      op.resolvedRole === 'superadmin'
-                        ? 'Super Admin'
-                        : op.resolvedRole === 'operator'
-                        ? 'Operador Técnico'
-                        : 'Cliente / Titular';
-
-                    const roleBg =
-                      op.resolvedRole === 'superadmin'
-                        ? secondaryFixed
-                        : op.resolvedRole === 'operator'
-                        ? 'rgba(37, 99, 235, 0.14)'
-                        : 'rgba(22, 163, 74, 0.14)';
-
-                    const roleTextColor =
-                      op.resolvedRole === 'superadmin'
-                        ? onSecondaryFixed
-                        : op.resolvedRole === 'operator'
-                        ? '#2563eb'
-                        : '#16a34a';
-
-                    return (
-                      <View
-                        key={op.id}
-                        style={[
-                          styles.tableDataRow,
-                          {
-                            backgroundColor: cardLowest,
-                            borderBottomColor: cardBorder,
-                            flexDirection: isMobile ? 'column' : 'row',
-                            alignItems: isMobile ? 'flex-start' : 'center',
-                          },
-                        ]}
-                      >
-                        {/* Col 1: Name & Email */}
-                        <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                          <View style={[styles.tableUserAvatar, { backgroundColor: primaryContainer }]}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }} numberOfLines={1}>
-                              {op.full_name || 'Sin nombre registrado'}
-                            </Text>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
-                              {op.email || 'Sin correo'} {op.operator_code ? `· ${op.operator_code}` : ''}
-                            </Text>
-                          </View>
-                        </View>
-
-                        {/* Col 2: Role Badge */}
-                        <View style={{ flex: 1.2 }}>
-                          <View style={{ alignSelf: 'flex-start', backgroundColor: roleBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 11, color: roleTextColor }}>{roleLabel}</Text>
-                          </View>
-                        </View>
-
-                        {/* Col 3: Location & Department (100% real from DB) */}
-                        <View style={{ flex: 1.4 }}>
-                          <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
-                            {op.state || op.city || 'Sin estado en BD'}
-                          </Text>
-                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
-                            {op.department || op.specialty || 'Sin departamento'}
-                          </Text>
-                        </View>
-
-                        {/* Col 4: Assigned Plants */}
-                        <View style={{ flex: 1.6 }}>
-                          {assignedPlants.length === 0 ? (
-                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textOutline }}>
-                              0 plantas asignadas
-                            </Text>
-                          ) : (
-                            assignedPlants.map((ap) => (
-                              <TouchableOpacity key={ap.id} onPress={() => selectMoto(ap.id)}>
-                                <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                                  ⚡ {ap.brand} {ap.model} ({ap.powerKva || 0} kVA)
-                                </Text>
-                              </TouchableOpacity>
-                            ))
-                          )}
-                        </View>
-
-                        {/* Col 5: Assigned Company Vehicle (100% real from DB) */}
-                        <View style={{ flex: 1.5 }}>
-                          <Text style={{ fontFamily: F.semibold, fontSize: 12, color: op.assigned_vehicle_name ? textOnSurface : textOutline }}>
-                            {op.assigned_vehicle_name || 'Sin vehículo asignado'}
-                          </Text>
-                          {op.assigned_vehicle_plate && (
-                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
-                              Placa: {op.assigned_vehicle_plate}
-                            </Text>
-                          )}
-                        </View>
-
-                        {/* Col 6: Actions */}
-                        <View style={{ width: isMobile ? '100%' : 120, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
-                          {op.phone ? (
-                            <TouchableOpacity
-                              onPress={() => {
-                                const rawDigits = String(op.phone).replace(/\D/g, '');
-                                const phone = rawDigits.startsWith('58') ? rawDigits : '58' + rawDigits.replace(/^0/, '');
-                                Linking.openURL('https://wa.me/' + phone).catch(() => {});
-                              }}
-                              style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)' }]}
-                            >
-                              <MaterialCommunityIcons name="whatsapp" size={18} color="#16a34a" />
-                            </TouchableOpacity>
-                          ) : null}
-                          <TouchableOpacity
-                            onPress={() => {
-                              loadSystemUsers();
-                              setUserMgmtVisible(true);
-                            }}
-                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                          >
-                            <MaterialIcons name="manage-accounts" size={18} color={primaryNavy} />
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    );
-                  })
-                )}
-              </View>
-
-              <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
-                <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
-                  Mostrando {filteredOperators.length} de {allCombinedUsers.length} perfiles registrados en Supabase
-                </Text>
-                <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                  {(operatorsList || []).length} Operadores · {(superAdminsList || []).length} Super Admins · {(clientsList || []).length} Clientes
-                </Text>
-              </View>
-            </View>
-          )}
-
-          {/* ===================================================================== */}
-          {/* 3.7 OPERATIONAL INTERACTIVE DATA TABLE 3: SUBSISTEMAS ISO 8528        */}
-          {/* ===================================================================== */}
-          {(perspectiveTab === 'all' || perspectiveTab === 'subsystems') && (
-            <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-              <View style={styles.tableCardHeader}>
-                <View>
-                  <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
-                    Subsistemas Industriales & Telemetría — {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Planta'}
-                  </Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                    Control de desgaste remanente sobre {currentHours.toLocaleString()} hrs registradas en horómetro
-                  </Text>
-                </View>
-
+                {/* KPI 3: Personal Operador & Admins */}
                 <TouchableOpacity
-                  onPress={() => {
-                    const options: Array<'TODOS' | 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO'> = ['TODOS', 'ÓPTIMO', 'PREVENTIVO', 'CRÍTICO'];
-                    const nextIdx = (options.indexOf(subsystemFilter) + 1) % options.length;
-                    setSubsystemFilter(options[nextIdx]);
-                  }}
-                  style={[styles.toolbarSelectBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
+                  onPress={() => setPerspectiveTab('personnel')}
+                  activeOpacity={0.85}
+                  style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}
                 >
-                  <MaterialIcons name="tune" size={17} color={primaryNavy} />
-                  <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }}>
-                    Estado: {subsystemFilter}
-                  </Text>
-                  <MaterialIcons name="expand-more" size={18} color={textVariant} />
+                  <View style={styles.kpiCardTopRow}>
+                    <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                      PERSONAL OPERADOR & ADMINS
+                    </Text>
+                    <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(37, 99, 235, 0.14)' }]}>
+                      <MaterialIcons name="engineering" size={20} color="#2563eb" />
+                    </View>
+                  </View>
+                  <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                        {allPersonnelList.length}
+                      </Text>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 15, color: textVariant }}>
+                        Integrantes
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: '#2563eb' }}>
+                        {(operatorsList || []).length} Operadores
+                      </Text>
+                      <Text style={{ color: textOutline, fontSize: 11 }}>•</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                        {(superAdminsList || []).length} Super Admins →
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+
+                {/* KPI 4: Usuarios y Clientes */}
+                <TouchableOpacity
+                  onPress={() => setPerspectiveTab('users')}
+                  activeOpacity={0.85}
+                  style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}
+                >
+                  <View style={styles.kpiCardTopRow}>
+                    <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                      USUARIOS & CLIENTES EN BD
+                    </Text>
+                    <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(107, 70, 193, 0.14)' }]}>
+                      <MaterialIcons name="groups" size={20} color={innovationPurple} />
+                    </View>
+                  </View>
+                  <View style={{ marginTop: 14 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                      <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                        {allUsersAndClientsList.length}
+                      </Text>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 15, color: textVariant }}>
+                        Cuentas
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10 }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: innovationPurple }}>
+                        {(clientsList || []).length} Activos
+                      </Text>
+                      <Text style={{ color: textOutline, fontSize: 11 }}>•</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: (pendingUsersList?.length || 0) > 0 ? '#ef4444' : textVariant }}>
+                        {(pendingUsersList || []).length} Pendientes →
+                      </Text>
+                    </View>
+                  </View>
                 </TouchableOpacity>
               </View>
 
-              {!isMobile && (
-                <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
-                  <Text style={[styles.tableHeadCell, { flex: 2.3, color: textVariant, fontFamily: F.bold }]}>SUBSISTEMA INDUSTRIAL</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.2, color: textVariant, fontFamily: F.bold }]}>USO EN CICLO</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>VIDA ÚTIL REMANENTE</Text>
-                  <Text style={[styles.tableHeadCell, { flex: 1, color: textVariant, fontFamily: F.bold }]}>ESTADO ISO 8528</Text>
-                  <Text style={[styles.tableHeadCell, { width: 90, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIÓN</Text>
-                </View>
-              )}
-
-              <View>
-                {filteredSubsystems.map((sub) => {
-                  const meta = SUBSYSTEM_META[sub.id] || { icon: 'cog', bg: surfaceLow, color: primaryNavy, desc: 'Componente Industrial' };
-                  const isGood = sub.wear >= 60;
-                  const isWarn = sub.wear >= 30 && sub.wear < 60;
-                  const statusColor = isGood ? '#16a34a' : isWarn ? '#d97706' : '#dc2626';
-
-                  return (
-                    <View
-                      key={sub.id}
-                      style={[
-                        styles.tableDataRow,
-                        {
-                          backgroundColor: cardLowest,
-                          borderBottomColor: cardBorder,
-                          flexDirection: isMobile ? 'column' : 'row',
-                          alignItems: isMobile ? 'flex-start' : 'center',
-                        },
-                      ]}
-                    >
-                      <View style={{ flex: 2.3, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                        <View style={[styles.tablePlantThumb, { backgroundColor: meta.bg }]}>
-                          <MaterialCommunityIcons name={meta.icon} size={22} color={meta.color} />
-                        </View>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }}>{sub.name}</Text>
-                          <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>{meta.desc}</Text>
-                        </View>
-                      </View>
-
-                      <View style={{ flex: 1.2 }}>
-                        <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>{sub.hoursSince} hrs</Text>
-                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>Intervalo: {sub.interval}h</Text>
-                      </View>
-
-                      <View style={{ flex: 1.6, paddingRight: 16 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>{sub.hoursRemaining} hrs restantes</Text>
-                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: statusColor }}>{sub.wear}%</Text>
-                        </View>
-                        <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow, height: 7, marginTop: 0 }]}>
-                          <View style={{ height: 7, borderRadius: 99, backgroundColor: statusColor, width: `${sub.wear}%` }} />
-                        </View>
-                      </View>
-
+              {/* 8+4 Column Executive Analytics & Module Shortcuts */}
+              <View style={[styles.bento12Grid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+                {/* LEFT 8 COLS: Real Fleet Chart + 4 Tier Breakdown Cards */}
+                <View style={[styles.bento8Col, isDesktop ? { flex: 8 } : { width: '100%' }]}>
+                  <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                    <View style={styles.chartHeaderRow}>
                       <View style={{ flex: 1 }}>
-                        <View style={{ alignSelf: 'flex-start', backgroundColor: `${statusColor}20`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
-                          <Text style={{ fontFamily: F.bold, fontSize: 11, color: statusColor }}>{sub.status}</Text>
-                        </View>
+                        <Text style={{ fontFamily: F.bold, fontSize: 19, color: primaryNavy }}>
+                          Capacidad Nominal (kVA) vs. Horas Reales de Operación
+                        </Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                          Comparativa directa de las {allPlants.length} plantas eléctricas registradas en la base de datos
+                        </Text>
                       </View>
-
-                      <View style={{ width: isMobile ? '100%' : 90, alignItems: 'flex-end' }}>
-                        <TouchableOpacity
-                          onPress={() => onOpenServicesTab(sub.id)}
-                          style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                        >
-                          <MaterialIcons name="build" size={17} color={primaryNavy} />
-                        </TouchableOpacity>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: isDark ? '#2563eb' : '#002045' }} />
+                          <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Potencia (kVA)</Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#ffc250' }} />
+                          <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Horómetro (hrs)</Text>
+                        </View>
                       </View>
                     </View>
-                  );
-                })}
+
+                    <View style={{ paddingTop: 12, paddingBottom: 6 }}>
+                      <RealFleetBarChart
+                        plants={allPlants}
+                        isDark={isDark}
+                        primaryColor={isDark ? '#2563eb' : '#002045'}
+                        goldColor="#ffc250"
+                        textSecondary={textVariant}
+                      />
+                    </View>
+
+                    <View style={[styles.chartFooterRow, { borderTopColor: cardBorder }]}>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                        * Valores leídos directamente del inventario activo en Supabase sin datos simulados.
+                      </Text>
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                        Capacidad Total: {fleetTotalKva.toLocaleString()} kVA · Uso Flota: {fleetStats.totalHours.toLocaleString()} hrs
+                      </Text>
+                    </View>
+                  </View>
+
+                  {/* 4 Tier Distribution Cards */}
+                  <View style={styles.tiers4Grid}>
+                    <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Alta Capacidad (≥100 kVA)</Text>
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: isDark ? '#2563eb' : '#002045' }} />
+                      </View>
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.highCount}</Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                          {fleetTiers.highPct}% de la flota registrada
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
+                        {fleetTiers.highKva.toLocaleString()} kVA instalados
+                      </Text>
+                    </View>
+
+                    <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Media Capacidad (50-99)</Text>
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: academicGold }} />
+                      </View>
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.midCount}</Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                          {fleetTiers.midPct}% de la flota registrada
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
+                        {fleetTiers.midKva.toLocaleString()} kVA instalados
+                      </Text>
+                    </View>
+
+                    <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Compactas (&lt;50 kVA)</Text>
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: innovationPurple }} />
+                      </View>
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.compactCount}</Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                          {fleetTiers.compactPct}% de la flota registrada
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
+                        {fleetTiers.compactKva.toLocaleString()} kVA instalados
+                      </Text>
+                    </View>
+
+                    <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Bitácora de Servicios</Text>
+                        <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a' }} />
+                      </View>
+                      <View style={{ marginTop: 10 }}>
+                        <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{serviceRecords.length}</Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                          {fuelRecords.length} cargas de diésel
+                        </Text>
+                      </View>
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#16a34a', marginTop: 10 }}>
+                        ${totalServicesUSD.toFixed(2)} en mtto.
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+
+                {/* RIGHT 4 COLS: Fleet Availability Balance & Dedicated Section Shortcuts */}
+                <View style={[styles.bento4Col, isDesktop ? { flex: 4 } : { width: '100%' }]}>
+                  {/* Card 1: Fleet Availability Balance */}
+                  <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a', opacity: pulseAnim }} />
+                        <Text style={{ fontFamily: F.bold, fontSize: 16, color: primaryNavy }}>
+                          Balance de Disponibilidad
+                        </Text>
+                      </View>
+                      <View style={{ backgroundColor: surfaceHigh, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11, color: textVariant }}>
+                          Red Nacional
+                        </Text>
+                      </View>
+                    </View>
+
+                    <View style={{ backgroundColor: surfaceLow, padding: 14, borderRadius: 12, gap: 10 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <View style={{ flex: 1, paddingRight: 10 }}>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                            Plantas Disponibles vs. Asignadas
+                          </Text>
+                          <Text style={{ fontFamily: F.extrabold, fontSize: 20, color: primaryNavy, marginTop: 2 }}>
+                            {fleetStats.unassigned} Libres · {fleetStats.assigned} Asignadas
+                          </Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textOutline, marginTop: 2 }}>
+                            Total en BD: {allPlants.length} unidades ({fleetTotalKva} kVA)
+                          </Text>
+                        </View>
+                        <RealDonutRing
+                          percent={allPlants.length > 0 ? Math.round((fleetStats.unassigned / allPlants.length) * 100) : 100}
+                          primaryColor="#16a34a"
+                          trackColor={surfaceHigh}
+                          textColor={primaryNavy}
+                        />
+                      </View>
+                    </View>
+
+                    <TouchableOpacity
+                      onPress={() => setPerspectiveTab('plants')}
+                      activeOpacity={0.85}
+                      style={[styles.purpleScannerBtn, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}
+                    >
+                      <MaterialIcons name="bolt" size={18} color="#ffc250" />
+                      <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
+                        Ir a Disponibilidad de Plantas →
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Card 2: Dedicated Navigation Modules */}
+                  <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder, gap: 10 }]}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 16, color: primaryNavy }}>
+                      Pestañas de Control Dedicadas
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant, marginBottom: 4 }}>
+                      Accede a cada directorio por separado con filtros por País, Zona, Estado y Categoría:
+                    </Text>
+
+                    <TouchableOpacity
+                      onPress={() => setPerspectiveTab('plants')}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: surfaceLow,
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: 'rgba(22, 163, 74, 0.14)', justifyContent: 'center', alignItems: 'center' }}>
+                          <MaterialCommunityIcons name="generator-portable" size={18} color="#16a34a" />
+                        </View>
+                        <View>
+                          <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }}>Disponibilidad de Plantas</Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                            {allPlants.length} plantas · Filtro por País, Zona y Estado
+                          </Text>
+                        </View>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={textVariant} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setPerspectiveTab('personnel')}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: surfaceLow,
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: 'rgba(37, 99, 235, 0.14)', justifyContent: 'center', alignItems: 'center' }}>
+                          <MaterialIcons name="engineering" size={18} color="#2563eb" />
+                        </View>
+                        <View>
+                          <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }}>Personal Operador & Técnicos</Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                            {allPersonnelList.length} operadores y admins · Asignación de flota
+                          </Text>
+                        </View>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={textVariant} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setPerspectiveTab('users')}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        backgroundColor: surfaceLow,
+                        padding: 12,
+                        borderRadius: 12,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                        <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: 'rgba(107, 70, 193, 0.14)', justifyContent: 'center', alignItems: 'center' }}>
+                          <MaterialIcons name="groups" size={18} color={innovationPurple} />
+                        </View>
+                        <View>
+                          <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }}>Usuarios y Clientes</Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                            {allUsersAndClientsList.length} titulares y aprobaciones pendientes
+                          </Text>
+                        </View>
+                      </View>
+                      <MaterialIcons name="chevron-right" size={20} color={textVariant} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ===================================================================== */}
+          {/* PESTAÑA 2: DISPONIBILIDAD DE PLANTAS (Con filtros País/Zona/Estado)   */}
+          {/* ===================================================================== */}
+          {perspectiveTab === 'plants' && (
+            <View style={{ gap: 18 }}>
+              {/* 4 Mini-KPIs de Disponibilidad de Plantas */}
+              <View style={styles.kpiGridRow}>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>TOTAL PLANTAS EN BD</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: primaryNavy, marginTop: 6 }}>{allPlants.length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Inventario global registrado</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: '#16a34a', fontFamily: F.semibold }]}>DISPONIBLES (LIBRES)</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#16a34a', marginTop: 6 }}>{fleetStats.unassigned}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Listas para asignar operador</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: '#2563eb', fontFamily: F.semibold }]}>ASIGNADAS / EN OPERACIÓN</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#2563eb', marginTop: 6 }}>{fleetStats.assigned}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Con operador responsable</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: academicGold, fontFamily: F.semibold }]}>CAPACIDAD EN VISTA</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: primaryNavy, marginTop: 6 }}>{filteredPlantsKva.toLocaleString()} kVA</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>{filteredFleetPlants.length} plantas filtradas</Text>
+                </View>
+              </View>
+
+              {/* Main Plants Availability Card & Geographic Filter Matrix */}
+              <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                <View style={styles.tableCardHeader}>
+                  <View style={{ flex: 1, minWidth: 240 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
+                      Disponibilidad de Plantas Eléctricas y Maquinaria ({filteredFleetPlants.length})
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                      Navega y filtra el parque de plantas por Disponibilidad, Capacidad, País, Zona y Estado
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                      <MaterialIcons name="search" size={18} color={textOutline} />
+                      <TextInput
+                        value={plantSearch}
+                        onChangeText={setPlantSearch}
+                        placeholder="Buscar modelo, serial, estado o sede..."
+                        placeholderTextColor={textOutline}
+                        style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 210, paddingVertical: 4 }}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setIsAddingMoto(true)}
+                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 9 }]}
+                    >
+                      <MaterialIcons name="add-circle" size={16} color="#ffc250" />
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Incorporar Planta</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Geographic & Availability Multi-Row Filter Box */}
+                <View style={{ marginHorizontal: 20, marginBottom: 16, padding: 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
+                  {/* Row 1: DISPONIBILIDAD */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>DISPONIBILIDAD:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {(['Todas', 'Disponibles', 'Asignadas'] as const).map((status) => {
+                        const active = plantAvailabilityFilter === status;
+                        return (
+                          <TouchableOpacity
+                            key={status}
+                            onPress={() => setPlantAvailabilityFilter(status)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? '#16a34a' : cardLowest,
+                                borderColor: active ? '#16a34a' : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {status === 'Disponibles' ? 'Disponibles (Libres)' : status === 'Asignadas' ? 'En Operación (Asignadas)' : 'Todas las Plantas'}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 2: CAPACIDAD */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>CAPACIDAD:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {PLANT_CATEGORIES.map((cat) => {
+                        const active = plantCategoryFilter === cat;
+                        return (
+                          <TouchableOpacity
+                            key={cat}
+                            onPress={() => setPlantCategoryFilter(cat)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? primaryContainer : cardLowest,
+                                borderColor: active ? primaryContainer : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {cat}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 3: PAÍS */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>PAÍS:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {COUNTRIES_LIST.map((c) => {
+                        const active = plantCountryFilter === c;
+                        return (
+                          <TouchableOpacity
+                            key={c}
+                            onPress={() => setPlantCountryFilter(c)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? academicGold : cardLowest,
+                                borderColor: active ? academicGold : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {c}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 4: ZONA */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ZONA:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {ZONES_LIST.map((z) => {
+                        const active = plantZoneFilter === z;
+                        return (
+                          <TouchableOpacity
+                            key={z}
+                            onPress={() => setPlantZoneFilter(z)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? primaryContainer : cardLowest,
+                                borderColor: active ? primaryContainer : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {z}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 5: ESTADO / SEDE */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO / SEDE:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {STATES_LIST.map((st) => {
+                        const active = plantStateFilter === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            onPress={() => setPlantStateFilter(st)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? innovationPurple : cardLowest,
+                                borderColor: active ? innovationPurple : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {st}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+
+                {/* Table Header (Desktop) */}
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 2.2, color: textVariant, fontFamily: F.bold }]}>PLANTA & CAPACIDAD</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>SERIAL / CÓDIGO</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.8, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · ZONA · PAÍS)</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>DISPONIBILIDAD / OPERADOR</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.1, color: textVariant, fontFamily: F.bold }]}>HORÓMETRO</Text>
+                    <Text style={[styles.tableHeadCell, { width: 110, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                  </View>
+                )}
+
+                {/* Plants Rows */}
+                <View>
+                  {filteredFleetPlants.length === 0 ? (
+                    <View style={{ padding: 36, alignItems: 'center' }}>
+                      <MaterialCommunityIcons name="generator-portable" size={38} color={textOutline} />
+                      <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
+                        No se encontraron plantas con los filtros seleccionados
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredFleetPlants.map((plant) => {
+                      const kva = plant.powerKva || 0;
+                      const hrs = plant.currentHours || plant.currentOdometer || 0;
+                      return (
+                        <View
+                          key={plant.id}
+                          style={[
+                            styles.tableDataRow,
+                            {
+                              backgroundColor: cardLowest,
+                              borderBottomColor: cardBorder,
+                              flexDirection: isMobile ? 'column' : 'row',
+                              alignItems: isMobile ? 'flex-start' : 'center',
+                            },
+                          ]}
+                        >
+                          {/* Col 1: Brand, Model & Category */}
+                          <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={[styles.tablePlantThumb, { backgroundColor: surfaceLow }]}>
+                              <MaterialCommunityIcons name="generator-portable" size={22} color={primaryNavy} />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: primaryNavy }} numberOfLines={1}>
+                                {plant.brand} {plant.model} · {kva} kVA
+                              </Text>
+                              <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: innovationPurple }} numberOfLines={1}>
+                                {plant.category} · {plant.fuelType || 'Diesel'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Col 2: Serial */}
+                          <View style={{ flex: 1.3 }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>
+                              {plant.serialNumber || plant.plate || 'Sin serial'}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                              Año: {plant.year || '-'}
+                            </Text>
+                          </View>
+
+                          {/* Col 3: Geographic Location */}
+                          <View style={{ flex: 1.8 }}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                              <MaterialIcons name="location-on" size={15} color={academicGold} />
+                              <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                                {plant.location || plant.geoState}
+                              </Text>
+                            </View>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }} numberOfLines={1}>
+                              {plant.geoZone} · {plant.geoCountry}
+                            </Text>
+                          </View>
+
+                          {/* Col 4: Availability & Operator */}
+                          <View style={{ flex: 1.5 }}>
+                            <View
+                              style={{
+                                alignSelf: 'flex-start',
+                                backgroundColor: plant.isAssigned ? 'rgba(37, 99, 235, 0.14)' : 'rgba(22, 163, 74, 0.14)',
+                                paddingHorizontal: 9,
+                                paddingVertical: 3,
+                                borderRadius: 99,
+                                marginBottom: 3,
+                              }}
+                            >
+                              <Text
+                                style={{
+                                  fontFamily: F.bold,
+                                  fontSize: 10.5,
+                                  color: plant.isAssigned ? '#2563eb' : '#16a34a',
+                                }}
+                              >
+                                {plant.isAssigned ? 'EN OPERACIÓN' : 'DISPONIBLE (LIBRE)'}
+                              </Text>
+                            </View>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
+                              {plant.assignedOperatorName ? `Op: ${plant.assignedOperatorName}` : 'Sin operador asignado'}
+                            </Text>
+                          </View>
+
+                          {/* Col 5: Hours */}
+                          <View style={{ flex: 1.1 }}>
+                            <Text style={{ fontFamily: F.extrabold, fontSize: 13.5, color: primaryNavy }}>
+                              {hrs.toLocaleString()} hrs
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                              Horómetro real
+                            </Text>
+                          </View>
+
+                          {/* Col 6: Actions */}
+                          <View style={{ width: isMobile ? '100%' : 110, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                            <TouchableOpacity
+                              onPress={() => {
+                                selectMoto(plant.id);
+                                onOpenQuickHours();
+                              }}
+                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                            >
+                              <MaterialIcons name="more-time" size={18} color={primaryNavy} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                selectMoto(plant.id);
+                                onOpenServicesTab('oil');
+                              }}
+                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                            >
+                              <MaterialIcons name="build" size={17} color={primaryNavy} />
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              onPress={() => {
+                                selectMoto(plant.id);
+                                onOpenReport();
+                              }}
+                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                            >
+                              <MaterialIcons name="picture-as-pdf" size={18} color={primaryNavy} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                    Mostrando {filteredFleetPlants.length} de {allPlants.length} plantas eléctricas registradas en Supabase
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                    {fleetStats.unassigned} Disponibles · {fleetStats.assigned} Asignadas
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ===================================================================== */}
+          {/* PESTAÑA 3: PERSONAL OPERADOR & ADMINS (Exclusivo para Personal HL)    */}
+          {/* ===================================================================== */}
+          {perspectiveTab === 'personnel' && (
+            <View style={{ gap: 18 }}>
+              {/* 4 Mini-KPIs de Personal */}
+              <View style={styles.kpiGridRow}>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>TOTAL PERSONAL INTERNO</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: primaryNavy, marginTop: 6 }}>{allPersonnelList.length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Equipo técnico y directivo</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: '#2563eb', fontFamily: F.semibold }]}>OPERADORES TÉCNICOS</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#2563eb', marginTop: 6 }}>{(operatorsList || []).length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Personal de campo y soporte</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: academicGold, fontFamily: F.semibold }]}>SUPER ADMINISTRADORES</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: academicGold, marginTop: 6 }}>{(superAdminsList || []).length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Dirección y control global</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: '#16a34a', fontFamily: F.semibold }]}>CON PLANTAS A CARGO</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#16a34a', marginTop: 6 }}>{personnelWithPlantsCount}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Responsables activos en red</Text>
+                </View>
+              </View>
+
+              {/* Main Personnel Table & Multi-Criteria Filter Matrix */}
+              <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                <View style={styles.tableCardHeader}>
+                  <View style={{ flex: 1, minWidth: 240 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
+                      Directorio de Personal Operador y Administradores ({filteredPersonnelList.length})
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                      Filtra el personal técnico por Rol, Disponibilidad, País, Zona, Estado y Departamento
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                      <MaterialIcons name="search" size={18} color={textOutline} />
+                      <TextInput
+                        value={personnelSearch}
+                        onChangeText={setPersonnelSearch}
+                        placeholder="Buscar operador, carnet HL, especialidad..."
+                        placeholderTextColor={textOutline}
+                        style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 210, paddingVertical: 4 }}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setCreateOperatorVisible(true)}
+                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 9 }]}
+                    >
+                      <MaterialIcons name="person-add" size={16} color="#ffc250" />
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
+                        Registrar Operador / Super Admin
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Personnel Filter Box: ROL, ASIGNACIÓN, PAÍS, ZONA, ESTADO, DEPARTAMENTO */}
+                <View style={{ marginHorizontal: 20, marginBottom: 16, padding: 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
+                  {/* Row 1: ROL DE PERSONAL */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ROL PERSONAL:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {(['Todo el Personal', 'Operadores Técnicos', 'Super Administradores'] as const).map((r) => {
+                        const active = personnelRoleFilter === r;
+                        return (
+                          <TouchableOpacity
+                            key={r}
+                            onPress={() => setPersonnelRoleFilter(r)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? primaryContainer : cardLowest,
+                                borderColor: active ? primaryContainer : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {r}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 2: ASIGNACIÓN / DISPONIBILIDAD */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ASIGNACIÓN:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {(['Todos', 'Con Plantas a Cargo', 'Disponibles (0 Plantas)', 'Con Vehículo de Flota'] as const).map((a) => {
+                        const active = personnelAssignFilter === a;
+                        return (
+                          <TouchableOpacity
+                            key={a}
+                            onPress={() => setPersonnelAssignFilter(a)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? '#16a34a' : cardLowest,
+                                borderColor: active ? '#16a34a' : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {a}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 3: PAÍS */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>PAÍS:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {COUNTRIES_LIST.map((c) => {
+                        const active = personnelCountryFilter === c;
+                        return (
+                          <TouchableOpacity
+                            key={c}
+                            onPress={() => setPersonnelCountryFilter(c)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? academicGold : cardLowest,
+                                borderColor: active ? academicGold : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {c}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 4: ZONA */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ZONA:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {ZONES_LIST.map((z) => {
+                        const active = personnelZoneFilter === z;
+                        return (
+                          <TouchableOpacity
+                            key={z}
+                            onPress={() => setPersonnelZoneFilter(z)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? primaryContainer : cardLowest,
+                                borderColor: active ? primaryContainer : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {z}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 5: ESTADO */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {STATES_LIST.map((st) => {
+                        const active = personnelStateFilter === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            onPress={() => setPersonnelStateFilter(st)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? '#2563eb' : cardLowest,
+                                borderColor: active ? '#2563eb' : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {st}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 6: DEPARTAMENTO / ESPECIALIDAD */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>DEPARTAMENTO:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {personnelDeptsList.map((dp) => {
+                        const active = personnelDeptFilter === dp;
+                        return (
+                          <TouchableOpacity
+                            key={dp}
+                            onPress={() => setPersonnelDeptFilter(dp)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? innovationPurple : cardLowest,
+                                borderColor: active ? innovationPurple : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {dp}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+
+                {/* Table Header (Desktop) */}
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 2, color: textVariant, fontFamily: F.bold }]}>PERSONAL & CARNET HL</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>ROL & ESPECIALIDAD</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · PAÍS)</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.7, color: textVariant, fontFamily: F.bold }]}>PLANTAS BAJO SU CARGO</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textVariant, fontFamily: F.bold }]}>VEHÍCULO DE FLOTA</Text>
+                    <Text style={[styles.tableHeadCell, { width: 150, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                  </View>
+                )}
+
+                {/* Personnel Rows */}
+                <View>
+                  {filteredPersonnelList.length === 0 ? (
+                    <View style={{ padding: 36, alignItems: 'center' }}>
+                      <MaterialIcons name="engineering" size={38} color={textOutline} />
+                      <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
+                        No se encontró personal operador con los filtros seleccionados
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredPersonnelList.map((op: any) => {
+                      const initials = (op.full_name || op.email || 'OP')
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase();
+
+                      const assignedPlants = allPlants.filter(
+                        (p) =>
+                          p.assignedOperatorId === op.id ||
+                          (p.assignedOperatorName &&
+                            op.full_name &&
+                            p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+                      );
+
+                      const isSuper = op.resolvedRole === 'superadmin';
+
+                      return (
+                        <View
+                          key={op.id}
+                          style={[
+                            styles.tableDataRow,
+                            {
+                              backgroundColor: cardLowest,
+                              borderBottomColor: cardBorder,
+                              flexDirection: isMobile ? 'column' : 'row',
+                              alignItems: isMobile ? 'flex-start' : 'center',
+                            },
+                          ]}
+                        >
+                          {/* Col 1: Name, Email & Carnet */}
+                          <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={[styles.tableUserAvatar, { backgroundColor: isSuper ? academicGold : primaryContainer }]}>
+                              <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }} numberOfLines={1}>
+                                {op.full_name || 'Sin nombre en BD'}
+                              </Text>
+                              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
+                                {op.operator_code ? `Carnet: ${op.operator_code} · ` : ''}{op.email || 'Sin correo'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Col 2: Role & Department */}
+                          <View style={{ flex: 1.3 }}>
+                            <View
+                              style={{
+                                alignSelf: 'flex-start',
+                                backgroundColor: isSuper ? secondaryFixed : 'rgba(37, 99, 235, 0.14)',
+                                paddingHorizontal: 9,
+                                paddingVertical: 3,
+                                borderRadius: 99,
+                                marginBottom: 3,
+                              }}
+                            >
+                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: isSuper ? onSecondaryFixed : '#2563eb' }}>
+                                {isSuper ? 'SUPER ADMIN' : 'OPERADOR TÉCNICO'}
+                              </Text>
+                            </View>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
+                              {op.deptLabel}
+                            </Text>
+                          </View>
+
+                          {/* Col 3: Location */}
+                          <View style={{ flex: 1.5 }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              📍 {op.geoState}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
+                              {op.geoZone} · {op.geoCountry}
+                            </Text>
+                          </View>
+
+                          {/* Col 4: Assigned Plants */}
+                          <View style={{ flex: 1.7 }}>
+                            {isSuper ? (
+                              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                                Supervisión global ejecutiva
+                              </Text>
+                            ) : assignedPlants.length === 0 ? (
+                              <Text style={{ fontFamily: F.medium, fontSize: 12, color: textOutline }}>
+                                0 plantas asignadas (Disponible)
+                              </Text>
+                            ) : (
+                              assignedPlants.map((ap) => (
+                                <TouchableOpacity key={ap.id} onPress={() => selectMoto(ap.id)}>
+                                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                                    ⚡ {ap.brand} {ap.model} ({ap.powerKva || 0} kVA)
+                                  </Text>
+                                </TouchableOpacity>
+                              ))
+                            )}
+                          </View>
+
+                          {/* Col 5: Assigned Vehicle */}
+                          <View style={{ flex: 1.4 }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12, color: op.assigned_vehicle_name ? textOnSurface : textOutline }}>
+                              {op.assigned_vehicle_name || 'Sin vehículo asignado'}
+                            </Text>
+                            {op.assigned_vehicle_plate && (
+                              <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                                Placa: {op.assigned_vehicle_plate}
+                              </Text>
+                            )}
+                          </View>
+
+                          {/* Col 6: Actions */}
+                          <View style={{ width: isMobile ? '100%' : 150, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                            {op.phone ? (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const rawDigits = String(op.phone).replace(/\D/g, '');
+                                  const phone = rawDigits.startsWith('58') ? rawDigits : '58' + rawDigits.replace(/^0/, '');
+                                  Linking.openURL('https://wa.me/' + phone).catch(() => {});
+                                }}
+                                style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)' }]}
+                              >
+                                <MaterialCommunityIcons name="whatsapp" size={18} color="#16a34a" />
+                              </TouchableOpacity>
+                            ) : null}
+                            <TouchableOpacity
+                              onPress={() => setAssigningOperator(op)}
+                              style={[
+                                styles.toolbarSecondaryBtn,
+                                { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 10, paddingVertical: 6 },
+                              ]}
+                            >
+                              <MaterialIcons name="assignment-ind" size={16} color={primaryNavy} />
+                              <Text style={{ fontFamily: F.bold, fontSize: 11, color: primaryNavy }}>Asignar</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                    Mostrando {filteredPersonnelList.length} de {allPersonnelList.length} integrantes del personal interno
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                    {(operatorsList || []).length} Operadores · {(superAdminsList || []).length} Super Admins
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ===================================================================== */}
+          {/* PESTAÑA 4: USUARIOS Y CLIENTES (Exclusivo para Clientes y Solicitudes)*/}
+          {/* ===================================================================== */}
+          {perspectiveTab === 'users' && (
+            <View style={{ gap: 18 }}>
+              {/* 4 Mini-KPIs de Usuarios y Clientes */}
+              <View style={styles.kpiGridRow}>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>TOTAL USUARIOS / CLIENTES</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: primaryNavy, marginTop: 6 }}>{allUsersAndClientsList.length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Cuentas de titulares en BD</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: '#16a34a', fontFamily: F.semibold }]}>USUARIOS ACTIVOS</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#16a34a', marginTop: 6 }}>{(clientsList || []).length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Cuentas aprobadas y verificadas</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: '#ef4444', fontFamily: F.semibold }]}>SOLICITUDES PENDIENTES</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#ef4444', marginTop: 6 }}>{(pendingUsersList || []).length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>En espera de aprobación</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: innovationPurple, fontFamily: F.semibold }]}>USUARIOS EN VISTA</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: innovationPurple, marginTop: 6 }}>{filteredUsersList.length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Resultado del filtro activo</Text>
+                </View>
+              </View>
+
+              {/* Main Users & Clients Table & Geographic Filter Matrix */}
+              <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                <View style={styles.tableCardHeader}>
+                  <View style={{ flex: 1, minWidth: 240 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
+                      Directorio de Usuarios Regulares y Clientes Titulares ({filteredUsersList.length})
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                      Navega por Estado de Cuenta, País, Zona y Estado, o aprueba solicitudes pendientes
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                      <MaterialIcons name="search" size={18} color={textOutline} />
+                      <TextInput
+                        value={userSearch}
+                        onChangeText={setUserSearch}
+                        placeholder="Buscar cliente, correo, teléfono o estado..."
+                        placeholderTextColor={textOutline}
+                        style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 210, paddingVertical: 4 }}
+                      />
+                    </View>
+                    <TouchableOpacity
+                      onPress={() => setCreateOperatorVisible(true)}
+                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 9 }]}
+                    >
+                      <MaterialIcons name="person-add" size={16} color="#ffc250" />
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
+                        Crear Cuenta de Usuario
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+
+                {/* Users Filter Box: ESTADO DE CUENTA, PAÍS, ZONA, ESTADO */}
+                <View style={{ marginHorizontal: 20, marginBottom: 16, padding: 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
+                  {/* Row 1: ESTADO DE CUENTA */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO CUENTA:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {(['Todos los Usuarios', 'Usuarios Activos', 'Solicitudes Pendientes'] as const).map((st) => {
+                        const active = userStatusFilter === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            onPress={() => setUserStatusFilter(st)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? innovationPurple : cardLowest,
+                                borderColor: active ? innovationPurple : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {st}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 2: PAÍS */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>PAÍS:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {COUNTRIES_LIST.map((c) => {
+                        const active = userCountryFilter === c;
+                        return (
+                          <TouchableOpacity
+                            key={c}
+                            onPress={() => setUserCountryFilter(c)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? academicGold : cardLowest,
+                                borderColor: active ? academicGold : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {c}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 3: ZONA */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ZONA:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {ZONES_LIST.map((z) => {
+                        const active = userZoneFilter === z;
+                        return (
+                          <TouchableOpacity
+                            key={z}
+                            onPress={() => setUserZoneFilter(z)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? primaryContainer : cardLowest,
+                                borderColor: active ? primaryContainer : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {z}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+
+                  {/* Row 4: ESTADO */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO:</Text>
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                      {STATES_LIST.map((st) => {
+                        const active = userStateFilter === st;
+                        return (
+                          <TouchableOpacity
+                            key={st}
+                            onPress={() => setUserStateFilter(st)}
+                            style={[
+                              styles.filterPillChip,
+                              {
+                                backgroundColor: active ? '#2563eb' : cardLowest,
+                                borderColor: active ? '#2563eb' : cardBorder,
+                              },
+                            ]}
+                          >
+                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                              {st}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+
+                {/* Users Table Header (Desktop) */}
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 2.2, color: textVariant, fontFamily: F.bold }]}>USUARIO / CLIENTE</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>ESTADO DE CUENTA</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · PAÍS)</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textVariant, fontFamily: F.bold }]}>TELÉFONO / CONTACTO</Text>
+                    <Text style={[styles.tableHeadCell, { width: 180, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                  </View>
+                )}
+
+                {/* Users Rows */}
+                <View>
+                  {filteredUsersList.length === 0 ? (
+                    <View style={{ padding: 36, alignItems: 'center' }}>
+                      <MaterialIcons name="groups" size={38} color={textOutline} />
+                      <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
+                        No hay usuarios o clientes registrados en este filtro
+                      </Text>
+                    </View>
+                  ) : (
+                    filteredUsersList.map((u: any) => {
+                      const initials = (u.full_name || u.email || 'CL')
+                        .split(' ')
+                        .map((n: string) => n[0])
+                        .slice(0, 2)
+                        .join('')
+                        .toUpperCase();
+
+                      return (
+                        <View
+                          key={u.id}
+                          style={[
+                            styles.tableDataRow,
+                            {
+                              backgroundColor: cardLowest,
+                              borderBottomColor: cardBorder,
+                              flexDirection: isMobile ? 'column' : 'row',
+                              alignItems: isMobile ? 'flex-start' : 'center',
+                            },
+                          ]}
+                        >
+                          {/* Col 1: Name & Email */}
+                          <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                            <View style={[styles.tableUserAvatar, { backgroundColor: u.isPending ? '#ef4444' : innovationPurple }]}>
+                              <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }} numberOfLines={1}>
+                                {u.full_name || 'Usuario Registrado'}
+                              </Text>
+                              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
+                                {u.email || 'Sin correo'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Col 2: Account Status */}
+                          <View style={{ flex: 1.3 }}>
+                            <View
+                              style={{
+                                alignSelf: 'flex-start',
+                                backgroundColor: u.isPending ? 'rgba(239, 68, 68, 0.14)' : 'rgba(22, 163, 74, 0.14)',
+                                paddingHorizontal: 10,
+                                paddingVertical: 4,
+                                borderRadius: 99,
+                              }}
+                            >
+                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: u.isPending ? '#ef4444' : '#16a34a' }}>
+                                {u.isPending ? 'PENDIENTE APROBACIÓN' : 'CLIENTE ACTIVO'}
+                              </Text>
+                            </View>
+                          </View>
+
+                          {/* Col 3: Location */}
+                          <View style={{ flex: 1.6 }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              📍 {u.geoState}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
+                              {u.geoZone} · {u.geoCountry}
+                            </Text>
+                          </View>
+
+                          {/* Col 4: Phone */}
+                          <View style={{ flex: 1.4 }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: u.phone ? textOnSurface : textOutline }}>
+                              {u.phone || 'Sin teléfono en BD'}
+                            </Text>
+                          </View>
+
+                          {/* Col 5: Actions */}
+                          <View style={{ width: isMobile ? '100%' : 180, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                            {u.isPending && (
+                              <>
+                                <TouchableOpacity
+                                  onPress={() => approveUser(u.id)}
+                                  style={{ backgroundColor: '#16a34a', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                >
+                                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: '#ffffff' }}>Aprobar</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => rejectUser(u.id)}
+                                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.14)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                >
+                                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: '#ef4444' }}>Rechazar</Text>
+                                </TouchableOpacity>
+                              </>
+                            )}
+                            {u.phone ? (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const rawDigits = String(u.phone).replace(/\D/g, '');
+                                  const phone = rawDigits.startsWith('58') ? rawDigits : '58' + rawDigits.replace(/^0/, '');
+                                  Linking.openURL('https://wa.me/' + phone).catch(() => {});
+                                }}
+                                style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)' }]}
+                              >
+                                <MaterialCommunityIcons name="whatsapp" size={18} color="#16a34a" />
+                              </TouchableOpacity>
+                            ) : null}
+                            <TouchableOpacity
+                              onPress={() => {
+                                loadSystemUsers();
+                                setUserMgmtVisible(true);
+                              }}
+                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                            >
+                              <MaterialIcons name="manage-accounts" size={18} color={primaryNavy} />
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    })
+                  )}
+                </View>
+
+                <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                    Mostrando {filteredUsersList.length} de {allUsersAndClientsList.length} cuentas de usuarios y clientes
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                    {(clientsList || []).length} Activos · {(pendingUsersList || []).length} Pendientes
+                  </Text>
+                </View>
               </View>
             </View>
           )}
         </ScrollView>
 
-        {/* PERSISTENT SUB-TABS CONTAINER (Specs, Services, History, Wallet, Profile) */}
+        {/* PERSISTENT SUB-TABS CONTAINER (Services, History, Wallet, Profile) */}
         <View style={[{ flex: 1, width: '100%' }, activeTab === 'moto' && { display: 'none' }]}>
           {children}
         </View>
@@ -2088,32 +2764,29 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             <TouchableOpacity style={{ flex: 1 }} onPress={() => setMobileMenuOpen(false)} />
             <View style={[styles.mobileDrawerSheet, { backgroundColor: cardLowest, borderLeftColor: cardBorder }]}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: primaryNavy }}>Menú Ejecutivo</Text>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: primaryNavy }}>Módulos Super Admin</Text>
                 <TouchableOpacity onPress={() => setMobileMenuOpen(false)}>
                   <MaterialIcons name="close" size={22} color={textOnSurface} />
                 </TouchableOpacity>
               </View>
 
               <ScrollView contentContainerStyle={{ gap: 8 }}>
-                {[
-                  { label: 'Dashboard Principal', icon: 'dashboard', action: () => onSelectTab('moto') },
-                  { label: 'Mantenimiento & Servicios', icon: 'build', action: () => onSelectTab('services') },
-                  { label: 'Bitácora & Finanzas', icon: 'payments', action: () => onSelectTab('history') },
-                  { label: 'Ficha Técnica OEM', icon: 'qr-code-scanner', action: () => onSelectTab('specs') },
-                  { label: 'Usuarios y Operadores', icon: 'groups', action: () => setUserMgmtVisible(true) },
-                  { label: 'Exportar Reporte PDF', icon: 'picture-as-pdf', action: onOpenReport },
-                  { label: 'Configuración & Perfil', icon: 'person', action: () => onSelectTab('profile') },
-                ].map((item, i) => (
+                {sidebarNavItems.map((item) => (
                   <TouchableOpacity
-                    key={i}
+                    key={item.id}
                     onPress={() => {
                       setMobileMenuOpen(false);
                       item.action();
                     }}
-                    style={[styles.sidebarNavItem, { backgroundColor: surfaceLow }]}
+                    style={[
+                      styles.sidebarNavItem,
+                      { backgroundColor: item.isActive ? primaryContainer : surfaceLow },
+                    ]}
                   >
-                    <MaterialIcons name={item.icon as any} size={20} color={primaryNavy} />
-                    <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: textOnSurface }}>{item.label}</Text>
+                    <MaterialIcons name={item.icon as any} size={20} color={item.isActive ? '#ffffff' : primaryNavy} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: item.isActive ? '#ffffff' : textOnSurface }}>
+                      {item.label}
+                    </Text>
                   </TouchableOpacity>
                 ))}
 
@@ -2135,6 +2808,20 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
       {/* MODALS */}
       <UserManagementModal visible={userMgmtVisible} onClose={() => setUserMgmtVisible(false)} />
+      <CreateOperatorModal
+        visible={createOperatorVisible}
+        onClose={() => setCreateOperatorVisible(false)}
+        onOperatorCreated={() => loadSystemUsers()}
+      />
+      <AssignOperatorModal
+        visible={!!assigningOperator}
+        operator={assigningOperator}
+        onClose={() => setAssigningOperator(null)}
+        onSaveSuccess={() => {
+          setAssigningOperator(null);
+          loadSystemUsers();
+        }}
+      />
       <OperatorAgendaModal
         visible={agendaVisible}
         onClose={() => setAgendaVisible(false)}
@@ -2151,7 +2838,7 @@ const styles = StyleSheet.create({
     height: '100%',
   },
   sidebarAside: {
-    width: 268,
+    width: 272,
     height: '100%',
     borderRightWidth: 1,
     paddingVertical: 22,
@@ -2194,8 +2881,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   sidebarNavBadge: {
-    backgroundColor: '#ef4444',
-    paddingHorizontal: 6,
+    paddingHorizontal: 7,
     paddingVertical: 2,
     borderRadius: 99,
   },
@@ -2217,7 +2903,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   headerSearchBox: {
-    width: 320,
+    width: 310,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
@@ -2238,7 +2924,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
+    paddingHorizontal: 13,
     paddingVertical: 8,
     borderRadius: 12,
   },
@@ -2317,18 +3003,20 @@ const styles = StyleSheet.create({
   mobileSearchInput: {
     flex: 1,
     fontSize: 13,
-    paddingVertical: 4,
   },
   bentoScrollContent: {
-    padding: 24,
+    padding: 28,
     paddingBottom: 90,
-    gap: 24,
+    gap: 20,
+    maxWidth: 1440,
+    width: '100%',
+    alignSelf: 'center',
   },
   topUtilityBar: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     gap: 16,
   },
   utilityStatusBadge: {
@@ -2336,13 +3024,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 6,
     paddingHorizontal: 10,
-    paddingVertical: 3,
+    paddingVertical: 4,
     borderRadius: 99,
   },
   utilityPulseDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    width: 7,
+    height: 7,
+    borderRadius: 4,
   },
   utilityHeadline: {
     letterSpacing: -0.5,
@@ -2352,15 +3040,6 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     alignItems: 'center',
     gap: 10,
-  },
-  toolbarSelectBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 12,
-    borderWidth: 1,
   },
   toolbarSecondaryBtn: {
     flexDirection: 'row',
@@ -2375,36 +3054,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
+    paddingHorizontal: 15,
+    paddingVertical: 10,
     borderRadius: 12,
   },
   perspectiveTabContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    alignSelf: 'flex-start',
-    padding: 4,
-    borderRadius: 12,
-    gap: 4,
+    padding: 6,
+    borderRadius: 14,
+    gap: 6,
   },
   perspectiveTabBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 9,
+    paddingVertical: 10,
+    borderRadius: 10,
   },
   kpiGridRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 20,
+    gap: 16,
   },
   kpiCard: {
     flex: 1,
     minWidth: 230,
     padding: 20,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     justifyContent: 'space-between',
   },
@@ -2415,18 +3093,18 @@ const styles = StyleSheet.create({
   },
   kpiEyebrow: {
     fontSize: 11,
-    letterSpacing: 0.6,
+    letterSpacing: 0.7,
     textTransform: 'uppercase',
   },
   kpiIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   kpiBigDisplay: {
-    fontSize: 34,
+    fontSize: 32,
     letterSpacing: -0.8,
   },
   kpiProgressBarTrack: {
@@ -2437,44 +3115,45 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   kpiProgressBarFill: {
-    height: 8,
+    height: '100%',
     borderRadius: 99,
   },
   bento12Grid: {
-    gap: 24,
+    gap: 20,
+    width: '100%',
   },
   bento8Col: {
-    gap: 20,
+    gap: 16,
   },
   bento4Col: {
-    gap: 20,
+    gap: 16,
   },
   bentoCardBox: {
     padding: 22,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
   },
   chartHeaderRow: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     gap: 12,
-    paddingBottom: 12,
   },
   chartFooterRow: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingTop: 12,
-    borderTopWidth: 1,
     gap: 8,
   },
   tiers4Grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 14,
+    gap: 12,
   },
   tierMiniCard: {
     flex: 1,
@@ -2487,14 +3166,15 @@ const styles = StyleSheet.create({
   purpleScannerBtn: {
     marginTop: 14,
     paddingVertical: 11,
+    paddingHorizontal: 14,
     borderRadius: 12,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 8,
   },
   operationalTableCard: {
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
   },
@@ -2512,7 +3192,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     paddingVertical: 6,
-    borderRadius: 12,
+    borderRadius: 10,
     borderWidth: 1,
   },
   filterPillChip: {
@@ -2541,23 +3221,23 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   tablePlantThumb: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
+    width: 40,
+    height: 40,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tableUserAvatar: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     justifyContent: 'center',
     alignItems: 'center',
   },
   tableActionIconBtn: {
     width: 34,
     height: 34,
-    borderRadius: 8,
+    borderRadius: 9,
     justifyContent: 'center',
     alignItems: 'center',
   },

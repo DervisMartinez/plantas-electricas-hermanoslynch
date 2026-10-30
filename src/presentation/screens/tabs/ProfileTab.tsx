@@ -721,21 +721,20 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
           </View>
 
           {/* ======================================================================== */}
-          {/* CENTRO DE MANDO & CLASIFICADOR GLOBAL (EXCLUSIVO DEL JEFE / SUPER ADMIN) */}
+          {/* RESUMEN DE PRIVILEGIOS EJECUTIVOS (EXCLUSIVO DEL JEFE / SUPER ADMIN)     */}
           {/* ======================================================================== */}
           {isSuperAdmin && (
             <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: isDark ? 'rgba(0, 227, 253, 0.35)' : 'rgba(2, 132, 199, 0.35)', borderWidth: 1 }]}>
-              {/* Header Ejecutivo */}
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, marginBottom: 12 }}>
                 <View style={{ flex: 1, minWidth: 240 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
                     <MaterialIcons name="admin-panel-settings" size={22} color={isDark ? '#00e3fd' : '#0284c7'} />
                     <Text style={{ fontSize: 16, fontFamily: F.extrabold, color: colors.onSurface }}>
-                      Centro de Mando & Clasificador Global
+                      Nivel de Privilegio: Super Administrador Principal
                     </Text>
                   </View>
                   <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 12, lineHeight: 17 }}>
-                    Como Super Administrador tienes acceso total al listado de usuarios, personal operador y máquinas/plantas disponibles, sin tener unidades asignadas como operador de campo.
+                    Cuenta ejecutiva sin plantas ni vehículos asignados a título de operador. La gestión de Disponibilidad de Plantas, Personal Operador y Usuarios se encuentra organizada en sus pestañas dedicadas del Portal Super Admin.
                   </Text>
                 </View>
 
@@ -758,7 +757,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                   >
                     <MaterialIcons name="manage-accounts" size={16} color="#ffffff" />
                     <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11.5 }}>
-                      Control de Usuarios
+                      Control de Roles y Usuarios
                     </Text>
                   </TouchableOpacity>
 
@@ -779,421 +778,34 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
                   >
                     <MaterialIcons name="add-circle-outline" size={16} color={isDark ? '#00e3fd' : '#0284c7'} />
                     <Text style={{ fontFamily: F.bold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 11.5 }}>
-                      Incorporar Máquina
+                      Incorporar Planta
                     </Text>
                   </TouchableOpacity>
                 </View>
               </View>
 
-              {/* KPIs de Dirección General */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Total Usuarios</Text>
-                  <Text style={{ fontFamily: F.extrabold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 20, marginTop: 2 }}>{allSystemUsers.length}</Text>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Directorio global</Text>
+                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Usuarios / Clientes</Text>
+                  <Text style={{ fontFamily: F.extrabold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 20, marginTop: 2 }}>{(clientsList || []).length}</Text>
+                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Cuentas registradas</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
                   <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Personal Operador</Text>
                   <Text style={{ fontFamily: F.extrabold, color: '#2563eb', fontSize: 20, marginTop: 2 }}>{(operatorsList || []).length}</Text>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Técnicos activos</Text>
+                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Técnicos en BD</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Máquinas / Plantas</Text>
+                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Plantas en Red</Text>
                   <Text style={{ fontFamily: F.extrabold, color: '#16a34a', fontSize: 20, marginTop: 2 }}>{enrichedPlants.length}</Text>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Disponibles en red</Text>
+                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Unidades en BD</Text>
                 </View>
                 <View style={{ flex: 1, minWidth: 130, backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant }}>
                   <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10, textTransform: 'uppercase' }}>Super Admins</Text>
-                  <Text style={{ fontFamily: F.extrabold, color: '#d97706', fontSize: 20, marginTop: 2 }}>{Math.max((superAdminsList || []).length, 1)}</Text>
-                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Jefes / Directores</Text>
+                  <Text style={{ fontFamily: F.extrabold, color: '#d97706', fontSize: 20, marginTop: 2 }}>{(superAdminsList || []).length}</Text>
+                  <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 10 }}>Directores en BD</Text>
                 </View>
               </View>
-
-              {/* Pestañas de Entidad a Clasificar */}
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
-                {[
-                  { id: 'plants' as const, label: `Máquinas / Plantas Disponibles (${enrichedPlants.length})`, icon: 'bolt' },
-                  { id: 'operators' as const, label: `Personal Operador (${(operatorsList || []).length})`, icon: 'engineering' },
-                  { id: 'users' as const, label: `Listado de Usuarios (${allSystemUsers.length})`, icon: 'groups' },
-                ].map((tab) => {
-                  const active = execTab === tab.id;
-                  return (
-                    <TouchableOpacity
-                      key={tab.id}
-                      onPress={() => {
-                        setExecTab(tab.id);
-                        setExecCategory('Todas');
-                      }}
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                        backgroundColor: active ? '#2563eb' : colors.surfaceContainer,
-                        borderColor: active ? '#2563eb' : colors.outlineVariant,
-                        borderWidth: 1,
-                        paddingHorizontal: 14,
-                        paddingVertical: 9,
-                        borderRadius: 12,
-                      }}
-                    >
-                      <MaterialIcons name={tab.icon as any} size={16} color={active ? '#ffffff' : colors.onSurfaceVariant} />
-                      <Text style={{ fontFamily: F.bold, color: active ? '#ffffff' : colors.onSurface, fontSize: 12 }}>
-                        {tab.label}
-                      </Text>
-                    </TouchableOpacity>
-                  );
-                })}
-              </View>
-
-              {/* Buscador Global + Botón Reset */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <View style={{
-                  flex: 1,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: colors.surfaceContainer,
-                  borderColor: colors.outlineVariant,
-                  borderWidth: 1,
-                  paddingHorizontal: 12,
-                  paddingVertical: 8,
-                  borderRadius: 12,
-                }}>
-                  <MaterialIcons name="search" size={18} color={colors.onSurfaceVariant} />
-                  <TextInput
-                    value={execSearch}
-                    onChangeText={setExecSearch}
-                    placeholder="Buscar por nombre, modelo, serial, estado, departamento o país..."
-                    placeholderTextColor={colors.onSurfaceVariant}
-                    style={{ flex: 1, fontFamily: F.medium, color: colors.onSurface, fontSize: 12.5, paddingVertical: 2 }}
-                  />
-                  {execSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setExecSearch('')}>
-                      <MaterialIcons name="clear" size={16} color={colors.onSurfaceVariant} />
-                    </TouchableOpacity>
-                  )}
-                </View>
-
-                {(execCountry !== 'Todos' || execZone !== 'Todas' || execState !== 'Todos' || execDept !== 'Todos' || execCategory !== 'Todas' || execSearch !== '') && (
-                  <TouchableOpacity
-                    onPress={() => {
-                      setExecCountry('Todos');
-                      setExecZone('Todas');
-                      setExecState('Todos');
-                      setExecDept('Todos');
-                      setExecCategory('Todas');
-                      setExecSearch('');
-                    }}
-                    style={{
-                      backgroundColor: 'rgba(239, 68, 68, 0.14)',
-                      borderColor: '#ef4444',
-                      borderWidth: 1,
-                      paddingHorizontal: 10,
-                      paddingVertical: 9,
-                      borderRadius: 10,
-                    }}
-                  >
-                    <Text style={{ fontFamily: F.bold, color: '#ef4444', fontSize: 11 }}>Limpiar Filtros</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Filtros Multi-Criterio: PAÍS, ZONA, ESTADO, DEPARTAMENTO, CATEGORÍA */}
-              <View style={{ backgroundColor: colors.surfaceContainer, padding: 12, borderRadius: 14, borderWidth: 1, borderColor: colors.outlineVariant, gap: 8, marginBottom: 14 }}>
-                {/* 1. PAÍS */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10.5, width: 92 }}>PAÍS:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {['Todos', 'Venezuela', 'Colombia', 'Panamá', 'EE.UU.'].map((c) => (
-                      <TouchableOpacity
-                        key={c}
-                        onPress={() => setExecCountry(c)}
-                        style={{
-                          backgroundColor: execCountry === c ? '#00e3fd' : colors.surfaceContainerLow,
-                          borderColor: execCountry === c ? '#00e3fd' : colors.outlineVariant,
-                          borderWidth: 1,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={{ fontFamily: execCountry === c ? F.bold : F.medium, color: execCountry === c ? '#0c0d12' : colors.onSurfaceVariant, fontSize: 11 }}>
-                          {c}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* 2. ZONA */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10.5, width: 92 }}>ZONA:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {['Todas', 'Zona Central', 'Zona Capital', 'Zona Occidental', 'Zona Oriental', 'Zona Andina'].map((z) => (
-                      <TouchableOpacity
-                        key={z}
-                        onPress={() => setExecZone(z)}
-                        style={{
-                          backgroundColor: execZone === z ? '#2563eb' : colors.surfaceContainerLow,
-                          borderColor: execZone === z ? '#2563eb' : colors.outlineVariant,
-                          borderWidth: 1,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={{ fontFamily: execZone === z ? F.bold : F.medium, color: execZone === z ? '#ffffff' : colors.onSurfaceVariant, fontSize: 11 }}>
-                          {z}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* 3. ESTADO */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10.5, width: 92 }}>ESTADO:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {['Todos', 'Carabobo', 'Distrito Capital', 'Miranda', 'Aragua', 'Zulia', 'Lara', 'Anzoátegui', 'Táchira', 'Bolívar'].map((st) => (
-                      <TouchableOpacity
-                        key={st}
-                        onPress={() => setExecState(st)}
-                        style={{
-                          backgroundColor: execState === st ? '#2563eb' : colors.surfaceContainerLow,
-                          borderColor: execState === st ? '#2563eb' : colors.outlineVariant,
-                          borderWidth: 1,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={{ fontFamily: execState === st ? F.bold : F.medium, color: execState === st ? '#ffffff' : colors.onSurfaceVariant, fontSize: 11 }}>
-                          {st}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* 4. DEPARTAMENTO */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10.5, width: 92 }}>DPTO:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {['Todos', 'Generación Eléctrica', 'Mantenimiento Preventivo', 'Media Tensión', 'Electrónica ComAp', 'Dirección Ejecutiva', 'Clientes Corporativos'].map((d) => (
-                      <TouchableOpacity
-                        key={d}
-                        onPress={() => setExecDept(d)}
-                        style={{
-                          backgroundColor: execDept === d ? '#00e3fd' : colors.surfaceContainerLow,
-                          borderColor: execDept === d ? '#00e3fd' : colors.outlineVariant,
-                          borderWidth: 1,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={{ fontFamily: execDept === d ? F.bold : F.medium, color: execDept === d ? '#0c0d12' : colors.onSurfaceVariant, fontSize: 11 }}>
-                          {d}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                {/* 5. CATEGORÍA */}
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ fontFamily: F.bold, color: colors.onSurfaceVariant, fontSize: 10.5, width: 92 }}>CATEGORÍA:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {(execTab === 'plants'
-                      ? ['Todas', 'Alta Capacidad (≥100 kVA)', 'Media Capacidad (50-99 kVA)', 'Compactas (<50 kVA)', 'Diésel Industrial', 'Disponibles en Red']
-                      : ['Todas', 'Super Admins (Jefes)', 'Operadores Técnicos', 'Clientes / Empresas', 'Con Móvil de Flota']
-                    ).map((cat) => (
-                      <TouchableOpacity
-                        key={cat}
-                        onPress={() => setExecCategory(cat)}
-                        style={{
-                          backgroundColor: execCategory === cat ? '#22c55e' : colors.surfaceContainerLow,
-                          borderColor: execCategory === cat ? '#22c55e' : colors.outlineVariant,
-                          borderWidth: 1,
-                          paddingHorizontal: 10,
-                          paddingVertical: 4,
-                          borderRadius: 8,
-                        }}
-                      >
-                        <Text style={{ fontFamily: execCategory === cat ? F.bold : F.medium, color: execCategory === cat ? '#0c0d12' : colors.onSurfaceVariant, fontSize: 11 }}>
-                          {cat}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-              </View>
-
-              {/* RESULTADOS DEL CLASIFICADOR GLOBAL */}
-              {execTab === 'plants' ? (
-                <View style={{ gap: 10 }}>
-                  {filteredExecPlants.length === 0 ? (
-                    <View style={{ padding: 24, alignItems: 'center', backgroundColor: colors.surfaceContainer, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.outlineVariant }}>
-                      <MaterialCommunityIcons name="generator-portable" size={32} color={colors.onSurfaceVariant} />
-                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, marginTop: 8 }}>
-                        No hay máquinas disponibles con esta clasificación
-                      </Text>
-                    </View>
-                  ) : (
-                    filteredExecPlants.map((m) => {
-                      const isAudited = m.id === myMoto.id;
-                      return (
-                        <View
-                          key={m.id}
-                          style={{
-                            backgroundColor: colors.surfaceContainer,
-                            padding: 14,
-                            borderRadius: 14,
-                            borderWidth: 1,
-                            borderColor: isAudited ? (isDark ? '#00e3fd' : '#0284c7') : colors.outlineVariant,
-                            gap: 8,
-                          }}
-                        >
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <MaterialCommunityIcons name="generator-portable" size={22} color={isDark ? '#00e3fd' : '#0284c7'} />
-                              <View>
-                                <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 14 }}>
-                                  {m.brand} {m.model} • {m.powerKva || 35} kVA
-                                </Text>
-                                <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11 }}>
-                                  Serial: {m.serialNumber || m.plate || `BPG-${m.model}`} · Combustible: {m.fuelType || 'Diesel'} · {(m.currentHours || m.currentOdometer || 0)} hrs
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                                <Text style={{ fontFamily: F.bold, color: '#16a34a', fontSize: 10 }}>DISPONIBLE EN RED</Text>
-                              </View>
-                              <TouchableOpacity
-                                onPress={() => selectMoto(m.id)}
-                                style={{
-                                  backgroundColor: isAudited ? (isDark ? '#00e3fd' : '#0284c7') : '#2563eb',
-                                  paddingHorizontal: 10,
-                                  paddingVertical: 5,
-                                  borderRadius: 8,
-                                }}
-                              >
-                                <Text style={{ fontFamily: F.bold, color: isAudited ? (isDark ? '#0c0d12' : '#ffffff') : '#ffffff', fontSize: 10.5 }}>
-                                  {isAudited ? 'AUDITANDO TELEMETRÍA' : 'AUDITAR PLANTA'}
-                                </Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-
-                          {/* Etiquetas de Clasificación Territorial y Categoría */}
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-                            <View style={{ backgroundColor: isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(2, 132, 199, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 10 }}>🌍 País: {m.metaCountry}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#60a5fa' : '#1d4ed8', fontSize: 10 }}>🗺️ {m.metaZone}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#fbbf24' : '#b45309', fontSize: 10 }}>📍 Estado: {m.metaState}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#c4b5fd' : '#6d28d9', fontSize: 10 }}>🏢 Dpto: {m.metaDept}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#4ade80' : '#15803d', fontSize: 10 }}>🏷️ {m.metaCategory}</Text>
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-                </View>
-              ) : (
-                <View style={{ gap: 10 }}>
-                  {filteredExecUsers.length === 0 ? (
-                    <View style={{ padding: 24, alignItems: 'center', backgroundColor: colors.surfaceContainer, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: colors.outlineVariant }}>
-                      <MaterialIcons name="groups" size={32} color={colors.onSurfaceVariant} />
-                      <Text style={{ fontFamily: F.bold, color: colors.onSurface, fontSize: 13, marginTop: 8 }}>
-                        No se encontraron usuarios o personal en esta clasificación
-                      </Text>
-                    </View>
-                  ) : (
-                    filteredExecUsers.map((u: any) => {
-                      const roleBadgeColor = u.resolvedRole === 'superadmin' ? (isDark ? '#00e3fd' : '#0284c7') : u.resolvedRole === 'operator' ? '#2563eb' : '#16a34a';
-                      const roleLabel = u.resolvedRole === 'superadmin' ? 'JEFE / SUPER ADMIN' : u.resolvedRole === 'operator' ? 'PERSONAL OPERADOR' : 'CLIENTE / TITULAR';
-                      return (
-                        <View
-                          key={u.id}
-                          style={{
-                            backgroundColor: colors.surfaceContainer,
-                            padding: 14,
-                            borderRadius: 14,
-                            borderWidth: 1,
-                            borderColor: colors.outlineVariant,
-                            gap: 8,
-                          }}
-                        >
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                              <View style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: roleBadgeColor, justifyContent: 'center', alignItems: 'center' }}>
-                                <Text style={{ fontFamily: F.bold, color: u.resolvedRole === 'superadmin' && isDark ? '#0c0d12' : '#ffffff', fontSize: 13 }}>
-                                  {(u.full_name || u.email || 'U').slice(0, 2).toUpperCase()}
-                                </Text>
-                              </View>
-                              <View>
-                                <Text style={{ fontFamily: F.extrabold, color: colors.onSurface, fontSize: 13.5 }}>
-                                  {u.full_name || 'Usuario Registrado'}
-                                </Text>
-                                <Text style={{ fontFamily: F.medium, color: colors.onSurfaceVariant, fontSize: 11 }}>
-                                  {u.email || 'Sin correo'} {u.operator_code ? `· Carnet: ${u.operator_code}` : ''}
-                                </Text>
-                              </View>
-                            </View>
-
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                              <View style={{ backgroundColor: isDark ? 'rgba(255,255,255,0.06)' : 'rgba(15, 23, 42, 0.05)', borderColor: roleBadgeColor, borderWidth: 1, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                                <Text style={{ fontFamily: F.bold, color: roleBadgeColor, fontSize: 9.5 }}>{roleLabel}</Text>
-                              </View>
-                              {u.phone && (
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    const rawDigits = String(u.phone).replace(/\D/g, '');
-                                    const ph = rawDigits.startsWith('58') ? rawDigits : ('58' + rawDigits.replace(/^0/, ''));
-                                    Linking.openURL('https://wa.me/' + ph).catch(() => {});
-                                  }}
-                                  style={{ backgroundColor: '#25D366', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 6 }}
-                                >
-                                  <MaterialCommunityIcons name="whatsapp" size={14} color="#ffffff" />
-                                </TouchableOpacity>
-                              )}
-                            </View>
-                          </View>
-
-                          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-                            <View style={{ backgroundColor: isDark ? 'rgba(0, 227, 253, 0.12)' : 'rgba(2, 132, 199, 0.12)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#00e3fd' : '#0284c7', fontSize: 10 }}>🌍 País: {u.metaCountry}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(37, 99, 235, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#60a5fa' : '#1d4ed8', fontSize: 10 }}>🗺️ {u.metaZone}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(245, 158, 11, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#fbbf24' : '#b45309', fontSize: 10 }}>📍 Estado: {u.metaState}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#c4b5fd' : '#6d28d9', fontSize: 10 }}>🏢 Dpto: {u.metaDept}</Text>
-                            </View>
-                            <View style={{ backgroundColor: 'rgba(34, 197, 94, 0.15)', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
-                              <Text style={{ fontFamily: F.semibold, color: isDark ? '#4ade80' : '#15803d', fontSize: 10 }}>🏷️ {u.metaCategory}</Text>
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })
-                  )}
-                </View>
-              )}
             </View>
           )}
 
@@ -1494,7 +1106,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
             </View>
           )}
 
-          {/* GENERADOR DE REPORTE TÉCNICO PDF */}
+          {/* GENERADOR DE REPORTE TÉCNICO PDF (SOLO OPERADORES Y CLIENTES, NO SUPER ADMIN) */}
+          {!isSuperAdmin && (
           <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: '#0b3b60', borderWidth: 1.2 }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1532,6 +1145,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               </Text>
             </TouchableOpacity>
           </View>
+          )}
 
           {/* DETALLES DE LA PLANTA O VEHÍCULO ACTUAL (SOLO OPERADORES Y CLIENTES, NO SUPER ADMIN) */}
           {!isSuperAdmin && (

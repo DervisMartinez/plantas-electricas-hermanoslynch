@@ -55,15 +55,18 @@ interface TabNavItem {
 
 export const MainApp = () => {
   const { colors, mode } = useTheme();
-  const { myMoto, updateMoto, addRecord, drivesCompanyVehicle, isAdmin } = useMyMoto();
+  const { myMoto, updateMoto, addRecord, drivesCompanyVehicle, isAdmin, isSuperAdmin } = useMyMoto();
   const [activeTab, setActiveTab] = useState<'moto' | 'specs' | 'services' | 'wallet' | 'history' | 'profile'>('moto');
   const [visitedTabs, setVisitedTabs] = useState<Set<string>>(new Set(['moto', 'specs', 'services', 'wallet', 'history', 'profile']));
   const [servicesInitialComp, setServicesInitialComp] = useState<ComponentType | undefined>(undefined);
-    React.useEffect(() => {
+  React.useEffect(() => {
     if (!drivesCompanyVehicle && activeTab === 'wallet') {
       setActiveTab('moto');
     }
-  }, [drivesCompanyVehicle, activeTab]);
+    if (isSuperAdmin && activeTab === 'specs') {
+      setActiveTab('moto');
+    }
+  }, [drivesCompanyVehicle, isSuperAdmin, activeTab]);
   const insets = useSafeAreaInsets();
   const { width: windowWidth } = useWindowDimensions();
 
@@ -247,7 +250,7 @@ export const MainApp = () => {
               handleSelectTab('services');
             }}
           >
-            {visitedTabs.has('specs') && (
+            {!isSuperAdmin && visitedTabs.has('specs') && (
               <View style={{ flex: 1, width: '100%', display: activeTab === 'specs' ? 'flex' : 'none' }}>
                 <SpecsTab onNavigateToServices={() => handleSelectTab('services')} />
               </View>
