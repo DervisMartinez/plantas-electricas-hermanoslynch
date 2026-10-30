@@ -19,7 +19,7 @@ import { useMyMoto } from '../../context/MotoContext';
 import { isCar, isPlanta, Moto } from '../../../domain/entities/Moto';
 import { getMotoSpecs } from '../../../data/specs';
 import { VEHICLE_CATALOG } from '../../../data/catalog';
-import { ComponentType, COMPONENT_NAMES } from '../../../constants/telemetry';
+import { ComponentType } from '../../../constants/telemetry';
 import { UserManagementModal } from '../UserManagementModal';
 import { OperatorAgendaModal } from '../OperatorAgendaModal';
 
@@ -41,27 +41,52 @@ interface BentoDashboardViewProps {
 
 // Subsystem thematic metadata for squircle thumbnails
 const SUBSYSTEM_META: Record<string, { icon: any; bg: string; color: string; desc: string }> = {
-  oil: { icon: 'oil', bg: 'rgba(37, 99, 235, 0.15)', color: '#2563eb', desc: 'Cada 250 hrs · Aceite 15W-40 CI-4' },
-  fuel_filter: { icon: 'filter-variant', bg: 'rgba(139, 92, 246, 0.15)', color: '#8b5cf6', desc: 'Cada 250 hrs · Primario Racor & Secundario' },
-  air_filter: { icon: 'air-filter', bg: 'rgba(245, 158, 11, 0.15)', color: '#f59e0b', desc: 'Cada 500 hrs · Cartucho Industrial Seco' },
-  coolant: { icon: 'radiator', bg: 'rgba(16, 185, 129, 0.15)', color: '#10b981', desc: 'Cada 1,000 hrs · Glicol 50/50 Desmineralizado' },
-  battery: { icon: 'battery-charging-100', bg: 'rgba(0, 227, 253, 0.15)', color: '#00e3fd', desc: 'Cada 2,000 hrs · Baterías Plomo-Ácido 24V' },
-  accessory_belt: { icon: 'cogs', bg: 'rgba(236, 72, 153, 0.15)', color: '#ec4899', desc: 'Cada 1,000 hrs · Correas Poli-V Ventilador' },
-  timing_belt: { icon: 'engine', bg: 'rgba(99, 102, 241, 0.15)', color: '#6366f1', desc: 'Cada 1,500 hrs · Calibración Balancines e Inyectores' },
-  clutch: { icon: 'shield-car', bg: 'rgba(20, 184, 166, 0.15)', color: '#14b8a6', desc: 'Cada 3,000 hrs · Tacos Silentblock Antivibración' },
-  transmission_fluid: { icon: 'generator-portable', bg: 'rgba(249, 115, 22, 0.15)', color: '#f97316', desc: 'Cada 2,500 hrs · Bobinado Estator & Megado' },
-  cabin_filter: { icon: 'gauge', bg: 'rgba(6, 182, 212, 0.15)', color: '#06b6d4', desc: 'Cada 1,200 hrs · ComAp InteliLite & Sensores' },
+  oil: { icon: 'oil', bg: 'rgba(26, 54, 93, 0.14)', color: '#1A365D', desc: 'Ciclo 250 hrs · Aceite 15W-40 CI-4' },
+  fuel_filter: { icon: 'filter-variant', bg: 'rgba(107, 70, 193, 0.14)', color: '#6B46C1', desc: 'Ciclo 250 hrs · Primario Racor & Secundario' },
+  air_filter: { icon: 'air-filter', bg: 'rgba(214, 158, 46, 0.16)', color: '#D69E2E', desc: 'Ciclo 500 hrs · Cartucho Industrial Seco' },
+  coolant: { icon: 'radiator', bg: 'rgba(16, 185, 129, 0.14)', color: '#10b981', desc: 'Ciclo 1,000 hrs · Refrigerante Glicol 50/50' },
+  battery: { icon: 'battery-charging-100', bg: 'rgba(2, 132, 199, 0.14)', color: '#0284c7', desc: 'Ciclo 2,000 hrs · Banco Baterías 24V' },
+  accessory_belt: { icon: 'cogs', bg: 'rgba(236, 72, 153, 0.14)', color: '#ec4899', desc: 'Ciclo 1,000 hrs · Correas Poli-V Ventilador' },
+  timing_belt: { icon: 'engine', bg: 'rgba(99, 102, 241, 0.14)', color: '#6366f1', desc: 'Ciclo 1,500 hrs · Calibración Balancines e Inyectores' },
+  clutch: { icon: 'shield-car', bg: 'rgba(20, 184, 166, 0.14)', color: '#14b8a6', desc: 'Ciclo 3,000 hrs · Aisladores Antivibración' },
+  transmission_fluid: { icon: 'generator-portable', bg: 'rgba(249, 115, 22, 0.14)', color: '#f97316', desc: 'Ciclo 2,500 hrs · Bobinado Estator & Megado' },
+  cabin_filter: { icon: 'gauge', bg: 'rgba(6, 182, 212, 0.14)', color: '#06b6d4', desc: 'Ciclo 1,200 hrs · Panel ComAp & Sensores' },
 };
 
-// Dual spline curve graph matching template "Active Users right now 💡"
-const SplineWaveChart: React.FC<{ isDark: boolean }> = ({ isDark }) => {
+// Real Data SVG Bar Chart plotting actual registered plants (Power kVA & Operating Hours)
+const RealFleetBarChart: React.FC<{
+  plants: Moto[];
+  isDark: boolean;
+  primaryColor: string;
+  goldColor: string;
+  textSecondary: string;
+}> = ({ plants, isDark, primaryColor, goldColor, textSecondary }) => {
+  const displayPlants = plants.slice(0, 7);
+  const maxVal = useMemo(() => {
+    if (displayPlants.length === 0) return 100;
+    let m = 0;
+    displayPlants.forEach((p) => {
+      const kva = p.powerKva || 0;
+      const hrs = p.currentHours || p.currentOdometer || 0;
+      if (kva > m) m = kva;
+      if (hrs > m) m = hrs;
+    });
+    return m > 0 ? Math.ceil(m * 1.15) : 100;
+  }, [displayPlants]);
+
   if (Platform.OS === 'web') {
+    const gridColor = isDark ? 'rgba(255,255,255,0.07)' : '#e2e8f0';
+    const baseLineColor = isDark ? 'rgba(255,255,255,0.16)' : '#cbd5e1';
+    const labelFill = isDark ? '#94a3b8' : '#64748b';
+    const count = Math.max(displayPlants.length, 1);
+    const slotWidth = 680 / count;
+
     return React.createElement(
       'svg',
       {
-        viewBox: '0 0 380 140',
+        viewBox: '0 0 760 220',
         width: '100%',
-        height: '100%',
+        height: '190',
         style: { overflow: 'visible' },
       },
       React.createElement(
@@ -69,91 +94,148 @@ const SplineWaveChart: React.FC<{ isDark: boolean }> = ({ isDark }) => {
         null,
         React.createElement(
           'linearGradient',
-          { id: 'goldCurveGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
-          React.createElement('stop', { offset: '0%', stopColor: '#f59e0b', stopOpacity: '0.35' }),
-          React.createElement('stop', { offset: '100%', stopColor: '#f59e0b', stopOpacity: '0.0' })
+          { id: 'barGradPrimary', x1: '0', y1: '0', x2: '0', y2: '1' },
+          React.createElement('stop', { offset: '0%', stopColor: isDark ? '#2563eb' : '#002045', stopOpacity: '0.95' }),
+          React.createElement('stop', { offset: '100%', stopColor: isDark ? '#1d4ed8' : '#1a365d', stopOpacity: '0.75' })
         ),
         React.createElement(
           'linearGradient',
-          { id: 'cyanCurveGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
-          React.createElement('stop', { offset: '0%', stopColor: '#00e3fd', stopOpacity: '0.22' }),
-          React.createElement('stop', { offset: '100%', stopColor: '#00e3fd', stopOpacity: '0.0' })
-        ),
-        React.createElement(
-          'linearGradient',
-          { id: 'verticalBeamGrad', x1: '0', y1: '0', x2: '0', y2: '1' },
-          React.createElement('stop', { offset: '0%', stopColor: 'rgba(255, 255, 255, 0.25)' }),
-          React.createElement('stop', { offset: '100%', stopColor: 'rgba(255, 255, 255, 0.02)' })
+          { id: 'barGradGold', x1: '0', y1: '0', x2: '0', y2: '1' },
+          React.createElement('stop', { offset: '0%', stopColor: '#ffc250', stopOpacity: '0.95' }),
+          React.createElement('stop', { offset: '100%', stopColor: '#d69e2e', stopOpacity: '0.78' })
         )
       ),
-      // Gold curve area
-      React.createElement('path', {
-        d: 'M 10 115 C 50 115, 80 95, 120 98 C 160 100, 200 45, 250 40 C 290 35, 330 90, 370 70 L 370 135 L 10 135 Z',
-        fill: 'url(#goldCurveGrad)',
-      }),
-      // Cyan curve area
-      React.createElement('path', {
-        d: 'M 10 125 C 60 105, 100 65, 145 70 C 190 75, 230 110, 275 100 C 315 90, 345 45, 370 52 L 370 135 L 10 135 Z',
-        fill: 'url(#cyanCurveGrad)',
-      }),
-      // Gold smooth spline
-      React.createElement('path', {
-        d: 'M 10 115 C 50 115, 80 95, 120 98 C 160 100, 200 45, 250 40 C 290 35, 330 90, 370 70',
-        fill: 'none',
-        stroke: '#f59e0b',
-        strokeWidth: '2.5',
-        strokeLinecap: 'round',
-      }),
-      // Cyan smooth spline
-      React.createElement('path', {
-        d: 'M 10 125 C 60 105, 100 65, 145 70 C 190 75, 230 110, 275 100 C 315 90, 345 45, 370 52',
-        fill: 'none',
-        stroke: '#00e3fd',
-        strokeWidth: '2',
-        strokeLinecap: 'round',
-      }),
-      // Vertical guide beam on peak at x=348
-      React.createElement('rect', {
-        x: '340',
-        y: '20',
-        width: '16',
-        height: '115',
-        rx: '8',
-        fill: 'url(#verticalBeamGrad)',
-      }),
-      React.createElement('circle', {
-        cx: '348',
-        cy: '48',
-        r: '4',
-        fill: '#f59e0b',
-        stroke: '#ffffff',
-        strokeWidth: '2',
+      // Horizontal Gridlines
+      React.createElement('line', { x1: '45', x2: '750', y1: '30', y2: '30', stroke: gridColor, strokeDasharray: '4 4', strokeWidth: '1' }),
+      React.createElement('line', { x1: '45', x2: '750', y1: '80', y2: '80', stroke: gridColor, strokeDasharray: '4 4', strokeWidth: '1' }),
+      React.createElement('line', { x1: '45', x2: '750', y1: '130', y2: '130', stroke: gridColor, strokeDasharray: '4 4', strokeWidth: '1' }),
+      React.createElement('line', { x1: '45', x2: '750', y1: '180', y2: '180', stroke: baseLineColor, strokeWidth: '1' }),
+      // Y-Axis Ticks (Real Scale)
+      React.createElement('text', { x: '0', y: '34', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, String(maxVal)),
+      React.createElement('text', { x: '0', y: '84', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, String(Math.round(maxVal * 0.66))),
+      React.createElement('text', { x: '0', y: '134', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, String(Math.round(maxVal * 0.33))),
+      React.createElement('text', { x: '0', y: '180', fill: labelFill, fontSize: '10', fontFamily: 'Montserrat, sans-serif' }, '0'),
+      // Bars per Real Plant
+      ...displayPlants.map((plant, idx) => {
+        const kva = plant.powerKva || 0;
+        const hrs = plant.currentHours || plant.currentOdometer || 0;
+        const kvaHeight = Math.max(4, Math.min(150, Math.round((kva / maxVal) * 150)));
+        const hrsHeight = Math.max(4, Math.min(150, Math.round((hrs / maxVal) * 150)));
+        const centerX = 65 + idx * slotWidth + slotWidth * 0.35;
+        const label = `${plant.model} (${kva}kVA)`;
+
+        return React.createElement(
+          'g',
+          { key: plant.id },
+          React.createElement('rect', {
+            x: String(centerX - 24),
+            y: String(180 - kvaHeight),
+            width: '22',
+            height: String(kvaHeight),
+            rx: '4',
+            fill: 'url(#barGradPrimary)',
+          }),
+          React.createElement('text', {
+            x: String(centerX - 13),
+            y: String(175 - kvaHeight),
+            fill: labelFill,
+            fontSize: '9',
+            textAnchor: 'middle',
+            fontWeight: 'bold',
+          }, `${kva}`),
+          React.createElement('rect', {
+            x: String(centerX + 2),
+            y: String(180 - hrsHeight),
+            width: '22',
+            height: String(hrsHeight),
+            rx: '4',
+            fill: 'url(#barGradGold)',
+          }),
+          React.createElement('text', {
+            x: String(centerX + 13),
+            y: String(175 - hrsHeight),
+            fill: '#d69e2e',
+            fontSize: '9',
+            textAnchor: 'middle',
+            fontWeight: 'bold',
+          }, `${hrs}h`),
+          React.createElement('text', {
+            x: String(centerX),
+            y: '202',
+            fill: labelFill,
+            fontSize: '11',
+            fontWeight: '600',
+            textAnchor: 'middle',
+            fontFamily: 'Montserrat, sans-serif',
+          }, label)
+        );
       })
     );
   }
+
   return (
-    <View style={{ height: 110, justifyContent: 'center' }}>
-      <View style={{ height: 3, backgroundColor: '#f59e0b', borderRadius: 2 }} />
-      <View style={{ height: 2, backgroundColor: '#00e3fd', borderRadius: 2, marginTop: 8 }} />
+    <View style={{ height: 150, justifyContent: 'flex-end', flexDirection: 'row', alignItems: 'flex-end', gap: 16, paddingHorizontal: 12 }}>
+      {displayPlants.map((plant) => {
+        const kva = plant.powerKva || 0;
+        const hrs = plant.currentHours || plant.currentOdometer || 0;
+        const kvaH = Math.max(8, Math.round((kva / maxVal) * 110));
+        const hrsH = Math.max(8, Math.round((hrs / maxVal) * 110));
+        return (
+          <View key={plant.id} style={{ alignItems: 'center', flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 4 }}>
+              <View style={{ width: 14, height: kvaH, backgroundColor: primaryColor, borderRadius: 4 }} />
+              <View style={{ width: 14, height: hrsH, backgroundColor: goldColor, borderRadius: 4 }} />
+            </View>
+            <Text style={{ fontSize: 10, color: textSecondary, marginTop: 6 }} numberOfLines={1}>
+              {plant.model}
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 };
 
-// Mini sparkline for table rows & cards
-const SplineMiniSparkline: React.FC<{ color?: string }> = ({ color = '#f59e0b' }) => {
+// Real Percentage Donut Ring matching template's "Acreditación en Puerta" ring
+const RealDonutRing: React.FC<{ percent: number; primaryColor: string; trackColor: string; textColor: string }> = ({
+  percent,
+  primaryColor,
+  trackColor,
+  textColor,
+}) => {
+  const clamped = Math.max(0, Math.min(100, Math.round(percent)));
   if (Platform.OS === 'web') {
-    return React.createElement(
-      'svg',
-      { viewBox: '0 0 70 20', width: 70, height: 20, fill: 'none' },
-      React.createElement('path', {
-        d: 'M 2 13 C 14 18, 22 4, 34 8 C 46 12, 56 2, 68 11',
-        stroke: color,
-        strokeWidth: '2',
-        strokeLinecap: 'round',
-      })
+    return (
+      <View style={{ width: 64, height: 64, justifyContent: 'center', alignItems: 'center', position: 'relative' }}>
+        {React.createElement(
+          'svg',
+          { viewBox: '0 0 36 36', width: 64, height: 64, style: { transform: 'rotate(-90deg)' } },
+          React.createElement('path', {
+            d: 'M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831',
+            fill: 'none',
+            stroke: trackColor,
+            strokeWidth: '4',
+          }),
+          React.createElement('path', {
+            d: 'M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831',
+            fill: 'none',
+            stroke: primaryColor,
+            strokeWidth: '4',
+            strokeDasharray: `${clamped}, 100`,
+            strokeLinecap: 'round',
+          })
+        )}
+        <Text style={{ position: 'absolute', fontFamily: 'Montserrat_700Bold', fontSize: 12, color: textColor }}>
+          {clamped}%
+        </Text>
+      </View>
     );
   }
-  return <View style={{ width: 40, height: 2, backgroundColor: color }} />;
+  return (
+    <View style={{ width: 56, height: 56, borderRadius: 28, borderWidth: 4, borderColor: primaryColor, justifyContent: 'center', alignItems: 'center' }}>
+      <Text style={{ fontFamily: 'Montserrat_700Bold', fontSize: 12, color: textColor }}>{clamped}%</Text>
+    </View>
+  );
 };
 
 export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
@@ -167,17 +249,18 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   onOpenServicesTab,
   children,
 }) => {
-  const { colors, mode, isDark, toggleTheme } = useTheme();
-  const { 
-    myMoto, 
-    motos, 
-    selectMoto, 
-    records, 
-    drivesCompanyVehicle, 
+  const { isDark, toggleTheme } = useTheme();
+  const {
+    myMoto,
+    motos,
+    selectMoto,
+    records,
+    drivesCompanyVehicle,
     logout,
     systemMetrics,
     loadSystemUsers,
     userName,
+    userEmail,
     isAdmin,
     isSuperAdmin,
     userRoleTitle,
@@ -185,11 +268,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     operatorsList,
     clientsList,
     pendingUsersList,
-    setIsAddingMoto
+    setIsAddingMoto,
   } = useMyMoto();
   const { width: windowWidth } = useWindowDimensions();
 
   const hasSuperAccess = isSuperAdmin || isAdmin;
+
+  useEffect(() => {
+    if (hasSuperAccess) {
+      loadSystemUsers();
+    }
+  }, [hasSuperAccess, loadSystemUsers]);
 
   // Pulsing animation for live indicators
   const pulseAnim = useRef(new Animated.Value(1)).current;
@@ -211,89 +300,28 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   }, [pulseAnim]);
 
   const userInitials = useMemo(() => {
-    const name = (userName || (isSuperAdmin ? 'Kalioverload' : 'Operador')).trim();
+    const name = (userName || userEmail || 'Usuario').trim();
     const parts = name.split(' ').filter(Boolean);
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase();
     }
     return name.slice(0, 2).toUpperCase();
-  }, [userName, isSuperAdmin]);
+  }, [userName, userEmail]);
 
   const [searchQuery, setSearchQuery] = useState('');
+  const [plantTableSearch, setPlantTableSearch] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
   const [userMgmtVisible, setUserMgmtVisible] = useState(false);
   const [agendaVisible, setAgendaVisible] = useState(false);
   const [subsystemFilter, setSubsystemFilter] = useState<'TODOS' | 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO'>('TODOS');
+  const [perspectiveTab, setPerspectiveTab] = useState<'all' | 'plants' | 'users' | 'subsystems'>('all');
 
-  // Super Admin Fleet & Operators Supervision
-  const allPlants = useMemo(() => motos.filter(isPlanta), [motos]);
+  // 100% Real Plants & Vehicles from Database
+  const allPlants = useMemo(() => (motos || []).filter(isPlanta), [motos]);
+  const allFleetCars = useMemo(() => (motos || []).filter((m) => isCar(m) || m.vehicleType === 'car'), [motos]);
 
-  // Helper to resolve geographical & categorical metadata
-  const resolveZone = (st: string) => {
-    const s = (st || '').toLowerCase();
-    if (s.includes('capital') || s.includes('caracas') || s.includes('miranda')) return 'Zona Capital';
-    if (s.includes('zulia') || s.includes('lara')) return 'Zona Occidental';
-    if (s.includes('anzo') || s.includes('bol')) return 'Zona Oriental';
-    if (s.includes('táchira') || s.includes('tachira')) return 'Zona Andina';
-    return 'Zona Central';
-  };
-
-  // Plant classification filters (Section 2)
-  const [plantCategoryFilter, setPlantCategoryFilter] = useState('Todas');
-  const [plantZoneFilter, setPlantZoneFilter] = useState('Todas');
-  const [plantCountryFilter, setPlantCountryFilter] = useState('Todos');
-
-  const PLANT_CATEGORIES = ['Todas', 'Alta Capacidad (≥100 kVA)', 'Media Capacidad (50-99 kVA)', 'Compactas (<50 kVA)', 'Diésel Industrial'];
-  const PLANT_ZONES = ['Todas', 'Zona Central', 'Zona Capital', 'Zona Occidental', 'Zona Oriental'];
-  const COUNTRIES = ['Todos', 'Venezuela', 'Colombia', 'Panamá', 'EE.UU.'];
-
-  const filteredFleetPlants = useMemo(() => {
-    return allPlants.filter((plant, idx) => {
-      const loc = (plant.location || '').toLowerCase();
-      const country = (plant as any).country || (loc.includes('colombia') ? 'Colombia' : loc.includes('panam') ? 'Panamá' : loc.includes('miami') ? 'EE.UU.' : 'Venezuela');
-      const state = (plant as any).state || (loc.includes('caracas') || loc.includes('capital') ? 'Distrito Capital' : loc.includes('miranda') ? 'Miranda' : loc.includes('zulia') ? 'Zulia' : idx % 3 === 1 ? 'Distrito Capital' : idx % 3 === 2 ? 'Miranda' : 'Carabobo');
-      const zone = (plant as any).zone || resolveZone(state);
-      const kva = plant.powerKva || 35;
-      const cat = kva >= 100 ? 'Alta Capacidad (≥100 kVA)' : kva >= 50 ? 'Media Capacidad (50-99 kVA)' : 'Compactas (<50 kVA)';
-
-      if (plantCountryFilter !== 'Todos' && country !== plantCountryFilter) return false;
-      if (plantZoneFilter !== 'Todas' && zone !== plantZoneFilter) return false;
-      if (plantCategoryFilter !== 'Todas') {
-        if (plantCategoryFilter === 'Diésel Industrial') {
-          if (!(plant.fuelType || 'Diesel').toLowerCase().includes('diesel')) return false;
-        } else if (cat !== plantCategoryFilter) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [allPlants, plantCountryFilter, plantZoneFilter, plantCategoryFilter]);
-
-  const fleetStats = useMemo(() => {
-    const total = allPlants.length;
-    const online = allPlants.length;
-    const attentionNeeded = allPlants.filter(p => !p.assignedOperatorId && !p.assignedOperatorName).length;
-    const totalHours = allPlants.reduce((acc, p) => acc + (p.currentHours || p.currentOdometer || 0), 0);
-    return { total, online, attentionNeeded, totalHours };
-  }, [allPlants]);
-
-  const fleetTotalKva = useMemo(() => {
-    return allPlants.reduce((acc, p) => acc + (p.powerKva || 35), 0);
-  }, [allPlants]);
-
-  // Personnel & Users classification filters (Section 3)
-  const [selectedUserCategory, setSelectedUserCategory] = useState('Todos los Usuarios');
-  const [selectedCountryFilter, setSelectedCountryFilter] = useState('Todos');
-  const [selectedZoneFilter, setSelectedZoneFilter] = useState('Todas');
-  const [selectedStateFilter, setSelectedStateFilter] = useState('Todos');
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState('Todos');
-  const [operatorSearch, setOperatorSearch] = useState('');
-
-  const USER_CATEGORIES = ['Todos los Usuarios', 'Personal Operador', 'Super Admins', 'Clientes / Titulares'];
-  const VENEZUELA_STATES = ['Todos', 'Carabobo', 'Distrito Capital', 'Aragua', 'Zulia', 'Miranda', 'Lara', 'Anzoátegui', 'Táchira', 'Bolívar'];
-  const DEPARTMENTS = ['Todos', 'Generación Eléctrica', 'Mantenimiento Preventivo', 'Media Tensión', 'Electrónica ComAp', 'Dirección Ejecutiva', 'Clientes Corporativos'];
-
+  // 100% Real Users from Database
   const allCombinedUsers = useMemo(() => {
     const map = new Map<string, any>();
     (superAdminsList || []).forEach((u: any) => map.set(u.id, { ...u, resolvedRole: 'superadmin' }));
@@ -304,10 +332,117 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: 'client' });
     });
     (pendingUsersList || []).forEach((u: any) => {
-      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: u.role || 'operator' });
+      if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: u.role || 'operator', isPending: true });
     });
     return Array.from(map.values());
   }, [superAdminsList, operatorsList, clientsList, pendingUsersList]);
+
+  // Classification Filters (100% derived from real data + standard categories)
+  const [plantCategoryFilter, setPlantCategoryFilter] = useState('Todas');
+  const [plantLocationFilter, setPlantLocationFilter] = useState('Todas');
+
+  const uniquePlantLocations = useMemo(() => {
+    const locs = new Set<string>(['Todas']);
+    allPlants.forEach((p) => {
+      if (p.location && p.location.trim()) {
+        locs.add(p.location.trim());
+      }
+    });
+    return Array.from(locs);
+  }, [allPlants]);
+
+  const PLANT_CATEGORIES = [
+    'Todas',
+    'Alta Capacidad (≥100 kVA)',
+    'Media Capacidad (50-99 kVA)',
+    'Compactas (<50 kVA)',
+  ];
+
+  const filteredFleetPlants = useMemo(() => {
+    return allPlants.filter((plant) => {
+      const kva = plant.powerKva || 0;
+      const cat =
+        kva >= 100
+          ? 'Alta Capacidad (≥100 kVA)'
+          : kva >= 50
+          ? 'Media Capacidad (50-99 kVA)'
+          : 'Compactas (<50 kVA)';
+
+      if (plantCategoryFilter !== 'Todas' && cat !== plantCategoryFilter) return false;
+      if (plantLocationFilter !== 'Todas' && (plant.location || '').trim() !== plantLocationFilter) return false;
+
+      const combinedQuery = (plantTableSearch || searchQuery).toLowerCase().trim();
+      if (combinedQuery) {
+        const match =
+          (plant.brand || '').toLowerCase().includes(combinedQuery) ||
+          (plant.model || '').toLowerCase().includes(combinedQuery) ||
+          (plant.serialNumber || plant.plate || '').toLowerCase().includes(combinedQuery) ||
+          (plant.location || '').toLowerCase().includes(combinedQuery) ||
+          (plant.assignedOperatorName || '').toLowerCase().includes(combinedQuery);
+        if (!match) return false;
+      }
+      return true;
+    });
+  }, [allPlants, plantCategoryFilter, plantLocationFilter, plantTableSearch, searchQuery]);
+
+  // 100% Real Fleet Metrics
+  const fleetStats = useMemo(() => {
+    const total = allPlants.length;
+    const assigned = allPlants.filter((p) => !!(p.assignedOperatorId || (p.assignedOperatorName && p.assignedOperatorName.trim()))).length;
+    const unassigned = Math.max(0, total - assigned);
+    const totalHours = allPlants.reduce((acc, p) => acc + (p.currentHours || p.currentOdometer || 0), 0);
+    return { total, assigned, unassigned, totalHours };
+  }, [allPlants]);
+
+  const fleetTotalKva = useMemo(() => {
+    return allPlants.reduce((acc, p) => acc + (p.powerKva || 0), 0);
+  }, [allPlants]);
+
+  // Real Tier Breakdown of Registered Plants
+  const fleetTiers = useMemo(() => {
+    const total = allPlants.length;
+    const high = allPlants.filter((p) => (p.powerKva || 0) >= 100);
+    const mid = allPlants.filter((p) => (p.powerKva || 0) >= 50 && (p.powerKva || 0) < 100);
+    const compact = allPlants.filter((p) => (p.powerKva || 0) < 50);
+
+    return {
+      highCount: high.length,
+      highPct: total > 0 ? ((high.length / total) * 100).toFixed(1) : '0.0',
+      highKva: high.reduce((acc, p) => acc + (p.powerKva || 0), 0),
+      midCount: mid.length,
+      midPct: total > 0 ? ((mid.length / total) * 100).toFixed(1) : '0.0',
+      midKva: mid.reduce((acc, p) => acc + (p.powerKva || 0), 0),
+      compactCount: compact.length,
+      compactPct: total > 0 ? ((compact.length / total) * 100).toFixed(1) : '0.0',
+      compactKva: compact.reduce((acc, p) => acc + (p.powerKva || 0), 0),
+    };
+  }, [allPlants]);
+
+  // Personnel & Users classification filters (100% derived from real DB values)
+  const [selectedUserCategory, setSelectedUserCategory] = useState('Todos los Usuarios');
+  const [selectedStateFilter, setSelectedStateFilter] = useState('Todos');
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState('Todos');
+  const [operatorSearch, setOperatorSearch] = useState('');
+
+  const USER_CATEGORIES = ['Todos los Usuarios', 'Personal Operador', 'Super Admins', 'Clientes / Titulares'];
+
+  const dynamicUserStates = useMemo(() => {
+    const s = new Set<string>(['Todos']);
+    allCombinedUsers.forEach((u: any) => {
+      const st = (u.state || u.city || '').trim();
+      if (st) s.add(st);
+    });
+    return Array.from(s);
+  }, [allCombinedUsers]);
+
+  const dynamicUserDepts = useMemo(() => {
+    const d = new Set<string>(['Todos']);
+    allCombinedUsers.forEach((u: any) => {
+      const dp = (u.department || u.specialty || '').trim();
+      if (dp) d.add(dp);
+    });
+    return Array.from(d);
+  }, [allCombinedUsers]);
 
   const filteredOperators = useMemo(() => {
     let list = allCombinedUsers;
@@ -319,42 +454,26 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       list = list.filter((u: any) => u.resolvedRole === 'client');
     }
 
-    if (selectedCountryFilter !== 'Todos') {
-      list = list.filter((op: any) => {
-        const loc = (op.country || op.state || op.city || '').toLowerCase();
-        const c = op.country || (loc.includes('colombia') ? 'Colombia' : loc.includes('panam') ? 'Panamá' : loc.includes('miami') ? 'EE.UU.' : 'Venezuela');
-        return c.toLowerCase() === selectedCountryFilter.toLowerCase();
-      });
-    }
-    if (selectedZoneFilter !== 'Todas') {
-      list = list.filter((op: any) => {
-        const z = op.zone || resolveZone(op.state || op.city || 'Carabobo');
-        return z.toLowerCase() === selectedZoneFilter.toLowerCase();
-      });
-    }
     if (selectedStateFilter !== 'Todos') {
-      list = list.filter((op: any) => (op.state || op.city || 'Carabobo').toLowerCase().includes(selectedStateFilter.toLowerCase()));
+      list = list.filter((op: any) => (op.state || op.city || '').toLowerCase() === selectedStateFilter.toLowerCase());
     }
     if (selectedDeptFilter !== 'Todos') {
-      list = list.filter((op: any) => {
-        const d = op.department || op.specialty || (op.resolvedRole === 'superadmin' ? 'Dirección Ejecutiva' : op.resolvedRole === 'client' ? 'Clientes Corporativos' : 'Generación Eléctrica');
-        return d.toLowerCase().includes(selectedDeptFilter.toLowerCase());
-      });
+      list = list.filter((op: any) => (op.department || op.specialty || '').toLowerCase() === selectedDeptFilter.toLowerCase());
     }
-    if (operatorSearch.trim()) {
-      const q = operatorSearch.toLowerCase().trim();
+    const q = (operatorSearch || searchQuery).toLowerCase().trim();
+    if (q) {
       list = list.filter((op: any) =>
         (op.full_name || '').toLowerCase().includes(q) ||
         (op.email || '').toLowerCase().includes(q) ||
         (op.operator_code || '').toLowerCase().includes(q) ||
-        (op.state || op.city || '').toLowerCase().includes(q)
+        (op.state || op.city || '').toLowerCase().includes(q) ||
+        (op.department || op.specialty || '').toLowerCase().includes(q)
       );
     }
     return list;
-  }, [allCombinedUsers, selectedUserCategory, selectedCountryFilter, selectedZoneFilter, selectedStateFilter, selectedDeptFilter, operatorSearch]);
+  }, [allCombinedUsers, selectedUserCategory, selectedStateFilter, selectedDeptFilter, operatorSearch, searchQuery]);
 
   const isDesktop = windowWidth >= 1024;
-  const isTablet = windowWidth >= 768 && windowWidth < 1024;
   const isMobile = windowWidth < 768;
 
   const currentHours = useMemo(() => {
@@ -367,33 +486,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return getMotoSpecs(myMoto.brand, myMoto.model);
   }, [myMoto]);
 
-  // Current Plant Catalog Image
-  const plantImageSource = useMemo(() => {
-    if (!myMoto) return PLANTA_IMG_REQUIRE;
-    if (myMoto.imageUrl && myMoto.imageUrl.trim() !== '') {
-      return { uri: myMoto.imageUrl };
-    }
-    const cat = VEHICLE_CATALOG.find(
-      (m) =>
-        m.brand.toLowerCase() === myMoto.brand.toLowerCase() &&
-        m.model.toLowerCase() === myMoto.model.toLowerCase()
-    );
-    return cat?.imageRes || PLANTA_IMG_REQUIRE;
-  }, [myMoto]);
-
-  // Formatted date for header
-  const headerDate = useMemo(() => {
-    const now = new Date();
-    return now.toLocaleDateString('es-ES', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'short',
-    });
-  }, []);
-
-  // Financial & Fuel Statistics
-  const fuelRecords = useMemo(() => records.filter((r) => r.type === 'fuel'), [records]);
-  const serviceRecords = useMemo(() => records.filter((r) => r.type !== 'fuel'), [records]);
+  // 100% Real Financial & Fuel Statistics from `records`
+  const fuelRecords = useMemo(() => (records || []).filter((r) => r.type === 'fuel'), [records]);
+  const serviceRecords = useMemo(() => (records || []).filter((r) => r.type !== 'fuel'), [records]);
 
   const totalFuelUSD = useMemo(
     () => fuelRecords.reduce((sum, r) => sum + (r.costUSD || 0), 0),
@@ -407,20 +502,20 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
   const totalFuelLiters = useMemo(() => {
     return fuelRecords.reduce((sum, r) => {
-      const match = r.notes?.match(/(\d+(\.\d+)?)/);
-      const liters = match ? parseFloat(match[1]) : 0;
-      return sum + (isNaN(liters) ? 0 : liters);
+      const m = r.notes?.match(/([\d.]+)\s*L/i);
+      if (m) return sum + parseFloat(m[1]);
+      return sum + ((r as any).liters || 0);
     }, 0);
   }, [fuelRecords]);
 
-  // Industrial Subsystems Wear Analysis
+  // 10 Industrial Subsystems for Active Plant (ISO 8528)
   const plantSubsystems = useMemo(() => {
     const list = [
-      { id: 'oil' as ComponentType, name: 'Aceite Diésel 15W-40', interval: 250, color: '#1a5cff' },
-      { id: 'fuel_filter' as ComponentType, name: 'Filtros Diésel & Racor', interval: 250, color: '#8b5cf6' },
-      { id: 'air_filter' as ComponentType, name: 'Filtro Aire Industrial', interval: 500, color: '#f59e0b' },
+      { id: 'oil' as ComponentType, name: 'Aceite 15W-40 & Filtro', interval: 250, color: '#1A365D' },
+      { id: 'fuel_filter' as ComponentType, name: 'Filtros Diésel & Racor', interval: 250, color: '#6B46C1' },
+      { id: 'air_filter' as ComponentType, name: 'Filtro Aire Industrial', interval: 500, color: '#D69E2E' },
       { id: 'coolant' as ComponentType, name: 'Circuito Refrigerante & Radiador', interval: 1000, color: '#10b981' },
-      { id: 'battery' as ComponentType, name: 'Alternador & Baterías 24V', interval: 2000, color: '#00e3fd' },
+      { id: 'battery' as ComponentType, name: 'Alternador & Baterías 24V', interval: 2000, color: '#0284c7' },
       { id: 'accessory_belt' as ComponentType, name: 'Correas Ventilador & Poleas', interval: 1000, color: '#ec4899' },
       { id: 'timing_belt' as ComponentType, name: 'Válvulas e Inyectores', interval: 1500, color: '#6366f1' },
       { id: 'clutch' as ComponentType, name: 'Aisladores Antivibratorios', interval: 3000, color: '#14b8a6' },
@@ -429,7 +524,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     ];
 
     return list.map((item) => {
-      const typeRecords = records.filter((r) => r.type === item.id);
+      const typeRecords = (records || []).filter((r) => r.type === item.id);
       const isInspected = typeRecords.length > 0;
       let wear = 100;
       let hoursSince = 0;
@@ -444,8 +539,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         hoursRemaining = Math.max(0, item.interval - hoursSince);
         status = wear >= 60 ? 'ÓPTIMO' : wear >= 30 ? 'PREVENTIVO' : 'CRÍTICO';
       } else {
-        // Ciclo inicial o sin registro previo: desgaste según horas transcurridas en el intervalo actual
-        hoursSince = currentHours > 0 ? (currentHours % item.interval) : 0;
+        hoursSince = currentHours > 0 ? currentHours % item.interval : 0;
         hoursRemaining = Math.max(0, item.interval - hoursSince);
         const ratio = Math.max(0, 1 - hoursSince / item.interval);
         wear = Math.min(100, Math.round(ratio * 100));
@@ -463,14 +557,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     });
   }, [records, currentHours]);
 
-  // Overall General Health
   const generalHealth = useMemo(() => {
     if (plantSubsystems.length === 0) return 100;
     const sum = plantSubsystems.reduce((acc, c) => acc + c.wear, 0);
     return Math.round(sum / plantSubsystems.length);
   }, [plantSubsystems]);
 
-  // Filtered subsystems for Bottom Table Section
+  const optimalSubsystemsCount = useMemo(() => {
+    return plantSubsystems.filter((s) => s.wear >= 60).length;
+  }, [plantSubsystems]);
+
   const filteredSubsystems = useMemo(() => {
     let list = plantSubsystems;
     if (subsystemFilter === 'ÓPTIMO') {
@@ -490,7 +586,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return list;
   }, [plantSubsystems, subsystemFilter, searchQuery]);
 
-  // Strict Montserrat font helpers
+  // Font family tokens
   const F = {
     bold: 'Montserrat_700Bold',
     semibold: 'Montserrat_600SemiBold',
@@ -499,297 +595,228 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     extrabold: 'Montserrat_800ExtraBold',
   };
 
-  // Futuristic SaaS Dark Theme Tokens matching reference screenshot
-  const bgMain = isDark ? '#0c0d12' : '#f8fafc';
-  const cardBg = isDark ? '#12151e' : '#ffffff';
-  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(15, 23, 42, 0.09)';
-  const railBg = isDark ? '#0a0b10' : '#ffffff';
-  const railBorder = isDark ? 'rgba(255, 255, 255, 0.05)' : 'rgba(15, 23, 42, 0.06)';
-  const textPrimary = isDark ? '#f8fafc' : '#0f172a';
-  const textSecondary = isDark ? '#94a3b8' : '#475569';
-  const accentBlue = '#2563eb';
-  const accentCyan = isDark ? '#00e3fd' : '#0284c7';
-  const pillDarkBg = isDark ? '#181d29' : '#f1f5f9';
+  // Template Design Tokens (UniEvents / Executive Navy & Academic Gold adapted for Light & Dark)
+  const bgSurface = isDark ? '#0c0d12' : '#f7f9fb';
+  const cardLowest = isDark ? '#131722' : '#ffffff';
+  const surfaceLow = isDark ? '#1a2030' : '#f2f4f6';
+  const surfaceHigh = isDark ? '#252d42' : '#e6e8ea';
+  const cardBorder = isDark ? 'rgba(255, 255, 255, 0.08)' : 'rgba(25, 28, 30, 0.08)';
+  const primaryNavy = isDark ? '#f8fafc' : '#002045';
+  const primaryContainer = isDark ? '#2563eb' : '#1a365d';
+  const academicGold = '#D69E2E';
+  const secondaryFixed = isDark ? 'rgba(214, 158, 46, 0.18)' : '#ffdeaa';
+  const onSecondaryFixed = isDark ? '#ffc250' : '#271900';
+  const innovationPurple = isDark ? '#a78bfa' : '#6B46C1';
+  const textOnSurface = isDark ? '#f8fafc' : '#191c1e';
+  const textVariant = isDark ? '#94a3b8' : '#43474e';
+  const textOutline = isDark ? '#64748b' : '#74777f';
+
+  const cycleNextPlant = () => {
+    if (allPlants.length <= 1) return;
+    const idx = allPlants.findIndex((p) => p.id === myMoto?.id);
+    const next = allPlants[(idx + 1) % allPlants.length];
+    if (next) selectMoto(next.id);
+  };
 
   return (
-    <View style={[styles.rootContainer, { backgroundColor: bgMain }]}>
-      
-      {/* 1. LEFT VERTICAL ICON RAIL */}
+    <View style={[styles.rootLayout, { backgroundColor: bgSurface }]}>
+      {/* ===================================================================== */}
+      {/* 1. LEFT EXECUTIVE SIDEBAR (w-72 inspired by template <aside>)        */}
+      {/* ===================================================================== */}
       {!isMobile && (
-        <View style={[styles.sidebarRail, { backgroundColor: railBg, borderRightColor: railBorder }]}>
-          {/* TOP BRAND BADGE */}
-          <TouchableOpacity
-            onPress={() => onSelectTab('moto')}
-            style={[styles.brandMarkBadge, { backgroundColor: isDark ? '#161a26' : '#e0f2fe' }]}
-            activeOpacity={0.8}
-          >
-            <Image source={HL_LOGO_REQUIRE} style={styles.brandMarkImg} resizeMode="contain" />
-          </TouchableOpacity>
-
-          {/* MIDDLE ICON BUTTONS */}
-          <View style={styles.railNavGroup}>
+        <View style={[styles.sidebarAside, { backgroundColor: cardLowest, borderRightColor: cardBorder }]}>
+          <View style={{ gap: 20, paddingHorizontal: 16 }}>
+            {/* Brand Header */}
             <TouchableOpacity
               onPress={() => onSelectTab('moto')}
-              style={[
-                styles.railIconBtn,
-                activeTab === 'moto' && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
+              style={styles.sidebarBrandRow}
+              activeOpacity={0.8}
             >
-              <MaterialIcons
-                name="speed"
-                size={22}
-                color={activeTab === 'moto' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
+              <View style={[styles.sidebarBrandIconBox, { backgroundColor: isDark ? '#1e293b' : '#002045' }]}>
+                <Image source={HL_LOGO_REQUIRE} style={{ width: 26, height: 26 }} resizeMode="contain" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontFamily: F.bold, fontSize: 18, color: primaryNavy, letterSpacing: -0.3 }} numberOfLines={1}>
+                  Hermanos Lynch
+                </Text>
+                <Text style={{ fontFamily: F.semibold, fontSize: 10, color: textVariant, textTransform: 'uppercase', letterSpacing: 1.2, marginTop: 2 }}>
+                  {isSuperAdmin ? 'PORTAL SUPER ADMIN' : 'PORTAL OPERACIONES'}
+                </Text>
+              </View>
             </TouchableOpacity>
 
+            {/* Active Plant Switcher Box (Template "Campus Central / Facultad de Ingeniería") */}
             <TouchableOpacity
-              onPress={() => onSelectTab('services')}
-              style={[
-                styles.railIconBtn,
-                activeTab === 'services' && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
+              onPress={cycleNextPlant}
+              activeOpacity={0.8}
+              style={[styles.sidebarPlantSelector, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
             >
-              <MaterialIcons
-                name="build"
-                size={22}
-                color={activeTab === 'services' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
+              <View style={[styles.sidebarSelectorIcon, { backgroundColor: cardLowest }]}>
+                <MaterialIcons name="bolt" size={18} color={academicGold} />
+              </View>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ fontFamily: F.semibold, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
+                  {myMoto?.location || 'Planta en Supervisión'}
+                </Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }} numberOfLines={1}>
+                  {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Sin planta registrada'}
+                </Text>
+              </View>
+              <MaterialIcons name="unfold-more" size={18} color={textVariant} />
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={() => onSelectTab('specs')}
-              style={[
-                styles.railIconBtn,
-                activeTab === 'specs' && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name="assignment"
-                size={22}
-                color={activeTab === 'specs' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => onSelectTab('history')}
-              style={[
-                styles.railIconBtn,
-                activeTab === 'history' && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name="receipt-long"
-                size={22}
-                color={activeTab === 'history' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
-            </TouchableOpacity>
-
-            {drivesCompanyVehicle && (
-              <TouchableOpacity
-                onPress={() => onSelectTab('wallet')}
-                style={[
-                  styles.railIconBtn,
-                  activeTab === 'wallet' && [
-                    styles.railIconActivePill,
-                    { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                  ],
-                ]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons
-                  name="account-balance-wallet"
-                  size={22}
-                  color={activeTab === 'wallet' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-                />
-              </TouchableOpacity>
-            )}
-
-            <TouchableOpacity
-              onPress={onOpenReport}
-              style={styles.railIconBtn}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="picture-as-pdf" size={22} color={textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={onOpenStats}
-              style={styles.railIconBtn}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="calendar-today" size={20} color={textSecondary} />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => setAgendaVisible(true)}
-              style={[
-                styles.railIconBtn,
-                agendaVisible && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialCommunityIcons
-                name="clipboard-text-clock"
-                size={22}
-                color={agendaVisible ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              onPress={() => {
-                loadSystemUsers();
-                setUserMgmtVisible(true);
-              }}
-              style={[
-                styles.railIconBtn,
-                userMgmtVisible && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name="manage-accounts"
-                size={22}
-                color={userMgmtVisible ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
-              {(systemMetrics?.pending_approvals || 0) > 0 && (
-                <View style={styles.railBadgeDot}>
-                  <Text style={styles.railBadgeText}>
-                    {systemMetrics.pending_approvals > 9 ? '9+' : systemMetrics.pending_approvals}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
+            {/* Navigation Links */}
+            <View style={{ gap: 4 }}>
+              {[
+                { id: 'moto' as const, label: 'Dashboard', icon: 'dashboard', action: () => onSelectTab('moto') },
+                { id: 'services' as const, label: 'Mantenimiento & Servicios', icon: 'build', action: () => onSelectTab('services') },
+                { id: 'history' as const, label: 'Bitácora & Finanzas', icon: 'payments', action: () => onSelectTab('history') },
+                { id: 'specs' as const, label: 'Ficha Técnica OEM', icon: 'qr-code-scanner', action: () => onSelectTab('specs') },
+                ...(hasSuperAccess
+                  ? [
+                      {
+                        id: 'users_mgmt' as const,
+                        label: 'Usuarios y Operadores',
+                        icon: 'group',
+                        badge: pendingUsersList?.length || 0,
+                        action: () => {
+                          loadSystemUsers();
+                          setUserMgmtVisible(true);
+                        },
+                      },
+                    ]
+                  : []),
+                ...(drivesCompanyVehicle && !isSuperAdmin
+                  ? [{ id: 'wallet' as const, label: 'Guantera de Flota', icon: 'account-balance-wallet', action: () => onSelectTab('wallet') }]
+                  : []),
+                { id: 'report' as const, label: 'Reportes PDF', icon: 'analytics', action: onOpenReport },
+                { id: 'profile' as const, label: 'Configuración & Perfil', icon: 'settings', action: () => onSelectTab('profile') },
+              ].map((navItem) => {
+                const isActive =
+                  (navItem.id === 'users_mgmt' && userMgmtVisible) ||
+                  activeTab === navItem.id;
+                return (
+                  <TouchableOpacity
+                    key={navItem.id}
+                    onPress={navItem.action}
+                    activeOpacity={0.8}
+                    style={[
+                      styles.sidebarNavItem,
+                      isActive && {
+                        backgroundColor: primaryContainer,
+                      },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name={navItem.icon as any}
+                      size={20}
+                      color={isActive ? '#ffffff' : textVariant}
+                    />
+                    <Text
+                      style={{
+                        flex: 1,
+                        fontFamily: isActive ? F.bold : F.medium,
+                        fontSize: 13.5,
+                        color: isActive ? '#ffffff' : textVariant,
+                      }}
+                      numberOfLines={1}
+                    >
+                      {navItem.label}
+                    </Text>
+                    {!!(navItem as any).badge && (navItem as any).badge > 0 && (
+                      <View style={styles.sidebarNavBadge}>
+                        <Text style={{ fontFamily: F.bold, fontSize: 10, color: '#ffffff' }}>
+                          {(navItem as any).badge}
+                        </Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
           </View>
 
-          {/* BOTTOM ICONS (THEME & PROFILE) */}
-          <View style={styles.railBottomGroup}>
-            <TouchableOpacity
-              onPress={toggleTheme}
-              style={[styles.railIconBtn, { backgroundColor: isDark ? '#141721' : '#f1f5f9' }]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name={isDark ? 'light-mode' : 'dark-mode'}
-                size={20}
-                color={isDark ? '#ffb703' : '#1a5cff'}
-              />
-            </TouchableOpacity>
+          {/* Bottom Sidebar Support & Sync Status */}
+          <View style={{ paddingHorizontal: 16, gap: 12 }}>
+            <View style={[styles.sidebarSupportCard, { backgroundColor: surfaceLow }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <MaterialIcons name="verified" size={15} color={academicGold} />
+                <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: academicGold }}>
+                  Base de Datos en Tiempo Real
+                </Text>
+              </View>
+              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, lineHeight: 16 }}>
+                {allPlants.length} plantas registradas · {allCombinedUsers.length} usuarios sincronizados.
+              </Text>
+            </View>
 
-            <TouchableOpacity
-              onPress={() => onSelectTab('profile')}
-              style={[
-                styles.railIconBtn,
-                activeTab === 'profile' && [
-                  styles.railIconActivePill,
-                  { backgroundColor: isDark ? '#ffffff' : '#1a5cff' },
-                ],
-              ]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name="person"
-                size={22}
-                color={activeTab === 'profile' ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary}
-              />
-            </TouchableOpacity>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 4 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#22c55e' }} />
+                <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Sincronizado</Text>
+              </View>
 
-            <TouchableOpacity
-              onPress={logout}
-              style={[styles.railIconBtn, { backgroundColor: isDark ? 'rgba(239, 68, 68, 0.12)' : '#fee2e2' }]}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="logout" size={20} color="#ef4444" />
-            </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity
+                  onPress={toggleTheme}
+                  style={{ padding: 6, borderRadius: 8, backgroundColor: surfaceLow }}
+                >
+                  <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={16} color={isDark ? '#ffc250' : '#002045'} />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={logout}
+                  style={{ padding: 6, borderRadius: 8, backgroundColor: 'rgba(239, 68, 68, 0.12)' }}
+                >
+                  <MaterialIcons name="logout" size={16} color="#ef4444" />
+                </TouchableOpacity>
+              </View>
+            </View>
           </View>
         </View>
       )}
 
-      {/* 2. MAIN BENTO DASHBOARD CONTAINER */}
+      {/* ===================================================================== */}
+      {/* 2. MAIN WORKSPACE AREA (Header + Scrollable Content)                  */}
+      {/* ===================================================================== */}
       <View style={styles.mainContentArea}>
-        
-        {/* TOP HEADER BAR (Channel Analytics Style) */}
+        {/* TOP HEADER BAR (Inspired by template <header>) */}
         {isMobile ? (
-          <View style={[styles.topHeaderBarMobile, { backgroundColor: cardBg, borderBottomColor: cardBorder }]}>
+          <View style={[styles.topHeaderBarMobile, { backgroundColor: cardLowest, borderBottomColor: cardBorder }]}>
             {mobileSearchOpen ? (
-              <View style={[styles.mobileSearchExpandedRow, { backgroundColor: isDark ? '#1a1f2c' : '#f1f5f9', borderColor: accentCyan }]}>
-                <MaterialIcons name="search" size={20} color={accentCyan} />
+              <View style={[styles.mobileSearchExpandedRow, { backgroundColor: surfaceLow, borderColor: primaryContainer }]}>
+                <MaterialIcons name="search" size={20} color={primaryNavy} />
                 <TextInput
                   value={searchQuery}
                   onChangeText={setSearchQuery}
-                  placeholder="Buscar planta, serial o subsistema..."
-                  placeholderTextColor={textSecondary}
-                  style={[styles.mobileSearchInput, { color: textPrimary, fontFamily: F.medium }]}
+                  placeholder="Buscar planta, serial, operador..."
+                  placeholderTextColor={textOutline}
+                  style={[styles.mobileSearchInput, { color: textOnSurface, fontFamily: F.medium }]}
                   autoFocus={true}
                 />
-                {searchQuery.length > 0 && (
-                  <TouchableOpacity
-                    onPress={() => setSearchQuery('')}
-                    style={{ padding: 4 }}
-                  >
-                    <MaterialIcons name="close" size={18} color={textSecondary} />
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   onPress={() => {
                     setMobileSearchOpen(false);
                     setSearchQuery('');
                   }}
-                  style={[styles.mobileSearchCancelBtn, { backgroundColor: isDark ? '#262f40' : '#e2e8f0' }]}
-                  activeOpacity={0.7}
+                  style={{ padding: 4 }}
                 >
-                  <MaterialIcons name="arrow-back" size={18} color={textPrimary} />
+                  <MaterialIcons name="close" size={18} color={textVariant} />
                 </TouchableOpacity>
               </View>
             ) : (
               <View style={styles.mobileCollapsedHeaderRow}>
                 <TouchableOpacity
                   onPress={() => setMobileMenuOpen(true)}
-                  style={[styles.mobileHamburgerBtn, { backgroundColor: isDark ? '#1a1f2c' : '#f1f5f9', borderColor: cardBorder }]}
-                  activeOpacity={0.8}
+                  style={[styles.mobileHamburgerBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
                 >
-                  <MaterialIcons name="menu" size={22} color={textPrimary} />
-                  {(systemMetrics?.pending_approvals || 0) > 0 && (
-                    <View style={styles.mobilePendingBadge}>
-                      <Text style={styles.mobilePendingBadgeText}>
-                        {systemMetrics.pending_approvals > 9 ? '9+' : systemMetrics.pending_approvals}
-                      </Text>
-                    </View>
-                  )}
+                  <MaterialIcons name="menu" size={22} color={textOnSurface} />
                 </TouchableOpacity>
 
-                <TouchableOpacity
-                  onPress={() => onSelectTab('moto')}
-                  style={styles.mobileBrandCenter}
-                  activeOpacity={0.8}
-                >
+                <TouchableOpacity onPress={() => onSelectTab('moto')} style={styles.mobileBrandCenter}>
                   <Image source={HL_LOGO_REQUIRE} style={styles.mobileBrandLogo} resizeMode="contain" />
                   <View style={{ marginLeft: 8 }}>
-                    <Text style={{ fontFamily: F.extrabold, fontSize: 13, color: textPrimary, letterSpacing: 0.5 }}>
-                      HERMANOS LYNCH
-                    </Text>
-                    <Text style={{ fontFamily: F.semibold, fontSize: 9.5, color: isSuperAdmin ? accentCyan : '#22c55e', letterSpacing: 0.5 }}>
+                    <Text style={{ fontFamily: F.extrabold, fontSize: 13, color: primaryNavy }}>HERMANOS LYNCH</Text>
+                    <Text style={{ fontFamily: F.semibold, fontSize: 9.5, color: academicGold }}>
                       {isSuperAdmin ? 'SUPER ADMIN' : (userRoleTitle || 'OPERADOR')}
                     </Text>
                   </View>
@@ -798,754 +825,993 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 <View style={styles.mobileHeaderRightRow}>
                   <TouchableOpacity
                     onPress={() => setMobileSearchOpen(true)}
-                    style={[styles.mobileSearchIconBtn, { backgroundColor: isDark ? '#1a1f2c' : '#f1f5f9', borderColor: cardBorder }]}
-                    activeOpacity={0.8}
+                    style={[styles.mobileSearchIconBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
                   >
-                    <MaterialIcons name="search" size={20} color={textPrimary} />
+                    <MaterialIcons name="search" size={20} color={textOnSurface} />
                   </TouchableOpacity>
-
-                  <TouchableOpacity
-                    onPress={() => setMobileMenuOpen(true)}
-                    style={[styles.mobileAvatarBtn, { borderColor: isSuperAdmin ? accentCyan : '#22c55e' }]}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.avatarCircle, { backgroundColor: isSuperAdmin ? '#275FE3' : '#16a34a', width: 34, height: 34, borderRadius: 17 }]}>
-                      <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>{userInitials}</Text>
-                    </View>
+                  <TouchableOpacity onPress={toggleTheme} style={[styles.mobileSearchIconBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                    <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={18} color={isDark ? '#ffc250' : '#002045'} />
                   </TouchableOpacity>
                 </View>
               </View>
             )}
           </View>
         ) : (
-          <View style={styles.topHeaderBar}>
-            {/* LARGE TITLE (TEMPLATE "Channel Analytics") */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <Text style={[styles.channelAnalyticsTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                {activeTab === 'moto' ? 'Telemetría & Analítica' :
-                 activeTab === 'specs' ? 'Ficha Técnica de Planta' :
-                 activeTab === 'services' ? 'Mantenimiento & Servicios' :
-                 activeTab === 'history' ? 'Historial de Registros' :
-                 activeTab === 'wallet' ? 'Flota de Vehículos & Gastos' :
-                 activeTab === 'profile' ? 'Perfil del Administrador' : 'Panel de Control'}
-              </Text>
-              <View style={[styles.liveNetBadge, { backgroundColor: 'rgba(0, 227, 253, 0.12)' }]}>
-                <Animated.View style={[styles.pulsingGreenDot, { opacity: pulseAnim }]} />
-                <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 11, letterSpacing: 0.6 }}>
-                  SISTEMA EN VIVO · ISO 8528
+          <View style={[styles.topHeaderBarDesktop, { backgroundColor: cardLowest, borderBottomColor: cardBorder }]}>
+            {/* Left: Search + Active Period/Plant Pill */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+              <View style={[styles.headerSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                <MaterialIcons name="search" size={18} color={textOutline} />
+                <TextInput
+                  value={searchQuery}
+                  onChangeText={setSearchQuery}
+                  placeholder="Buscar planta, serial, operador o componente..."
+                  placeholderTextColor={textOutline}
+                  style={{ flex: 1, fontFamily: F.medium, fontSize: 13, color: textOnSurface, paddingVertical: 4 }}
+                />
+                {searchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setSearchQuery('')}>
+                    <MaterialIcons name="clear" size={16} color={textOutline} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <View style={[styles.headerMetaPill, { backgroundColor: surfaceLow }]}>
+                <MaterialIcons name="bolt" size={16} color={academicGold} />
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                  Unidad Activa:{' '}
+                  <Text style={{ fontFamily: F.bold, color: primaryNavy }}>
+                    {myMoto ? `${myMoto.brand} ${myMoto.model} (${myMoto.serialNumber || myMoto.plate || 'S/N'})` : 'Ninguna'}
+                  </Text>
                 </Text>
               </View>
             </View>
 
-            {/* RIGHT HEADER ICONS & SEARCH */}
-            <View style={styles.headerRightActions}>
-              <View style={[styles.searchPillContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <MaterialIcons name="search" size={18} color={textSecondary} />
-                <TextInput
-                  value={searchQuery}
-                  onChangeText={setSearchQuery}
-                  placeholder="Buscar componente, serial..."
-                  placeholderTextColor={textSecondary}
-                  style={[styles.searchInput, { color: textPrimary, fontFamily: F.medium }]}
-                />
-              </View>
+            {/* Right: CTA Button + Notifications + Real User Profile */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setIsAddingMoto(true)}
+                activeOpacity={0.85}
+                style={[styles.headerPrimaryCta, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}
+              >
+                <MaterialIcons name="add-circle" size={17} color="#ffc250" />
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
+                  Incorporar Planta
+                </Text>
+              </TouchableOpacity>
 
-              {/* ENVELOPE / AGENDA ICON */}
+              <View style={{ width: 1, height: 24, backgroundColor: surfaceHigh }} />
+
               <TouchableOpacity
                 onPress={() => setAgendaVisible(true)}
-                style={[styles.headerIconCircle, { backgroundColor: cardBg, borderColor: cardBorder }]}
-                activeOpacity={0.8}
+                style={[styles.headerSquareIconBtn, { backgroundColor: surfaceLow }]}
               >
-                <MaterialCommunityIcons name="email-outline" size={19} color={textPrimary} />
+                <MaterialIcons name="notifications-none" size={20} color={textVariant} />
+                {(pendingUsersList?.length || 0) > 0 && <View style={styles.headerRedDot} />}
               </TouchableOpacity>
 
-              {/* NOTIFICATION BELL */}
               <TouchableOpacity
                 onPress={onOpenStats}
-                style={[styles.headerIconCircle, { backgroundColor: cardBg, borderColor: cardBorder }]}
-                activeOpacity={0.8}
+                style={[styles.headerSquareIconBtn, { backgroundColor: surfaceLow }]}
               >
-                <MaterialIcons name="notifications-none" size={20} color={textPrimary} />
-                <View style={styles.notifDot} />
+                <MaterialIcons name="help-outline" size={20} color={textVariant} />
               </TouchableOpacity>
 
-              {/* USER PROFILE AVATAR CIRCLE (MATCHING TEMPLATE TOP RIGHT) */}
               <TouchableOpacity
                 onPress={() => onSelectTab('profile')}
-                style={[styles.headerAvatarCircle, { borderColor: isSuperAdmin ? accentCyan : '#22c55e' }]}
                 activeOpacity={0.8}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingLeft: 6 }}
               >
-                <View style={[styles.avatarCircle, { backgroundColor: isSuperAdmin ? '#275FE3' : '#16a34a', width: 36, height: 36, borderRadius: 18 }]}>
-                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>{userInitials}</Text>
+                <View style={[styles.headerUserCircle, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{userInitials}</Text>
+                </View>
+                <View>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }}>
+                    {userName || userEmail || 'Super Admin'}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                    {isSuperAdmin ? 'Super Administrador' : (userRoleTitle || 'Operador Técnico')}
+                  </Text>
                 </View>
               </TouchableOpacity>
             </View>
           </View>
         )}
 
-        {/* SCROLLABLE BENTO CONTENT */}
+        {/* ===================================================================== */}
+        {/* 3. SCROLLABLE DASHBOARD BODY (100% Real Data, Template Structure)     */}
+        {/* ===================================================================== */}
         <ScrollView
           style={[{ flex: 1 }, activeTab !== 'moto' && { display: 'none' }]}
           contentContainerStyle={[
             styles.bentoScrollContent,
-            isMobile && { paddingHorizontal: 12, paddingBottom: 150 },
+            isMobile && { paddingHorizontal: 14, paddingBottom: 140 },
           ]}
           showsVerticalScrollIndicator={false}
         >
-          {/* ========================================================= */}
-          {/* ROW 1: BENTO MASTER SHOWCASE (HERO + 2 STACKED TOP CARDS) */}
-          {/* ========================================================= */}
-          <View style={[styles.row1MasterContainer, { flexDirection: isDesktop ? 'row' : 'column' }]}>
-            
-            {/* 1.1 HERO CARD (TEMPLATE "Optimize Your Metrics" & Concentric Glow) */}
-            <View style={[
-              styles.modernHeroCard,
-              { backgroundColor: cardBg, borderColor: cardBorder },
-              isDesktop ? { flex: 1.45 } : { width: '100%' }
-            ]}>
-              {/* Concentric ambient background rings */}
-              <View style={styles.concentricCircleRing1} pointerEvents="none" />
-              <View style={styles.concentricCircleRing2} pointerEvents="none" />
-
-              {/* Top content row: Text on left, generator image centered/right */}
-              <View style={[styles.heroCardContentRow, isMobile && { flexDirection: 'column' }]}>
-                {/* Left side: Eyebrow + Big display title + White Action Button */}
-                <View style={[styles.heroTextCol, isMobile && { width: '100%' }]}>
-                  <Text style={[styles.heroEyebrowText, { color: textSecondary, fontFamily: F.semibold }]}>
-                    GRUPO ELECTRÓGENO INDUSTRIAL
+          {/* 3.1 TOP UTILITY BAR: Operational Meta & Action Toolbar */}
+          <View style={styles.topUtilityBar}>
+            <View style={{ flex: 1, minWidth: 260 }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6, flexWrap: 'wrap' }}>
+                <View style={[styles.utilityStatusBadge, { backgroundColor: secondaryFixed }]}>
+                  <Animated.View style={[styles.utilityPulseDot, { backgroundColor: '#7d5700', opacity: pulseAnim }]} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: onSecondaryFixed }}>
+                    Sistema de Telemetría ISO 8528 Activo
                   </Text>
-                  
-                  <Text style={[styles.heroBigTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 24 : 32 }]}>
-                    Potencia Continua{'\n'}& Control Total
-                  </Text>
+                </View>
+                <Text style={{ color: textOutline, fontSize: 12 }}>•</Text>
+                <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textVariant }}>
+                  {allPlants.length} Plantas en BD · {records.length} Registros Reales
+                </Text>
+              </View>
+              <Text style={[styles.utilityHeadline, { color: primaryNavy, fontFamily: F.bold, fontSize: isMobile ? 22 : 30 }]}>
+                Centro de Control & Operaciones
+              </Text>
+            </View>
 
-                  <Text style={[styles.heroEquipmentDesc, { color: textSecondary, fontFamily: F.medium }]}>
-                    {myMoto ? (myMoto.brand + ' ' + myMoto.model + ' · ' + (myMoto.serialNumber || 'HL-GEN-001')) : 'Blue Power Generation C125'}
-                  </Text>
+            {/* Filters & Action Toolbar */}
+            <View style={styles.utilityActionsRow}>
+              {/* Real Location Filter Selector */}
+              <TouchableOpacity
+                onPress={() => {
+                  const nextIdx = (uniquePlantLocations.indexOf(plantLocationFilter) + 1) % uniquePlantLocations.length;
+                  setPlantLocationFilter(uniquePlantLocations[nextIdx]);
+                }}
+                style={[styles.toolbarSelectBtn, { backgroundColor: cardLowest, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="place" size={17} color={textOutline} />
+                <Text style={{ fontFamily: F.semibold, fontSize: 13, color: textOnSurface }}>
+                  Sede: {plantLocationFilter}
+                </Text>
+                <MaterialIcons name="expand-more" size={18} color={textVariant} />
+              </TouchableOpacity>
 
-                  {/* Action pill button matching template "Start Now" with full Light/Dark contrast */}
-                  <TouchableOpacity
-                    onPress={onOpenQuickHours}
+              {/* Real Category Filter Selector */}
+              <TouchableOpacity
+                onPress={() => {
+                  const nextIdx = (PLANT_CATEGORIES.indexOf(plantCategoryFilter) + 1) % PLANT_CATEGORIES.length;
+                  setPlantCategoryFilter(PLANT_CATEGORIES[nextIdx]);
+                }}
+                style={[styles.toolbarSelectBtn, { backgroundColor: cardLowest, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="bolt" size={17} color={academicGold} />
+                <Text style={{ fontFamily: F.semibold, fontSize: 13, color: textOnSurface }}>
+                  {plantCategoryFilter}
+                </Text>
+                <MaterialIcons name="expand-more" size={18} color={textVariant} />
+              </TouchableOpacity>
+
+              {/* Export Report Button */}
+              <TouchableOpacity
+                onPress={onOpenReport}
+                style={[styles.toolbarSecondaryBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="download" size={17} color={primaryNavy} />
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy }}>
+                  Exportar Reporte
+                </Text>
+              </TouchableOpacity>
+
+              {/* Register Hours / Fuel CTA */}
+              <TouchableOpacity
+                onPress={onOpenQuickHours}
+                style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}
+                activeOpacity={0.85}
+              >
+                <MaterialIcons name="add-circle" size={17} color="#ffc250" />
+                <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
+                  Registrar Horas / Diésel
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* 3.2 PERSPECTIVE TABS (Inspired by template's B9 Ticketing Tabs) */}
+          <View style={[styles.perspectiveTabContainer, { backgroundColor: surfaceLow }]}>
+            {[
+              { id: 'all' as const, label: 'Vista Integral Ejecutiva', icon: 'dashboard', color: academicGold },
+              { id: 'plants' as const, label: `Máquinas & Plantas (${allPlants.length})`, icon: 'bolt', color: '#2563eb' },
+              { id: 'users' as const, label: `Usuarios & Operadores (${allCombinedUsers.length})`, icon: 'groups', color: innovationPurple },
+              { id: 'subsystems' as const, label: `Subsistemas ISO 8528 (${plantSubsystems.length})`, icon: 'build', color: '#10b981' },
+            ].map((tab) => {
+              const active = perspectiveTab === tab.id;
+              return (
+                <TouchableOpacity
+                  key={tab.id}
+                  onPress={() => setPerspectiveTab(tab.id)}
+                  activeOpacity={0.85}
+                  style={[
+                    styles.perspectiveTabBtn,
+                    active && {
+                      backgroundColor: cardLowest,
+                      borderColor: cardBorder,
+                      borderWidth: 1,
+                    },
+                  ]}
+                >
+                  <MaterialIcons name={tab.icon as any} size={17} color={tab.color} />
+                  <Text
+                    style={{
+                      fontFamily: active ? F.bold : F.medium,
+                      fontSize: 13,
+                      color: active ? primaryNavy : textVariant,
+                    }}
+                  >
+                    {tab.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {/* 3.3 KEY METRICS ROW (4 KPI Cards — 100% REAL DATA, NO FAKE NUMBERS) */}
+          <View style={styles.kpiGridRow}>
+            {/* KPI 1: Inversión Operativa Real */}
+            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.kpiCardTopRow}>
+                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                  INVERSIÓN OPERATIVA REAL
+                </Text>
+                <View style={[styles.kpiIconBox, { backgroundColor: isDark ? 'rgba(37, 99, 235, 0.15)' : 'rgba(0, 32, 69, 0.06)' }]}>
+                  <MaterialIcons name="account-balance-wallet" size={20} color={primaryNavy} />
+                </View>
+              </View>
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                    ${Math.floor(totalCostUSD).toLocaleString('en-US')}
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 18, color: textOutline }}>
+                    .{totalCostUSD.toFixed(2).split('.')[1]}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <View style={{ backgroundColor: secondaryFixed, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: onSecondaryFixed }}>
+                      {records.length} registros en BD
+                    </Text>
+                  </View>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    Diésel: ${totalFuelUSD.toFixed(2)} ({totalFuelLiters} L)
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* KPI 2: Flota de Plantas & Capacidad Real */}
+            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.kpiCardTopRow}>
+                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                  PLANTAS & CAPACIDAD EN BD
+                </Text>
+                <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(214, 158, 46, 0.18)' }]}>
+                  <MaterialCommunityIcons name="generator-portable" size={20} color={academicGold} />
+                </View>
+              </View>
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                    {allPlants.length}
+                  </Text>
+                  <Text style={{ fontFamily: F.semibold, fontSize: 14, color: textVariant }}>
+                    / {fleetTotalKva.toLocaleString()} kVA totales
+                  </Text>
+                </View>
+                <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow }]}>
+                  <View
                     style={[
-                      styles.whitePillActionBtn,
+                      styles.kpiProgressBarFill,
                       {
-                        backgroundColor: isDark ? '#ffffff' : '#0f172a',
+                        backgroundColor: isDark ? '#2563eb' : '#002045',
+                        width: `${allPlants.length > 0 ? Math.round((fleetStats.assigned / allPlants.length) * 100) : 0}%`,
                       },
                     ]}
+                  />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 6 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: primaryNavy }}>
+                    {fleetStats.assigned} con operador
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    {fleetStats.unassigned} por asignar
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* KPI 3: Usuarios & Personal Operador Real */}
+            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.kpiCardTopRow}>
+                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                  DIRECTORIO DE USUARIOS EN BD
+                </Text>
+                <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(107, 70, 193, 0.14)' }]}>
+                  <MaterialIcons name="groups" size={20} color={innovationPurple} />
+                </View>
+              </View>
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6 }}>
+                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                    {allCombinedUsers.length}
+                  </Text>
+                  <Text style={{ fontFamily: F.semibold, fontSize: 16, color: textVariant }}>
+                    Perfiles
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <View style={{ width: 7, height: 7, borderRadius: 4, backgroundColor: academicGold }} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: textOnSurface }}>
+                      {(operatorsList || []).length} Operadores
+                    </Text>
+                  </View>
+                  <Text style={{ color: textOutline, fontSize: 11 }}>•</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    {(superAdminsList || []).length} Admins
+                  </Text>
+                  <Text style={{ color: textOutline, fontSize: 11 }}>•</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    {(clientsList || []).length} Clientes
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* KPI 4: Salud Global & Horómetro Real */}
+            <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.kpiCardTopRow}>
+                <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>
+                  SALUD ISO 8528 PLANTA ACTIVA
+                </Text>
+                <View style={[styles.kpiIconBox, { backgroundColor: 'rgba(34, 197, 94, 0.14)' }]}>
+                  <MaterialIcons name="verified" size={20} color="#16a34a" />
+                </View>
+              </View>
+              <View style={{ marginTop: 14 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
+                  <Text style={[styles.kpiBigDisplay, { color: primaryNavy, fontFamily: F.extrabold }]}>
+                    {generalHealth}%
+                  </Text>
+                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: generalHealth >= 60 ? '#16a34a' : '#d97706' }}>
+                    {generalHealth >= 60 ? 'Óptimo' : generalHealth >= 30 ? 'Preventivo' : 'Crítico'}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 10 }}>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    Horómetro actual: <Text style={{ fontFamily: F.bold, color: textOnSurface }}>{currentHours.toLocaleString()} hrs</Text> ({fleetStats.totalHours.toLocaleString()}h flota)
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
+
+          {/* 3.4 BENTO SECTION: 8 Cols Analytics & Tiers + 4 Cols Live Unit Inspector */}
+          {(perspectiveTab === 'all' || perspectiveTab === 'plants') && (
+            <View style={[styles.bento12Grid, { flexDirection: isDesktop ? 'row' : 'column' }]}>
+              {/* LEFT 8 COLS: Real Fleet Chart + 4 Tier Breakdown Cards */}
+              <View style={[styles.bento8Col, isDesktop ? { flex: 8 } : { width: '100%' }]}>
+                {/* Primary Chart Card */}
+                <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                  <View style={styles.chartHeaderRow}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontFamily: F.bold, fontSize: 19, color: primaryNavy }}>
+                        Capacidad Nominal (kVA) vs. Horas Reales de Operación
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                        Comparativa directa de las {allPlants.length} plantas eléctricas registradas en la base de datos
+                      </Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: isDark ? '#2563eb' : '#002045' }} />
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Potencia (kVA)</Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#ffc250' }} />
+                        <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Horómetro (hrs)</Text>
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={{ paddingTop: 12, paddingBottom: 6 }}>
+                    <RealFleetBarChart
+                      plants={allPlants}
+                      isDark={isDark}
+                      primaryColor={isDark ? '#2563eb' : '#002045'}
+                      goldColor="#ffc250"
+                      textSecondary={textVariant}
+                    />
+                  </View>
+
+                  <View style={[styles.chartFooterRow, { borderTopColor: cardBorder }]}>
+                    <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                      * Valores leídos directamente del inventario activo en Supabase sin proyecciones simuladas.
+                    </Text>
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                      Capacidad Total: {fleetTotalKva.toLocaleString()} kVA · Uso Flota: {fleetStats.totalHours.toLocaleString()} hrs
+                    </Text>
+                  </View>
+                </View>
+
+                {/* 4 Tier Distribution Cards (100% Real Data) */}
+                <View style={styles.tiers4Grid}>
+                  {/* Tier 1: Alta Capacidad */}
+                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Alta Capacidad (≥100 kVA)</Text>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: isDark ? '#2563eb' : '#002045' }} />
+                    </View>
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.highCount}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                        {fleetTiers.highPct}% de la flota registrada
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
+                      {fleetTiers.highKva.toLocaleString()} kVA instalados
+                    </Text>
+                  </View>
+
+                  {/* Tier 2: Media Capacidad */}
+                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Media Capacidad (50-99)</Text>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: academicGold }} />
+                    </View>
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.midCount}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                        {fleetTiers.midPct}% de la flota registrada
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
+                      {fleetTiers.midKva.toLocaleString()} kVA instalados
+                    </Text>
+                  </View>
+
+                  {/* Tier 3: Compactas */}
+                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Compactas (&lt;50 kVA)</Text>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: innovationPurple }} />
+                    </View>
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{fleetTiers.compactCount}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                        {fleetTiers.compactPct}% de la flota registrada
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: primaryNavy, marginTop: 10 }}>
+                      {fleetTiers.compactKva.toLocaleString()} kVA instalados
+                    </Text>
+                  </View>
+
+                  {/* Tier 4: Móviles de Flota & Servicios */}
+                  <View style={[styles.tierMiniCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>Bitácora de Servicios</Text>
+                      <View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a' }} />
+                    </View>
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontFamily: F.extrabold, fontSize: 22, color: primaryNavy }}>{serviceRecords.length}</Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }}>
+                        {fuelRecords.length} cargas de diésel
+                      </Text>
+                    </View>
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#16a34a', marginTop: 10 }}>
+                      ${totalServicesUSD.toFixed(2)} en mtto.
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* RIGHT 4 COLS: Live Active Plant Card & Subsystems Breakdown */}
+              <View style={[styles.bento4Col, isDesktop ? { flex: 4 } : { width: '100%' }]}>
+                {/* Card 1: Live Active Plant Status (Template "Acreditación en Puerta") */}
+                <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Animated.View style={{ width: 10, height: 10, borderRadius: 5, backgroundColor: '#16a34a', opacity: pulseAnim }} />
+                      <Text style={{ fontFamily: F.bold, fontSize: 16, color: primaryNavy }}>
+                        Unidad en Supervisión
+                      </Text>
+                    </View>
+                    <View style={{ backgroundColor: surfaceHigh, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11, color: textVariant }}>
+                        {myMoto?.location || 'Sede Principal'}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={{ backgroundColor: surfaceLow, padding: 14, borderRadius: 12, gap: 10 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Serial / Placa en BD</Text>
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                        {myMoto?.serialNumber || myMoto?.plate || 'Sin serial registrado'}
+                      </Text>
+                    </View>
+
+                    <View style={{ backgroundColor: cardLowest, padding: 12, borderRadius: 10, gap: 6, borderWidth: 1, borderColor: cardBorder }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Marca y Modelo</Text>
+                        <Text style={{ fontFamily: F.bold, fontSize: 13, color: innovationPurple }}>
+                          {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Ninguna'}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Capacidad / Combustible</Text>
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                          {myMoto?.powerKva || 0} kVA · {myMoto?.fuelType || 'Diesel'}
+                        </Text>
+                      </View>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Operador Responsable</Text>
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: myMoto?.assignedOperatorName ? '#16a34a' : academicGold }}>
+                          {myMoto?.assignedOperatorName || 'Sin operador asignado'}
+                        </Text>
+                      </View>
+                    </View>
+
+                    {/* Donut Ring & Subsystem Health Count */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 4 }}>
+                      <View>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>Componentes Óptimos</Text>
+                        <Text style={{ fontFamily: F.extrabold, fontSize: 18, color: primaryNavy }}>
+                          {optimalSubsystemsCount} de {plantSubsystems.length}
+                        </Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textOutline }}>
+                          Horómetro: {currentHours.toLocaleString()} hrs
+                        </Text>
+                      </View>
+                      <RealDonutRing
+                        percent={generalHealth}
+                        primaryColor={isDark ? '#2563eb' : '#002045'}
+                        trackColor={surfaceHigh}
+                        textColor={primaryNavy}
+                      />
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={onOpenSpecs}
                     activeOpacity={0.85}
+                    style={[styles.purpleScannerBtn, { backgroundColor: isDark ? '#6B46C1' : '#6B46C1' }]}
                   >
-                    <MaterialIcons name="add" size={18} color={isDark ? '#0c0e14' : '#ffffff'} />
-                    <Text style={[styles.whitePillActionText, { fontFamily: F.bold, color: isDark ? '#0c0e14' : '#ffffff' }]}>
-                      + Registrar Horas / Diésel
+                    <MaterialIcons name="qr-code-scanner" size={18} color="#ffffff" />
+                    <Text style={{ fontFamily: F.bold, fontSize: 13, color: '#ffffff' }}>
+                      Abrir Ficha Técnica & Especificaciones OEM
                     </Text>
                   </TouchableOpacity>
                 </View>
 
-                {/* Right/Center: Generator showcase with ambient backlight & live pulse */}
-                <View style={[styles.heroImageShowcaseCol, isMobile && { marginVertical: 14 }]}>
-                  <View style={styles.ambientAtmosphericGlow} />
-                  <Image
-                    source={plantImageSource}
-                    style={[styles.heroShowcaseImg, isMobile && { width: 220, height: 160 }]}
-                    resizeMode="contain"
-                  />
-                  <View style={[styles.heroFloatingPulsePill, { backgroundColor: isDark ? 'rgba(12, 15, 22, 0.92)' : 'rgba(255, 255, 255, 0.92)', borderColor: cardBorder }]}>
-                    <Animated.View style={[styles.pulsingGreenDot, { opacity: pulseAnim }]} />
-                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10, letterSpacing: 0.6 }}>
-                      OPERATIVA EN LÍNEA · ISO 8528
+                {/* Card 2: Critical Subsystems Matrix (Template "Métodos de Pago") */}
+                <View style={[styles.bentoCardBox, { backgroundColor: cardLowest, borderColor: cardBorder, gap: 12 }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 16, color: primaryNavy }}>
+                      Estado de Subsistemas Críticos
+                    </Text>
+                    <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>
+                      Vida Útil Remanente
                     </Text>
                   </View>
-                </View>
-              </View>
 
-              {/* 1.2 FLOATING FROSTED GLASS TELEMETRY STRIP (Bottom of Hero Card) */}
-              <View style={[styles.floatingFrostedStrip, { backgroundColor: isDark ? 'rgba(18, 22, 34, 0.85)' : 'rgba(255, 255, 255, 0.9)', borderColor: cardBorder }]}>
-                {/* Metric 1: Potencia (Cyan Dot) */}
-                <View style={styles.frostedMetricCol}>
-                  <Text style={[styles.frostedMetricValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 20 }]}>
-                    {myMoto ? (myMoto.powerKva || 35) + 'k' : '35k'}
-                  </Text>
-                  <View style={styles.frostedLabelRow}>
-                    <View style={[styles.metricDotIndicator, { backgroundColor: accentCyan }]} />
-                    <Text style={[styles.frostedMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Potencia
-                    </Text>
-                  </View>
-                  <View style={[styles.metricAccentUnderline, { backgroundColor: accentCyan }]} />
-                </View>
-
-                {/* Metric 2: Horómetro (Magenta / Purple Dot) */}
-                <TouchableOpacity onPress={onOpenQuickHours} style={styles.frostedMetricCol} activeOpacity={0.8}>
-                  <Text style={[styles.frostedMetricValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 20 }]}>
-                    {currentHours > 1000 ? (currentHours / 1000).toFixed(1) + 'k' : currentHours + 'h'}
-                  </Text>
-                  <View style={styles.frostedLabelRow}>
-                    <View style={[styles.metricDotIndicator, { backgroundColor: '#d946ef' }]} />
-                    <Text style={[styles.frostedMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Horómetro
-                    </Text>
-                  </View>
-                  <View style={[styles.metricAccentUnderline, { backgroundColor: '#d946ef' }]} />
-                </TouchableOpacity>
-
-                {/* Metric 3: Gasto Diésel (Emerald Dot) */}
-                <TouchableOpacity onPress={onOpenQuickFuel} style={styles.frostedMetricCol} activeOpacity={0.8}>
-                  <Text style={[styles.frostedMetricValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 20 }]}>
-                    {totalCostUSD > 0 ? ('$' + (totalCostUSD >= 1000 ? (totalCostUSD / 1000).toFixed(1) + 'k' : totalCostUSD.toFixed(0))) : '$3,6k'}
-                  </Text>
-                  <View style={styles.frostedLabelRow}>
-                    <View style={[styles.metricDotIndicator, { backgroundColor: '#22c55e' }]} />
-                    <Text style={[styles.frostedMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Inversión
-                    </Text>
-                  </View>
-                  <View style={[styles.metricAccentUnderline, { backgroundColor: '#22c55e' }]} />
-                </TouchableOpacity>
-
-                {/* Metric 4: Salud Global */}
-                <View style={styles.frostedMetricCol}>
-                  <Text style={[styles.frostedMetricValue, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 20 }]}>
-                    {generalHealth}%
-                  </Text>
-                  <View style={styles.frostedLabelRow}>
-                    <View style={[styles.metricDotIndicator, { backgroundColor: generalHealth >= 60 ? '#22c55e' : generalHealth >= 30 ? '#f59e0b' : '#ef4444' }]} />
-                    <Text style={[styles.frostedMetricLabel, { color: textSecondary, fontFamily: F.medium }]}>
-                      Salud Global
-                    </Text>
-                  </View>
-                  <View style={[styles.metricAccentUnderline, { backgroundColor: generalHealth >= 60 ? '#22c55e' : generalHealth >= 30 ? '#f59e0b' : '#ef4444' }]} />
-                </View>
-
-                {/* Next Action Circular Arrow Button ( > ) */}
-                <TouchableOpacity
-                  onPress={onOpenSpecs}
-                  style={styles.frostedArrowCircleBtn}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="chevron-right" size={20} color="#ffffff" />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* 1.3 RIGHT COLUMN: 2 STACKED CARDS */}
-            <View style={[styles.rightStackedCol, isDesktop ? { flex: 1 } : { width: '100%' }]}>
-              
-              {/* TOP CARD: "Generación en Vivo 💡" (Active Users right now 💡) */}
-              <View style={[styles.topSplineWaveCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                <View style={styles.splineCardHeaderRow}>
-                  <Text style={[styles.splineCardTitle, { color: textPrimary, fontFamily: F.bold }]}>
-                    Generación en Vivo 💡
-                  </Text>
-
-                  {/* Peak Floating Tooltip Pill */}
-                  <View style={styles.splinePeakPillBadge}>
-                    <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>
-                      {currentHours > 0 ? ((myMoto?.powerKw || 28) + ' kW') : '50 hrs'}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Wave Spline Graphic with Y-Axis & X-Axis */}
-                <View style={styles.splineGraphArea}>
-                  {/* Y-Axis labels */}
-                  <View style={styles.splineYAxis}>
-                    <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.semibold }]}>60</Text>
-                    <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.semibold }]}>40</Text>
-                    <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.semibold }]}>20</Text>
-                    <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.semibold }]}>0</Text>
-                  </View>
-
-                  {/* Dual Spline Wave SVG */}
-                  <View style={{ flex: 1, height: 110 }}>
-                    <SplineWaveChart isDark={isDark} />
-                  </View>
-                </View>
-
-                {/* X-Axis month/hour labels */}
-                <View style={styles.splineXAxisRow}>
-                  <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.medium }]}>Oct</Text>
-                  <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.medium }]}>Mar</Text>
-                  <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.medium }]}>Jul</Text>
-                  <Text style={[styles.splineAxisText, { color: textSecondary, fontFamily: F.medium }]}>Aug</Text>
-                </View>
-              </View>
-
-              {/* BOTTOM CARD: "Consumo & Diésel" (Latest Sales Split Card) */}
-              <View style={[styles.bottomSplitCard, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                {/* Left side: Metric + Sparkline + Earnings */}
-                <View style={styles.splitCardLeftHalf}>
-                  <Text style={[styles.splitCardEyebrow, { color: textSecondary, fontFamily: F.semibold }]}>
-                    Consumo & Diésel
-                  </Text>
-
-                  <View style={styles.splitSparklineRow}>
-                    <SplineMiniSparkline color="#22c55e" />
-                    <View style={styles.greenTrendPercentBadge}>
-                      <MaterialIcons name="north-east" size={11} color="#22c55e" />
-                      <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>6%</Text>
-                    </View>
-                  </View>
-
-                  <Text style={[styles.splitBigDollarMetric, { color: '#22c55e', fontFamily: F.extrabold }]}>
-                    $ {totalFuelUSD > 0 ? totalFuelUSD.toLocaleString() : '586'}
-                  </Text>
-
-                  <View style={styles.splitTotalEarningsRow}>
-                    <View style={[styles.miniAssetThumb, { backgroundColor: pillDarkBg }]}>
-                      <MaterialIcons name="local-gas-station" size={13} color={accentCyan} />
-                    </View>
-                    <Text style={[styles.splitEarningsText, { color: textSecondary, fontFamily: F.medium }]}>
-                      Gasto acumulado ({totalFuelLiters > 0 ? (totalFuelLiters + ' L') : '420 L'})
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Right side: Inset Squircle Technical Component Card with Ambient Glow */}
-                <TouchableOpacity
-                  onPress={onOpenSpecs}
-                  style={[styles.splitCardRightInset, { backgroundColor: isDark ? 'rgba(255,255,255,0.03)' : '#f8fafc', borderColor: cardBorder }]}
-                  activeOpacity={0.85}
-                >
-                  <View style={styles.ambientSquircleGlow} />
-                  <MaterialCommunityIcons name="engine" size={46} color={accentCyan} />
-                  <Text style={[styles.squircleAssetName, { color: textSecondary, fontFamily: F.semibold }]} numberOfLines={1}>
-                    {specs?.engineType || 'Cummins 4BTA3.9'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-            </View>
-
-          </View>
-
-          {/* ========================================================= */}
-          {/* SECTION 2: FLOTA DE PLANTAS ELÉCTRICAS EN RED (BENTO ROW 2) */}
-          {/* ========================================================= */}
-          {hasSuperAccess && (
-            <View style={[styles.superFleetContainer, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-              <View style={styles.superFleetHeader}>
-                <View style={{ flex: 1, minWidth: 260 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                      Catálogo Global de Máquinas y Plantas Disponibles
-                    </Text>
-                    <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                      <View style={styles.greenPulseDot} />
-                      <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>
-                        {filteredFleetPlants.length} / {fleetStats.total} DISPONIBLES
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                    Clasificación corporativa de grupos electrógenos y maquinaria disponible por País, Zona y Categoría de potencia.
-                  </Text>
-                </View>
-
-                <View style={styles.fleetKpiChipsRow}>
-                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                    <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10 }}>Total Plantas</Text>
-                    <Text style={{ fontFamily: F.extrabold, color: textPrimary, fontSize: 16 }}>{fleetStats.total}</Text>
-                  </View>
-                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                    <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 10 }}>Operativas</Text>
-                    <Text style={{ fontFamily: F.extrabold, color: '#22c55e', fontSize: 16 }}>{fleetStats.online}</Text>
-                  </View>
-                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                    <Text style={{ fontFamily: F.bold, color: accentCyan, fontSize: 10 }}>Horas Flota</Text>
-                    <Text style={{ fontFamily: F.extrabold, color: accentCyan, fontSize: 16 }}>{fleetStats.totalHours.toLocaleString()}h</Text>
-                  </View>
-                  <View style={[styles.fleetMiniKpi, { backgroundColor: pillDarkBg }]}>
-                    <Text style={{ fontFamily: F.bold, color: '#f59e0b', fontSize: 10 }}>Capacidad</Text>
-                    <Text style={{ fontFamily: F.extrabold, color: '#f59e0b', fontSize: 16 }}>{fleetTotalKva} kVA</Text>
-                  </View>
-                </View>
-              </View>
-
-              {/* Clasificador de Máquinas por País, Zona y Categoría */}
-              <View style={[styles.filterSectionBox, { marginBottom: 14 }]}>
-                <View style={styles.filterGroupRow}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>PAÍS:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {COUNTRIES.map((c) => (
+                  <View style={{ gap: 10 }}>
+                    {plantSubsystems.slice(0, 4).map((sub) => (
                       <TouchableOpacity
-                        key={c}
-                        onPress={() => setPlantCountryFilter(c)}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: plantCountryFilter === c ? accentCyan : pillDarkBg,
-                            borderColor: plantCountryFilter === c ? accentCyan : cardBorder,
-                          },
-                        ]}
+                        key={sub.id}
+                        onPress={() => onOpenServicesTab(sub.id)}
+                        activeOpacity={0.8}
                       >
-                        <Text style={{ fontFamily: plantCountryFilter === c ? F.bold : F.medium, color: plantCountryFilter === c ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary, fontSize: 11 }}>
-                          {c}
-                        </Text>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                          <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }}>
+                            {sub.name}
+                          </Text>
+                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                            {sub.hoursRemaining}h rest. ({sub.wear}%)
+                          </Text>
+                        </View>
+                        <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow, height: 6, marginTop: 0 }]}>
+                          <View
+                            style={{
+                              height: 6,
+                              borderRadius: 99,
+                              backgroundColor: sub.color,
+                              width: `${sub.wear}%`,
+                            }}
+                          />
+                        </View>
                       </TouchableOpacity>
                     ))}
-                  </ScrollView>
+                  </View>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* ===================================================================== */}
+          {/* 3.5 OPERATIONAL INTERACTIVE DATA TABLE 1: PLANTAS ELÉCTRICAS EN BD    */}
+          {/* ===================================================================== */}
+          {(perspectiveTab === 'all' || perspectiveTab === 'plants') && (
+            <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.tableCardHeader}>
+                <View style={{ flex: 1, minWidth: 240 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
+                    Grupos Electrógenos y Máquinas en Gestión ({filteredFleetPlants.length})
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                    Listado operativo real de plantas registradas en base de datos, ubicación, horómetro y operador asignado
+                  </Text>
                 </View>
 
-                <View style={[styles.filterGroupRow, { marginTop: 6 }]}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>ZONA:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {PLANT_ZONES.map((z) => (
-                      <TouchableOpacity
-                        key={z}
-                        onPress={() => setPlantZoneFilter(z)}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: plantZoneFilter === z ? accentBlue : pillDarkBg,
-                            borderColor: plantZoneFilter === z ? accentBlue : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text style={{ fontFamily: plantZoneFilter === z ? F.bold : F.medium, color: plantZoneFilter === z ? '#ffffff' : textSecondary, fontSize: 11 }}>
-                          {z}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                    <MaterialIcons name="filter-list" size={18} color={textOutline} />
+                    <TextInput
+                      value={plantTableSearch}
+                      onChangeText={setPlantTableSearch}
+                      placeholder="Filtrar planta, serial o sede..."
+                      placeholderTextColor={textOutline}
+                      style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 180, paddingVertical: 4 }}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setIsAddingMoto(true)}
+                    style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
+                  >
+                    <MaterialIcons name="add" size={16} color="#ffc250" />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Nueva Planta</Text>
+                  </TouchableOpacity>
                 </View>
+              </View>
 
-                <View style={[styles.filterGroupRow, { marginTop: 6 }]}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>CATEGORÍA:</Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {PLANT_CATEGORIES.map((cat) => (
+              {/* Category & Location Filter Chips */}
+              <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {PLANT_CATEGORIES.map((cat) => {
+                    const active = plantCategoryFilter === cat;
+                    return (
                       <TouchableOpacity
                         key={cat}
                         onPress={() => setPlantCategoryFilter(cat)}
                         style={[
-                          styles.filterChip,
+                          styles.filterPillChip,
                           {
-                            backgroundColor: plantCategoryFilter === cat ? '#22c55e' : pillDarkBg,
-                            borderColor: plantCategoryFilter === cat ? '#22c55e' : cardBorder,
+                            backgroundColor: active ? primaryContainer : surfaceLow,
+                            borderColor: active ? primaryContainer : cardBorder,
                           },
                         ]}
                       >
-                        <Text style={{ fontFamily: plantCategoryFilter === cat ? F.bold : F.medium, color: plantCategoryFilter === cat ? '#0c0e14' : textSecondary, fontSize: 11 }}>
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
                           {cat}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
+                    );
+                  })}
+                  {uniquePlantLocations.map((loc) => {
+                    if (loc === 'Todas') return null;
+                    const active = plantLocationFilter === loc;
+                    return (
+                      <TouchableOpacity
+                        key={loc}
+                        onPress={() => setPlantLocationFilter(active ? 'Todas' : loc)}
+                        style={[
+                          styles.filterPillChip,
+                          {
+                            backgroundColor: active ? academicGold : surfaceLow,
+                            borderColor: active ? academicGold : cardBorder,
+                          },
+                        ]}
+                      >
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                          📍 {loc}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
-              {/* Plant Cards Scroll */}
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.fleetCardsScroll}>
-                {filteredFleetPlants.map((plant, idx) => {
-                  const isSelected = myMoto?.id === plant.id;
-                  const opName = plant.assignedOperatorName || 'Por Asignar';
-                  const kva = plant.powerKva || 35;
-                  const catLabel = kva >= 100 ? 'Alta Capacidad' : kva >= 50 ? 'Media Capacidad' : 'Compacta';
-                  const loc = (plant.location || '').toLowerCase();
-                  const stateLabel = (plant as any).state || (loc.includes('caracas') ? 'Distrito Capital' : loc.includes('miranda') ? 'Miranda' : idx % 3 === 1 ? 'Distrito Capital' : idx % 3 === 2 ? 'Miranda' : 'Carabobo');
-                  const zoneLabel = (plant as any).zone || resolveZone(stateLabel);
+              {/* Table Header Bar (Desktop) */}
+              {!isMobile && (
+                <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
+                  <Text style={[styles.tableHeadCell, { flex: 2.2, color: textVariant, fontFamily: F.bold }]}>PLANTA & MARCA</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>SERIAL / AÑO</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>RECINTO / SEDE</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>OPERADOR ASIGNADO</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.2, color: textVariant, fontFamily: F.bold }]}>POTENCIA & USO</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.1, color: textVariant, fontFamily: F.bold }]}>ESTADO</Text>
+                  <Text style={[styles.tableHeadCell, { width: 110, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                </View>
+              )}
 
-                  return (
-                    <TouchableOpacity
-                      key={plant.id}
-                      onPress={() => selectMoto(plant.id)}
-                      style={[
-                        styles.fleetPlantCard,
-                        {
-                          backgroundColor: isSelected ? (isDark ? '#1a2236' : '#eff6ff') : pillDarkBg,
-                          borderColor: isSelected ? accentBlue : cardBorder,
-                          borderWidth: isSelected ? 2 : 1,
-                        },
-                      ]}
-                      activeOpacity={0.8}
-                    >
-                      <View style={styles.fleetPlantCardHeader}>
-                        <View style={{ flex: 1, paddingRight: 6 }}>
-                          <Text style={[styles.fleetPlantModel, { color: textPrimary, fontFamily: F.extrabold }]} numberOfLines={1}>
-                            {plant.model} · {kva} kVA
+              {/* Table Body Rows */}
+              <View>
+                {filteredFleetPlants.length === 0 ? (
+                  <View style={{ padding: 32, alignItems: 'center' }}>
+                    <MaterialCommunityIcons name="generator-portable" size={36} color={textOutline} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
+                      No hay plantas registradas que coincidan con el filtro actual
+                    </Text>
+                  </View>
+                ) : (
+                  filteredFleetPlants.map((plant) => {
+                    const isSelected = myMoto?.id === plant.id;
+                    const kva = plant.powerKva || 0;
+                    const hrs = plant.currentHours || plant.currentOdometer || 0;
+
+                    return (
+                      <TouchableOpacity
+                        key={plant.id}
+                        onPress={() => selectMoto(plant.id)}
+                        activeOpacity={0.85}
+                        style={[
+                          styles.tableDataRow,
+                          {
+                            backgroundColor: isSelected ? (isDark ? 'rgba(37, 99, 235, 0.12)' : '#f0f7ff') : cardLowest,
+                            borderBottomColor: cardBorder,
+                            flexDirection: isMobile ? 'column' : 'row',
+                            alignItems: isMobile ? 'flex-start' : 'center',
+                          },
+                        ]}
+                      >
+                        {/* Col 1: Plant & Brand */}
+                        <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <View style={[styles.tablePlantThumb, { backgroundColor: surfaceLow }]}>
+                            <MaterialCommunityIcons name="generator-portable" size={22} color={isSelected ? '#2563eb' : primaryNavy} />
+                          </View>
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: primaryNavy }} numberOfLines={1}>
+                              {plant.brand} {plant.model}
+                            </Text>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: innovationPurple }} numberOfLines={1}>
+                              {kva >= 100 ? 'Alta Capacidad' : kva >= 50 ? 'Media Capacidad' : 'Compacta'} · {plant.fuelType || 'Diesel'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Col 2: Serial & Year */}
+                        <View style={{ flex: 1.3 }}>
+                          <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>
+                            {plant.serialNumber || plant.plate || 'Sin serial'}
                           </Text>
-                          <Text style={[styles.fleetPlantBrand, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
-                            {plant.brand} · {catLabel}
+                          <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                            Año: {plant.year || '-'}
                           </Text>
                         </View>
-                        <View style={[styles.onlineStatusBadge, { backgroundColor: 'rgba(34, 197, 94, 0.15)' }]}>
-                          <Text style={{ fontFamily: F.bold, color: '#22c55e', fontSize: 9 }}>DISPONIBLE</Text>
-                        </View>
-                      </View>
 
-                      <View style={styles.fleetPlantLocationRow}>
-                        <MaterialIcons name="place" size={14} color={accentCyan} />
-                        <Text style={[styles.fleetPlantLocationText, { color: textPrimary, fontFamily: F.semibold }]} numberOfLines={1}>
-                          {stateLabel} · {zoneLabel} (Venezuela)
-                        </Text>
-                      </View>
-
-                      <View style={styles.fleetPlantOperatorRow}>
-                        <MaterialIcons name="engineering" size={14} color={textSecondary} />
-                        <Text style={[styles.fleetPlantOperatorText, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
-                          Operador: <Text style={{ fontFamily: F.bold, color: plant.assignedOperatorName ? accentBlue : '#f59e0b' }}>{opName}</Text>
-                        </Text>
-                      </View>
-
-                      <View style={styles.fleetPlantCardFooter}>
-                        <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 11 }}>
-                          Horas: <Text style={{ fontFamily: F.extrabold, color: textPrimary }}>{(plant.currentHours || 0).toLocaleString()} hrs</Text>
-                        </Text>
-                        <View style={[styles.selectPlantIndicator, { backgroundColor: isSelected ? accentBlue : 'transparent' }]}>
-                          <Text style={{ fontFamily: F.bold, color: isSelected ? '#ffffff' : textSecondary, fontSize: 10 }}>
-                            {isSelected ? 'ACTIVA' : 'SUPERVISAR →'}
+                        {/* Col 3: Location / Sede */}
+                        <View style={{ flex: 1.5, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <MaterialIcons name="location-on" size={16} color={textOutline} />
+                          <Text style={{ fontFamily: F.medium, fontSize: 13, color: textOnSurface }} numberOfLines={1}>
+                            {plant.location || 'Sin sede registrada'}
                           </Text>
                         </View>
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-              </ScrollView>
+
+                        {/* Col 4: Assigned Operator */}
+                        <View style={{ flex: 1.6 }}>
+                          <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: plant.assignedOperatorName ? primaryNavy : academicGold }}>
+                            {plant.assignedOperatorName || 'Sin operador asignado'}
+                          </Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                            {plant.assignedOperatorId ? 'Vinculado en BD' : 'Disponible para asignar'}
+                          </Text>
+                        </View>
+
+                        {/* Col 5: Power & Hours */}
+                        <View style={{ flex: 1.2 }}>
+                          <Text style={{ fontFamily: F.extrabold, fontSize: 14, color: primaryNavy }}>
+                            {kva} kVA
+                          </Text>
+                          <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }}>
+                            {hrs.toLocaleString()} hrs uso
+                          </Text>
+                        </View>
+
+                        {/* Col 6: Status Badge */}
+                        <View style={{ flex: 1.1 }}>
+                          <View
+                            style={{
+                              alignSelf: 'flex-start',
+                              flexDirection: 'row',
+                              alignItems: 'center',
+                              gap: 6,
+                              backgroundColor: isSelected ? secondaryFixed : surfaceLow,
+                              paddingHorizontal: 10,
+                              paddingVertical: 4,
+                              borderRadius: 99,
+                            }}
+                          >
+                            <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: isSelected ? '#7d5700' : '#16a34a' }} />
+                            <Text style={{ fontFamily: F.bold, fontSize: 11, color: isSelected ? onSecondaryFixed : textOnSurface }}>
+                              {isSelected ? 'En Supervisión' : 'En Red'}
+                            </Text>
+                          </View>
+                        </View>
+
+                        {/* Col 7: Actions */}
+                        <View style={{ width: isMobile ? '100%' : 110, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                          <TouchableOpacity
+                            onPress={() => {
+                              selectMoto(plant.id);
+                              onOpenQuickHours();
+                            }}
+                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                          >
+                            <MaterialIcons name="more-time" size={18} color={primaryNavy} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              selectMoto(plant.id);
+                              onOpenSpecs();
+                            }}
+                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                          >
+                            <MaterialIcons name="analytics" size={18} color={primaryNavy} />
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            onPress={() => {
+                              selectMoto(plant.id);
+                              onOpenReport();
+                            }}
+                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                          >
+                            <MaterialIcons name="picture-as-pdf" size={18} color={primaryNavy} />
+                          </TouchableOpacity>
+                        </View>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </View>
+
+              {/* Table Footer */}
+              <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                  Mostrando {filteredFleetPlants.length} de {allPlants.length} plantas eléctricas registradas en la base de datos
+                </Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                  Capacidad Acumulada: {fleetTotalKva.toLocaleString()} kVA
+                </Text>
+              </View>
             </View>
           )}
 
-          {/* ========================================================= */}
-          {/* SECTION 3: DIRECTORIO GLOBAL DE USUARIOS, OPERADORES Y FLOTA */}
-          {/* ========================================================= */}
-          {hasSuperAccess && (
-            <View style={[
-              styles.superOperatorsContainer, 
-              { backgroundColor: cardBg, borderColor: cardBorder }
-            ]}>
-              <View style={styles.superOperatorsHeader}>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                    <Text style={[styles.superFleetTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                      Directorio Global de Usuarios, Personal Operador y Flota
-                    </Text>
-                    <View style={[styles.liveFleetPill, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
-                      <MaterialIcons name="badge" size={13} color={accentBlue} />
-                      <Text style={{ fontFamily: F.bold, color: accentBlue, fontSize: 10 }}>
-                        {filteredOperators.length} REGISTROS EN VISTA
-                      </Text>
-                    </View>
-                  </View>
-                  <Text style={[styles.superFleetSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                    Clasificación integral de usuarios y personal por Categoría, País, Zona, Estado y Departamento técnico.
+          {/* ===================================================================== */}
+          {/* 3.6 OPERATIONAL INTERACTIVE DATA TABLE 2: USUARIOS & OPERADORES EN BD */}
+          {/* ===================================================================== */}
+          {hasSuperAccess && (perspectiveTab === 'all' || perspectiveTab === 'users') && (
+            <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.tableCardHeader}>
+                <View style={{ flex: 1, minWidth: 240 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
+                    Directorio Real de Usuarios, Personal Operador y Roles ({filteredOperators.length})
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                    Clasificación por rol, ubicación registrada, departamento, plantas bajo supervisión y vehículo asignado en BD
                   </Text>
                 </View>
 
-                <TouchableOpacity
-                  onPress={() => {
-                    loadSystemUsers();
-                    setUserMgmtVisible(true);
-                  }}
-                  style={[styles.manageUsersQuickBtn, { backgroundColor: accentBlue }]}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="person-add" size={16} color="#ffffff" />
-                  <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                    Gestionar / Crear Usuario
-                  </Text>
-                </TouchableOpacity>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                  <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
+                    <MaterialIcons name="search" size={18} color={textOutline} />
+                    <TextInput
+                      value={operatorSearch}
+                      onChangeText={setOperatorSearch}
+                      placeholder="Buscar usuario, correo, carnet o estado..."
+                      placeholderTextColor={textOutline}
+                      style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 190, paddingVertical: 4 }}
+                    />
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => {
+                      loadSystemUsers();
+                      setUserMgmtVisible(true);
+                    }}
+                    style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
+                  >
+                    <MaterialIcons name="person-add" size={16} color="#ffc250" />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
+                      Gestionar / Crear Usuario
+                    </Text>
+                  </TouchableOpacity>
+                </View>
               </View>
 
-              {/* Filtros Multi-Nivel: Categoría, País, Zona, Estado y Departamento */}
-              <View style={styles.filterSectionBox}>
-                <View style={styles.filterGroupRow}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                    CATEGORÍA:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {USER_CATEGORIES.map((cat) => (
+              {/* Real Multi-Criteria Filters for Users */}
+              <View style={{ paddingHorizontal: 20, paddingBottom: 14, gap: 8 }}>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+                  {USER_CATEGORIES.map((cat) => {
+                    const active = selectedUserCategory === cat;
+                    return (
                       <TouchableOpacity
                         key={cat}
                         onPress={() => setSelectedUserCategory(cat)}
                         style={[
-                          styles.filterChip,
+                          styles.filterPillChip,
                           {
-                            backgroundColor: selectedUserCategory === cat ? '#22c55e' : pillDarkBg,
-                            borderColor: selectedUserCategory === cat ? '#22c55e' : cardBorder,
+                            backgroundColor: active ? primaryContainer : surfaceLow,
+                            borderColor: active ? primaryContainer : cardBorder,
                           },
                         ]}
                       >
-                        <Text
-                          style={{
-                            fontFamily: selectedUserCategory === cat ? F.bold : F.medium,
-                            color: selectedUserCategory === cat ? '#0c0e14' : textSecondary,
-                            fontSize: 11,
-                          }}
-                        >
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
                           {cat}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                    PAÍS:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {COUNTRIES.map((c) => (
-                      <TouchableOpacity
-                        key={c}
-                        onPress={() => setSelectedCountryFilter(c)}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: selectedCountryFilter === c ? accentCyan : pillDarkBg,
-                            borderColor: selectedCountryFilter === c ? accentCyan : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: selectedCountryFilter === c ? F.bold : F.medium,
-                            color: selectedCountryFilter === c ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary,
-                            fontSize: 11,
-                          }}
-                        >
-                          {c}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                    ZONA:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {PLANT_ZONES.map((z) => (
-                      <TouchableOpacity
-                        key={z}
-                        onPress={() => setSelectedZoneFilter(z)}
-                        style={[
-                          styles.filterChip,
-                          {
-                            backgroundColor: selectedZoneFilter === z ? accentBlue : pillDarkBg,
-                            borderColor: selectedZoneFilter === z ? accentBlue : cardBorder,
-                          },
-                        ]}
-                      >
-                        <Text
-                          style={{
-                            fontFamily: selectedZoneFilter === z ? F.bold : F.medium,
-                            color: selectedZoneFilter === z ? '#ffffff' : textSecondary,
-                            fontSize: 11,
-                          }}
-                        >
-                          {z}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                    ESTADO:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {VENEZUELA_STATES.map((st) => (
+                    );
+                  })}
+                  {dynamicUserStates.map((st) => {
+                    if (st === 'Todos') return null;
+                    const active = selectedStateFilter === st;
+                    return (
                       <TouchableOpacity
                         key={st}
-                        onPress={() => setSelectedStateFilter(st)}
+                        onPress={() => setSelectedStateFilter(active ? 'Todos' : st)}
                         style={[
-                          styles.filterChip,
+                          styles.filterPillChip,
                           {
-                            backgroundColor: selectedStateFilter === st ? accentBlue : pillDarkBg,
-                            borderColor: selectedStateFilter === st ? accentBlue : cardBorder,
+                            backgroundColor: active ? academicGold : surfaceLow,
+                            borderColor: active ? academicGold : cardBorder,
                           },
                         ]}
                       >
-                        <Text
-                          style={{
-                            fontFamily: selectedStateFilter === st ? F.bold : F.medium,
-                            color: selectedStateFilter === st ? '#ffffff' : textSecondary,
-                            fontSize: 11,
-                          }}
-                        >
-                          {st}
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                          📍 {st}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View style={[styles.filterGroupRow, { marginTop: 8 }]}>
-                  <Text style={[styles.filterGroupLabel, { color: textSecondary, fontFamily: F.bold }]}>
-                    DEPARTAMENTO:
-                  </Text>
-                  <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                    {DEPARTMENTS.map((dept) => (
+                    );
+                  })}
+                  {dynamicUserDepts.map((dp) => {
+                    if (dp === 'Todos') return null;
+                    const active = selectedDeptFilter === dp;
+                    return (
                       <TouchableOpacity
-                        key={dept}
-                        onPress={() => setSelectedDeptFilter(dept)}
+                        key={dp}
+                        onPress={() => setSelectedDeptFilter(active ? 'Todos' : dp)}
                         style={[
-                          styles.filterChip,
+                          styles.filterPillChip,
                           {
-                            backgroundColor: selectedDeptFilter === dept ? accentCyan : pillDarkBg,
-                            borderColor: selectedDeptFilter === dept ? accentCyan : cardBorder,
+                            backgroundColor: active ? innovationPurple : surfaceLow,
+                            borderColor: active ? innovationPurple : cardBorder,
                           },
                         ]}
                       >
-                        <Text
-                          style={{
-                            fontFamily: selectedDeptFilter === dept ? F.bold : F.medium,
-                            color: selectedDeptFilter === dept ? (isDark ? '#0c0e14' : '#ffffff') : textSecondary,
-                            fontSize: 11,
-                          }}
-                        >
-                          {dept}
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
+                          🏢 {dp}
                         </Text>
                       </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                </View>
-
-                <View style={[styles.operatorSearchInputRow, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
-                  <MaterialIcons name="search" size={18} color={textSecondary} />
-                  <TextInput
-                    value={operatorSearch}
-                    onChangeText={setOperatorSearch}
-                    placeholder="Buscar usuario u operador por nombre, carnet HL, correo, estado o país..."
-                    placeholderTextColor={textSecondary}
-                    style={{ flex: 1, fontFamily: F.medium, color: textPrimary, fontSize: 12 }}
-                  />
-                  {operatorSearch.length > 0 && (
-                    <TouchableOpacity onPress={() => setOperatorSearch('')}>
-                      <MaterialIcons name="clear" size={16} color={textSecondary} />
-                    </TouchableOpacity>
-                  )}
-                </View>
+                    );
+                  })}
+                </ScrollView>
               </View>
 
-              {/* Operators Grid */}
-              <View style={styles.operatorsCardsGrid}>
+              {/* Users Table Header (Desktop) */}
+              {!isMobile && (
+                <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
+                  <Text style={[styles.tableHeadCell, { flex: 2, color: textVariant, fontFamily: F.bold }]}>USUARIO & CORREO</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.2, color: textVariant, fontFamily: F.bold }]}>ROL EN BD</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.4, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN / DPTO</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>PLANTAS SUPERVISADAS</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>MÓVIL DE FLOTA</Text>
+                  <Text style={[styles.tableHeadCell, { width: 120, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                </View>
+              )}
+
+              {/* Users Rows (100% Real Data from Supabase) */}
+              <View>
                 {filteredOperators.length === 0 ? (
-                  <View style={[styles.emptyOperatorsState, { borderColor: cardBorder }]}>
-                    <MaterialIcons name="engineering" size={38} color={textSecondary} />
-                    <Text style={[styles.emptyOperatorsTitle, { color: textPrimary, fontFamily: F.bold }]}>
-                      No hay operadores registrados en este filtro
+                  <View style={{ padding: 32, alignItems: 'center' }}>
+                    <MaterialIcons name="groups" size={36} color={textOutline} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 14, color: textOnSurface, marginTop: 8 }}>
+                      No hay usuarios registrados en este filtro
                     </Text>
-                    <Text style={[styles.emptyOperatorsSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      {operatorSearch ? 'No se encontraron operadores que coincidan con la búsqueda.' : 'Puedes dar de alta técnicos de generadores y asignarles plantas desde la consola.'}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => {
-                        loadSystemUsers();
-                        setUserMgmtVisible(true);
-                      }}
-                      style={[styles.manageUsersQuickBtn, { backgroundColor: accentBlue, marginTop: 6 }]}
-                      activeOpacity={0.85}
-                    >
-                      <MaterialIcons name="person-add" size={16} color="#ffffff" />
-                      <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 12 }}>
-                        + Registrar Operador Técnico
-                      </Text>
-                    </TouchableOpacity>
                   </View>
                 ) : (
                   filteredOperators.map((op: any) => {
-                    const initials = (op.full_name || 'OP')
+                    const initials = (op.full_name || op.email || 'U')
                       .split(' ')
                       .map((n: string) => n[0])
                       .slice(0, 2)
@@ -1555,116 +1821,128 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                     const assignedPlants = allPlants.filter(
                       (p) =>
                         p.assignedOperatorId === op.id ||
-                        (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+                        (p.assignedOperatorName &&
+                          op.full_name &&
+                          p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
                     );
 
-                    const hasVehicle = !!op.drives_company_vehicle || !!op.assigned_vehicle_name;
-                    const vehicleName = op.assigned_vehicle_name || (hasVehicle ? 'Toyota Hilux Soporte HL-01' : 'Sin vehículo asignado');
-                    const vehiclePlate = op.assigned_vehicle_plate || 'A10BC2D';
+                    const roleLabel =
+                      op.resolvedRole === 'superadmin'
+                        ? 'Super Admin'
+                        : op.resolvedRole === 'operator'
+                        ? 'Operador Técnico'
+                        : 'Cliente / Titular';
+
+                    const roleBg =
+                      op.resolvedRole === 'superadmin'
+                        ? secondaryFixed
+                        : op.resolvedRole === 'operator'
+                        ? 'rgba(37, 99, 235, 0.14)'
+                        : 'rgba(22, 163, 74, 0.14)';
+
+                    const roleTextColor =
+                      op.resolvedRole === 'superadmin'
+                        ? onSecondaryFixed
+                        : op.resolvedRole === 'operator'
+                        ? '#2563eb'
+                        : '#16a34a';
 
                     return (
-                      <View key={op.id} style={[styles.operatorSuperCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}>
-                        <View style={styles.operatorSuperCardTop}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                            <View style={[styles.operatorSuperAvatar, { backgroundColor: accentBlue }]}>
-                              <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 14 }}>{initials}</Text>
-                            </View>
-                            <View>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                <Text style={[styles.operatorSuperName, { color: textPrimary, fontFamily: F.extrabold }]}>
-                                  {op.full_name || 'Operador Técnico'}
-                                </Text>
-                                <MaterialIcons name="verified" size={14} color="#22c55e" />
-                              </View>
-                              <Text style={{ fontFamily: F.semibold, color: accentCyan, fontSize: 11 }}>
-                                Carnet: {op.operator_code || 'HL-TECH-3018'} · {op.specialty || 'Especialista Técnico Senior'}
-                              </Text>
-                            </View>
+                      <View
+                        key={op.id}
+                        style={[
+                          styles.tableDataRow,
+                          {
+                            backgroundColor: cardLowest,
+                            borderBottomColor: cardBorder,
+                            flexDirection: isMobile ? 'column' : 'row',
+                            alignItems: isMobile ? 'flex-start' : 'center',
+                          },
+                        ]}
+                      >
+                        {/* Col 1: Name & Email */}
+                        <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <View style={[styles.tableUserAvatar, { backgroundColor: primaryContainer }]}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
                           </View>
-
-                          <View style={[styles.locationMiniTag, { backgroundColor: cardBg }]}>
-                            <MaterialIcons name="place" size={12} color={accentCyan} />
-                            <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 10 }}>
-                              {op.state || 'Carabobo'}, Venezuela
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }} numberOfLines={1}>
+                              {op.full_name || 'Sin nombre registrado'}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
+                              {op.email || 'Sin correo'} {op.operator_code ? `· ${op.operator_code}` : ''}
                             </Text>
                           </View>
                         </View>
 
-                        {/* Plantas Asignadas */}
-                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-                          <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5, marginBottom: 4 }}>
-                            PLANTAS BAJO SU CONTROL ({assignedPlants.length}):
+                        {/* Col 2: Role Badge */}
+                        <View style={{ flex: 1.2 }}>
+                          <View style={{ alignSelf: 'flex-start', backgroundColor: roleBg, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 11, color: roleTextColor }}>{roleLabel}</Text>
+                          </View>
+                        </View>
+
+                        {/* Col 3: Location & Department (100% real from DB) */}
+                        <View style={{ flex: 1.4 }}>
+                          <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                            {op.state || op.city || 'Sin estado en BD'}
                           </Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
+                            {op.department || op.specialty || 'Sin departamento'}
+                          </Text>
+                        </View>
+
+                        {/* Col 4: Assigned Plants */}
+                        <View style={{ flex: 1.6 }}>
                           {assignedPlants.length === 0 ? (
-                            <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11, fontStyle: 'italic' }}>
-                              Sin plantas asignadas actualmente
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textOutline }}>
+                              0 plantas asignadas
                             </Text>
                           ) : (
                             assignedPlants.map((ap) => (
-                              <TouchableOpacity
-                                key={ap.id}
-                                onPress={() => selectMoto(ap.id)}
-                                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, paddingVertical: 2 }}
-                              >
-                                <MaterialIcons name="bolt" size={14} color="#f59e0b" />
-                                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
-                                  {ap.brand} {ap.model} ({ap.location || 'Sede Principal'})
+                              <TouchableOpacity key={ap.id} onPress={() => selectMoto(ap.id)}>
+                                <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                                  ⚡ {ap.brand} {ap.model} ({ap.powerKva || 0} kVA)
                                 </Text>
-                                <MaterialIcons name="arrow-forward" size={12} color={accentCyan} />
                               </TouchableOpacity>
                             ))
                           )}
                         </View>
 
-                        {/* Vehículo Asignado */}
-                        <View style={[styles.opResourcesBox, { backgroundColor: cardBg, borderColor: cardBorder, marginTop: 8 }]}>
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                            <Text style={{ fontFamily: F.bold, color: textSecondary, fontSize: 10.5 }}>
-                              VEHÍCULO DE EMPRESA ASIGNADO:
+                        {/* Col 5: Assigned Company Vehicle (100% real from DB) */}
+                        <View style={{ flex: 1.5 }}>
+                          <Text style={{ fontFamily: F.semibold, fontSize: 12, color: op.assigned_vehicle_name ? textOnSurface : textOutline }}>
+                            {op.assigned_vehicle_name || 'Sin vehículo asignado'}
+                          </Text>
+                          {op.assigned_vehicle_plate && (
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
+                              Placa: {op.assigned_vehicle_plate}
                             </Text>
-                            <Text style={{ fontFamily: F.bold, color: hasVehicle ? '#22c55e' : textSecondary, fontSize: 10 }}>
-                              {hasVehicle ? 'ACTIVO' : 'NO ASIGNADO'}
-                            </Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                            <MaterialIcons name={hasVehicle ? "directions-car" : "car-crash"} size={14} color={hasVehicle ? accentBlue : textSecondary} />
-                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11.5 }}>
-                              {vehicleName}
-                            </Text>
-                            {hasVehicle && (
-                              <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
-                                (Placa: {vehiclePlate})
-                              </Text>
-                            )}
-                          </View>
+                          )}
                         </View>
 
-                        {/* Acciones */}
-                        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-                          <TouchableOpacity
-                            onPress={() => {
-                              const rawDigits = (op.phone || '584143059921').replace(/\D/g, '');
-                              const phone = rawDigits.startsWith('58') ? rawDigits : ('58' + rawDigits.replace(/^0/, ''));
-                              const url = 'https://wa.me/' + phone + '?text=' + encodeURIComponent('Hola ' + op.full_name + ', te contacto desde la consola de Hermanos Lynch.');
-                              Linking.openURL(url).catch(() => {});
-                            }}
-                            style={[styles.opDirectActionBtn, { backgroundColor: '#25D366' }]}
-                            activeOpacity={0.85}
-                          >
-                            <MaterialCommunityIcons name="whatsapp" size={14} color="#ffffff" />
-                            <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 11 }}>WhatsApp</Text>
-                          </TouchableOpacity>
-
+                        {/* Col 6: Actions */}
+                        <View style={{ width: isMobile ? '100%' : 120, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                          {op.phone ? (
+                            <TouchableOpacity
+                              onPress={() => {
+                                const rawDigits = String(op.phone).replace(/\D/g, '');
+                                const phone = rawDigits.startsWith('58') ? rawDigits : '58' + rawDigits.replace(/^0/, '');
+                                Linking.openURL('https://wa.me/' + phone).catch(() => {});
+                              }}
+                              style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)' }]}
+                            >
+                              <MaterialCommunityIcons name="whatsapp" size={18} color="#16a34a" />
+                            </TouchableOpacity>
+                          ) : null}
                           <TouchableOpacity
                             onPress={() => {
                               loadSystemUsers();
                               setUserMgmtVisible(true);
                             }}
-                            style={[styles.opDirectActionBtn, { backgroundColor: cardBg, borderColor: cardBorder, borderWidth: 1 }]}
-                            activeOpacity={0.8}
+                            style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
                           >
-                            <MaterialIcons name="settings" size={14} color={textPrimary} />
-                            <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 11 }}>Control</Text>
+                            <MaterialIcons name="manage-accounts" size={18} color={primaryNavy} />
                           </TouchableOpacity>
                         </View>
                       </View>
@@ -1672,777 +1950,347 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   })
                 )}
               </View>
+
+              <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
+                <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                  Mostrando {filteredOperators.length} de {allCombinedUsers.length} perfiles registrados en Supabase
+                </Text>
+                <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
+                  {(operatorsList || []).length} Operadores · {(superAdminsList || []).length} Super Admins · {(clientsList || []).length} Clientes
+                </Text>
+              </View>
             </View>
           )}
 
-          {/* ========================================================= */}
-          {/* SECTION 4: SUBSISTEMAS INDUSTRIALES & TELEMETRÍA (ISO 8528) */}
-          {/* ========================================================= */}
-          <View style={[
-            styles.modernSubsystemsTableCard, 
-            { backgroundColor: cardBg, borderColor: cardBorder }
-          ]}>
-            {/* Table Header Row: Title & Dropdown Filter */}
-            <View style={styles.tableTopHeaderRow}>
+          {/* ===================================================================== */}
+          {/* 3.7 OPERATIONAL INTERACTIVE DATA TABLE 3: SUBSISTEMAS ISO 8528        */}
+          {/* ===================================================================== */}
+          {(perspectiveTab === 'all' || perspectiveTab === 'subsystems') && (
+            <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+              <View style={styles.tableCardHeader}>
+                <View>
+                  <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
+                    Subsistemas Industriales & Telemetría — {myMoto ? `${myMoto.brand} ${myMoto.model}` : 'Planta'}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
+                    Control de desgaste remanente sobre {currentHours.toLocaleString()} hrs registradas en horómetro
+                  </Text>
+                </View>
+
+                <TouchableOpacity
+                  onPress={() => {
+                    const options: Array<'TODOS' | 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO'> = ['TODOS', 'ÓPTIMO', 'PREVENTIVO', 'CRÍTICO'];
+                    const nextIdx = (options.indexOf(subsystemFilter) + 1) % options.length;
+                    setSubsystemFilter(options[nextIdx]);
+                  }}
+                  style={[styles.toolbarSelectBtn, { backgroundColor: surfaceLow, borderColor: cardBorder }]}
+                >
+                  <MaterialIcons name="tune" size={17} color={primaryNavy} />
+                  <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }}>
+                    Estado: {subsystemFilter}
+                  </Text>
+                  <MaterialIcons name="expand-more" size={18} color={textVariant} />
+                </TouchableOpacity>
+              </View>
+
+              {!isMobile && (
+                <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
+                  <Text style={[styles.tableHeadCell, { flex: 2.3, color: textVariant, fontFamily: F.bold }]}>SUBSISTEMA INDUSTRIAL</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.2, color: textVariant, fontFamily: F.bold }]}>USO EN CICLO</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>VIDA ÚTIL REMANENTE</Text>
+                  <Text style={[styles.tableHeadCell, { flex: 1, color: textVariant, fontFamily: F.bold }]}>ESTADO ISO 8528</Text>
+                  <Text style={[styles.tableHeadCell, { width: 90, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIÓN</Text>
+                </View>
+              )}
+
               <View>
-                <Text style={[styles.tableSectionTitle, { color: textPrimary, fontFamily: F.extrabold, fontSize: isMobile ? 16 : 18 }]}>
-                  Subsistemas Industriales & Telemetría
-                </Text>
-                <Text style={[styles.tableSectionSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                  Monitoreo de desgaste remanente y ciclos de mantenimiento ISO 8528
-                </Text>
-              </View>
+                {filteredSubsystems.map((sub) => {
+                  const meta = SUBSYSTEM_META[sub.id] || { icon: 'cog', bg: surfaceLow, color: primaryNavy, desc: 'Componente Industrial' };
+                  const isGood = sub.wear >= 60;
+                  const isWarn = sub.wear >= 30 && sub.wear < 60;
+                  const statusColor = isGood ? '#16a34a' : isWarn ? '#d97706' : '#dc2626';
 
-              {/* Status Filter Dropdown Pill */}
-              <TouchableOpacity
-                onPress={() => {
-                  const options: Array<'TODOS' | 'ÓPTIMO' | 'PREVENTIVO' | 'CRÍTICO'> = ['TODOS', 'ÓPTIMO', 'PREVENTIVO', 'CRÍTICO'];
-                  const nextIdx = (options.indexOf(subsystemFilter) + 1) % options.length;
-                  setSubsystemFilter(options[nextIdx]);
-                }}
-                style={[styles.tableFilterDropdownPill, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
-                activeOpacity={0.8}
-              >
-                <Text style={{ fontFamily: F.bold, color: textPrimary, fontSize: 12 }}>
-                  Estado: {subsystemFilter}
-                </Text>
-                <MaterialIcons name="keyboard-arrow-down" size={17} color={textSecondary} />
-              </TouchableOpacity>
-            </View>
-
-            {/* Table Column Headers (Desktop/Tablet) */}
-            {!isMobile && (
-              <View style={[styles.tableColumnsBar, { borderBottomColor: cardBorder }]}>
-                <Text style={[styles.colHeadText, { flex: 2.2, color: textSecondary, fontFamily: F.semibold }]}>Componente Industrial</Text>
-                <Text style={[styles.colHeadText, { flex: 1.2, color: textSecondary, fontFamily: F.semibold }]}>Lectura de Uso</Text>
-                <Text style={[styles.colHeadText, { flex: 1.2, color: textSecondary, fontFamily: F.semibold }]}>Horas Restantes</Text>
-                <Text style={[styles.colHeadText, { flex: 1, color: textSecondary, fontFamily: F.semibold }]}>Tendencia</Text>
-                <Text style={[styles.colHeadText, { width: 44, textAlign: 'center', color: textSecondary, fontFamily: F.semibold }]}>Acción</Text>
-              </View>
-            )}
-
-            {/* Table Data Rows */}
-            <View style={styles.tableRowsList}>
-              {filteredSubsystems.map((sub) => {
-                const meta = SUBSYSTEM_META[sub.id] || { icon: 'cog', bg: 'rgba(0, 227, 253, 0.15)', color: accentCyan, desc: 'Componente Industrial' };
-                const isGood = sub.wear >= 60;
-                const isWarn = sub.wear >= 30 && sub.wear < 60;
-                const statusColor = isGood ? '#22c55e' : isWarn ? '#f59e0b' : '#ef4444';
-
-                if (isMobile) {
                   return (
-                    <TouchableOpacity
+                    <View
                       key={sub.id}
-                      onPress={() => onOpenServicesTab(sub.id)}
-                      style={[styles.mobileSubsystemRowCard, { backgroundColor: pillDarkBg, borderColor: cardBorder }]}
-                      activeOpacity={0.8}
+                      style={[
+                        styles.tableDataRow,
+                        {
+                          backgroundColor: cardLowest,
+                          borderBottomColor: cardBorder,
+                          flexDirection: isMobile ? 'column' : 'row',
+                          alignItems: isMobile ? 'flex-start' : 'center',
+                        },
+                      ]}
                     >
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                        <View style={[styles.subsystemSquircleThumb, { backgroundColor: meta.bg }]}>
-                          <MaterialCommunityIcons name={meta.icon} size={20} color={meta.color} />
+                      <View style={{ flex: 2.3, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                        <View style={[styles.tablePlantThumb, { backgroundColor: meta.bg }]}>
+                          <MaterialCommunityIcons name={meta.icon} size={22} color={meta.color} />
                         </View>
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.subsystemRowName, { color: textPrimary, fontFamily: F.bold }]}>
-                            {sub.name}
-                          </Text>
-                          <Text style={[styles.subsystemRowDesc, { color: textSecondary, fontFamily: F.medium }]}>
-                            {meta.desc}
-                          </Text>
+                          <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }}>{sub.name}</Text>
+                          <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>{meta.desc}</Text>
                         </View>
-                        <Text style={{ fontFamily: F.extrabold, color: statusColor, fontSize: 13 }}>
-                          {sub.wear}%
-                        </Text>
                       </View>
 
-                      <View style={[styles.mobileRowKpiStrip, { borderTopColor: cardBorder }]}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <View style={[styles.miniStatusDot, { backgroundColor: '#38bdf8' }]} />
-                          <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11 }}>
-                            Uso: {sub.hoursSince} hrs
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                          <View style={[styles.miniStatusDot, { backgroundColor: statusColor }]} />
-                          <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 11 }}>
-                            Restan: {sub.hoursRemaining} hrs
-                          </Text>
-                        </View>
-                        <SplineMiniSparkline color={statusColor} />
+                      <View style={{ flex: 1.2 }}>
+                        <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>{sub.hoursSince} hrs</Text>
+                        <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>Intervalo: {sub.interval}h</Text>
                       </View>
-                    </TouchableOpacity>
+
+                      <View style={{ flex: 1.6, paddingRight: 16 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>{sub.hoursRemaining} hrs restantes</Text>
+                          <Text style={{ fontFamily: F.bold, fontSize: 12, color: statusColor }}>{sub.wear}%</Text>
+                        </View>
+                        <View style={[styles.kpiProgressBarTrack, { backgroundColor: surfaceLow, height: 7, marginTop: 0 }]}>
+                          <View style={{ height: 7, borderRadius: 99, backgroundColor: statusColor, width: `${sub.wear}%` }} />
+                        </View>
+                      </View>
+
+                      <View style={{ flex: 1 }}>
+                        <View style={{ alignSelf: 'flex-start', backgroundColor: `${statusColor}20`, paddingHorizontal: 10, paddingVertical: 4, borderRadius: 99 }}>
+                          <Text style={{ fontFamily: F.bold, fontSize: 11, color: statusColor }}>{sub.status}</Text>
+                        </View>
+                      </View>
+
+                      <View style={{ width: isMobile ? '100%' : 90, alignItems: 'flex-end' }}>
+                        <TouchableOpacity
+                          onPress={() => onOpenServicesTab(sub.id)}
+                          style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                        >
+                          <MaterialIcons name="build" size={17} color={primaryNavy} />
+                        </TouchableOpacity>
+                      </View>
+                    </View>
                   );
-                }
-
-                return (
-                  <View
-                    key={sub.id}
-                    style={[styles.desktopTableRow, { borderBottomColor: cardBorder }]}
-                  >
-                    {/* Col 1: Squircle Icon + Name + Subtitle */}
-                    <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                      <View style={[styles.subsystemSquircleThumb, { backgroundColor: meta.bg }]}>
-                        <MaterialCommunityIcons name={meta.icon} size={22} color={meta.color} />
-                      </View>
-                      <View style={{ flex: 1, paddingRight: 8 }}>
-                        <Text style={[styles.subsystemRowName, { color: textPrimary, fontFamily: F.bold }]}>
-                          {sub.name}
-                        </Text>
-                        <Text style={[styles.subsystemRowDesc, { color: textSecondary, fontFamily: F.medium }]} numberOfLines={1}>
-                          {meta.desc}
-                        </Text>
-                      </View>
-                    </View>
-
-                    {/* Col 2: Dot + Hours Elapsed */}
-                    <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={[styles.miniStatusDot, { backgroundColor: '#38bdf8' }]} />
-                      <Text style={{ fontFamily: F.semibold, color: textPrimary, fontSize: 12 }}>
-                        {sub.hoursSince} hrs uso
-                      </Text>
-                    </View>
-
-                    {/* Col 3: Dot + Hours Remaining & % */}
-                    <View style={{ flex: 1.2, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <View style={[styles.miniStatusDot, { backgroundColor: statusColor }]} />
-                      <Text style={{ fontFamily: F.semibold, color: statusColor, fontSize: 12 }}>
-                        {sub.hoursRemaining} hrs ({sub.wear}%)
-                      </Text>
-                    </View>
-
-                    {/* Col 4: Mini Sparkline Wave */}
-                    <View style={{ flex: 1, alignItems: 'flex-start' }}>
-                      <SplineMiniSparkline color={statusColor} />
-                    </View>
-
-                    {/* Col 5: Menu options ( ··· ) */}
-                    <TouchableOpacity
-                      onPress={() => onOpenServicesTab(sub.id)}
-                      style={styles.tableRowMenuBtn}
-                      activeOpacity={0.7}
-                    >
-                      <MaterialIcons name="more-horiz" size={20} color={textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-                );
-              })}
-            </View>
-
-            {/* Table Footer: ISO 8528 certification & summary note */}
-            <View style={[styles.tableFooterNote, { borderTopColor: cardBorder }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <MaterialIcons name="verified" size={14} color="#22c55e" />
-                <Text style={{ fontFamily: F.semibold, color: textSecondary, fontSize: 11 }}>
-                  Norma ISO 8528 · Monitoreo continuo de vida útil y ciclos de servicio OEM
-                </Text>
+                })}
               </View>
-              <Text style={{ fontFamily: F.medium, color: textSecondary, fontSize: 11 }}>
-                Mostrando {filteredSubsystems.length} de {plantSubsystems.length} componentes certificados
-              </Text>
             </View>
-          </View>
-
+          )}
         </ScrollView>
 
-        {/* PERSISTENT SUB-TABS (SPECS, SERVICES, HISTORY, WALLET, PROFILE) */}
-        <View style={[{ flex: 1 }, activeTab === 'moto' && { display: 'none' }]}>
+        {/* PERSISTENT SUB-TABS CONTAINER (Specs, Services, History, Wallet, Profile) */}
+        <View style={[{ flex: 1, width: '100%' }, activeTab === 'moto' && { display: 'none' }]}>
           {children}
         </View>
       </View>
 
-      {/* MOBILE FLOATING BOTTOM NAVIGATION DOCK */}
+      {/* MOBILE DRAWER MENU */}
       {isMobile && (
-        <View style={[styles.mobileBottomNav, { backgroundColor: cardBg, borderColor: cardBorder }]}>
-          <TouchableOpacity
-            onPress={() => onSelectTab('moto')}
-            style={[styles.mobileNavItem, activeTab === 'moto' && styles.mobileNavItemActive]}
-            activeOpacity={0.75}
-          >
-            <MaterialIcons
-              name="speed"
-              size={20}
-              color={activeTab === 'moto' ? accentCyan : textSecondary}
-            />
-            <Text style={[styles.mobileNavLabel, { color: activeTab === 'moto' ? accentCyan : textSecondary, fontFamily: activeTab === 'moto' ? F.bold : F.medium }]}>
-              Planta
-            </Text>
-          </TouchableOpacity>
+        <Modal
+          visible={mobileMenuOpen}
+          transparent={true}
+          animationType="fade"
+          onRequestClose={() => setMobileMenuOpen(false)}
+        >
+          <View style={styles.mobileDrawerOverlay}>
+            <TouchableOpacity style={{ flex: 1 }} onPress={() => setMobileMenuOpen(false)} />
+            <View style={[styles.mobileDrawerSheet, { backgroundColor: cardLowest, borderLeftColor: cardBorder }]}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontFamily: F.extrabold, fontSize: 16, color: primaryNavy }}>Menú Ejecutivo</Text>
+                <TouchableOpacity onPress={() => setMobileMenuOpen(false)}>
+                  <MaterialIcons name="close" size={22} color={textOnSurface} />
+                </TouchableOpacity>
+              </View>
 
-          <TouchableOpacity
-            onPress={() => onSelectTab('services')}
-            style={[styles.mobileNavItem, activeTab === 'services' && styles.mobileNavItemActive]}
-            activeOpacity={0.75}
-          >
-            <MaterialIcons
-              name="build"
-              size={20}
-              color={activeTab === 'services' ? accentCyan : textSecondary}
-            />
-            <Text style={[styles.mobileNavLabel, { color: activeTab === 'services' ? accentCyan : textSecondary, fontFamily: activeTab === 'services' ? F.bold : F.medium }]}>
-              Servicios
-            </Text>
-          </TouchableOpacity>
+              <ScrollView contentContainerStyle={{ gap: 8 }}>
+                {[
+                  { label: 'Dashboard Principal', icon: 'dashboard', action: () => onSelectTab('moto') },
+                  { label: 'Mantenimiento & Servicios', icon: 'build', action: () => onSelectTab('services') },
+                  { label: 'Bitácora & Finanzas', icon: 'payments', action: () => onSelectTab('history') },
+                  { label: 'Ficha Técnica OEM', icon: 'qr-code-scanner', action: () => onSelectTab('specs') },
+                  { label: 'Usuarios y Operadores', icon: 'groups', action: () => setUserMgmtVisible(true) },
+                  { label: 'Exportar Reporte PDF', icon: 'picture-as-pdf', action: onOpenReport },
+                  { label: 'Configuración & Perfil', icon: 'person', action: () => onSelectTab('profile') },
+                ].map((item, i) => (
+                  <TouchableOpacity
+                    key={i}
+                    onPress={() => {
+                      setMobileMenuOpen(false);
+                      item.action();
+                    }}
+                    style={[styles.sidebarNavItem, { backgroundColor: surfaceLow }]}
+                  >
+                    <MaterialIcons name={item.icon as any} size={20} color={primaryNavy} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: textOnSurface }}>{item.label}</Text>
+                  </TouchableOpacity>
+                ))}
 
-          <TouchableOpacity
-            onPress={() => onSelectTab('specs')}
-            style={[styles.mobileNavItem, activeTab === 'specs' && styles.mobileNavItemActive]}
-            activeOpacity={0.75}
-          >
-            <MaterialIcons
-              name="assignment"
-              size={20}
-              color={activeTab === 'specs' ? accentCyan : textSecondary}
-            />
-            <Text style={[styles.mobileNavLabel, { color: activeTab === 'specs' ? accentCyan : textSecondary, fontFamily: activeTab === 'specs' ? F.bold : F.medium }]}>
-              Ficha
-            </Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => onSelectTab('history')}
-            style={[styles.mobileNavItem, activeTab === 'history' && styles.mobileNavItemActive]}
-            activeOpacity={0.75}
-          >
-            <MaterialIcons
-              name="receipt-long"
-              size={20}
-              color={activeTab === 'history' ? accentCyan : textSecondary}
-            />
-            <Text style={[styles.mobileNavLabel, { color: activeTab === 'history' ? accentCyan : textSecondary, fontFamily: activeTab === 'history' ? F.bold : F.medium }]}>
-              Historial
-            </Text>
-          </TouchableOpacity>
-
-          {drivesCompanyVehicle && (
-            <TouchableOpacity
-              onPress={() => onSelectTab('wallet')}
-              style={[styles.mobileNavItem, activeTab === 'wallet' && styles.mobileNavItemActive]}
-              activeOpacity={0.75}
-            >
-              <MaterialIcons
-                name="account-balance-wallet"
-                size={20}
-                color={activeTab === 'wallet' ? accentCyan : textSecondary}
-              />
-              <Text style={[styles.mobileNavLabel, { color: activeTab === 'wallet' ? accentCyan : textSecondary, fontFamily: activeTab === 'wallet' ? F.bold : F.medium }]}>
-                Flota
-              </Text>
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity
-            onPress={() => onSelectTab('profile')}
-            style={[styles.mobileNavItem, activeTab === 'profile' && styles.mobileNavItemActive]}
-            activeOpacity={0.75}
-          >
-            <MaterialIcons
-              name="person"
-              size={20}
-              color={activeTab === 'profile' ? accentCyan : textSecondary}
-            />
-            <Text style={[styles.mobileNavLabel, { color: activeTab === 'profile' ? accentCyan : textSecondary, fontFamily: activeTab === 'profile' ? F.bold : F.medium }]}>
-              Perfil
-            </Text>
-          </TouchableOpacity>
-        </View>
+                <TouchableOpacity
+                  onPress={() => {
+                    setMobileMenuOpen(false);
+                    logout();
+                  }}
+                  style={[styles.sidebarNavItem, { backgroundColor: 'rgba(239, 68, 68, 0.14)', marginTop: 12 }]}
+                >
+                  <MaterialIcons name="logout" size={20} color="#ef4444" />
+                  <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: '#ef4444' }}>Cerrar Sesión</Text>
+                </TouchableOpacity>
+              </ScrollView>
+            </View>
+          </View>
+        </Modal>
       )}
 
-      {/* USER MANAGEMENT MODAL */}
-      <UserManagementModal
-        visible={userMgmtVisible}
-        onClose={() => setUserMgmtVisible(false)}
-      />
-
-      {/* OPERATOR AGENDA MODAL */}
+      {/* MODALS */}
+      <UserManagementModal visible={userMgmtVisible} onClose={() => setUserMgmtVisible(false)} />
       <OperatorAgendaModal
         visible={agendaVisible}
         onClose={() => setAgendaVisible(false)}
       />
-
-      {/* APPLE STYLE MOBILE MENU DRAWER */}
-      <Modal
-        visible={mobileMenuOpen}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setMobileMenuOpen(false)}
-      >
-        <View style={styles.mobileMenuOverlay}>
-          <TouchableOpacity
-            style={styles.mobileMenuBackdrop}
-            activeOpacity={1}
-            onPress={() => setMobileMenuOpen(false)}
-          />
-
-          <View style={[styles.mobileMenuDrawer, { backgroundColor: isDark ? '#121316' : '#f2f2f7', borderColor: cardBorder }]}>
-            <View style={[styles.appleGrabberBar, { backgroundColor: isDark ? 'rgba(255,255,255,0.22)' : 'rgba(0,0,0,0.18)' }]} />
-
-            <View style={[styles.appleProfileCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.06)' }]}>
-              <View style={[styles.avatarCircle, { backgroundColor: isSuperAdmin ? '#007AFF' : '#34C759', width: 44, height: 44, borderRadius: 22 }]}>
-                <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 15 }}>{userInitials}</Text>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: textPrimary, letterSpacing: -0.2 }} numberOfLines={1}>
-                  {userName || (isSuperAdmin ? 'Kalioverload' : 'Operador')}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 3 }}>
-                  <View style={[
-                    styles.appleRoleBadge,
-                    {
-                      backgroundColor: isSuperAdmin ? 'rgba(0, 122, 255, 0.12)' : 'rgba(52, 199, 89, 0.12)',
-                      borderColor: isSuperAdmin ? 'rgba(0, 122, 255, 0.3)' : 'rgba(52, 199, 89, 0.3)',
-                    }
-                  ]}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 9.5, color: isSuperAdmin ? '#007AFF' : '#34C759' }}>
-                      {isSuperAdmin ? 'SUPER ADMIN' : (userRoleTitle || 'OPERADOR')}
-                    </Text>
-                  </View>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11, color: textSecondary }}>
-                    {headerDate}
-                  </Text>
-                </View>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => setMobileMenuOpen(false)}
-                style={[styles.appleCloseBtn, { backgroundColor: isDark ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.06)' }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="close" size={17} color={isDark ? 'rgba(255,255,255,0.7)' : 'rgba(0,0,0,0.6)'} />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
-              <Text style={styles.appleSectionHeader}>OPERACIONES RÁPIDAS</Text>
-              <View style={[styles.appleGroupCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    loadSystemUsers();
-                    setUserMgmtVisible(true);
-                  }}
-                  style={styles.appleGroupRow}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#007AFF' }]}>
-                    <MaterialIcons name="group" size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: textPrimary, fontFamily: F.semibold }]}>
-                      Control de Usuarios
-                    </Text>
-                    <Text style={[styles.appleRowSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      {(systemMetrics?.pending_approvals || 0) > 0 ? (systemMetrics.pending_approvals + ' pendientes') : 'Aprobaciones y roles'}
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-
-                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    setAgendaVisible(true);
-                  }}
-                  style={styles.appleGroupRow}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#5856D6' }]}>
-                    <MaterialCommunityIcons name="calendar-clock" size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: textPrimary, fontFamily: F.semibold }]}>
-                      Agenda y Casos Técnicos
-                    </Text>
-                    <Text style={[styles.appleRowSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      Revisiones de clientes en campo
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-
-                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    onOpenQuickHours();
-                  }}
-                  style={styles.appleGroupRow}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#34C759' }]}>
-                    <MaterialIcons name="add" size={18} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: textPrimary, fontFamily: F.semibold }]}>
-                      Actualizar Horómetro
-                    </Text>
-                    <Text style={[styles.appleRowSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      Lectura en sitio de horas motor
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-
-                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    onOpenQuickFuel();
-                  }}
-                  style={styles.appleGroupRow}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#FF9500' }]}>
-                    <MaterialIcons name="local-gas-station" size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: textPrimary, fontFamily: F.semibold }]}>
-                      Registrar Carga de Diésel
-                    </Text>
-                    <Text style={[styles.appleRowSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      Litros despachados y consumo
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.appleSectionHeader}>NAVEGACIÓN</Text>
-              <View style={[styles.appleGroupCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    onSelectTab('moto');
-                  }}
-                  style={[styles.appleGroupRow, activeTab === 'moto' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#007AFF' }]}>
-                    <MaterialIcons name="speed" size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: activeTab === 'moto' ? '#007AFF' : textPrimary, fontFamily: F.bold }]}>
-                      Planta Eléctrica / Inicio
-                    </Text>
-                  </View>
-                  {activeTab === 'moto' ? (
-                    <MaterialIcons name="check" size={18} color="#007AFF" />
-                  ) : (
-                    <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                  )}
-                </TouchableOpacity>
-
-                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    onSelectTab('services');
-                  }}
-                  style={[styles.appleGroupRow, activeTab === 'services' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#FF9500' }]}>
-                    <MaterialIcons name="build" size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: activeTab === 'services' ? '#007AFF' : textPrimary, fontFamily: F.bold }]}>
-                      Servicios & Mantenimiento
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-
-                <View style={[styles.appleHairlineDivider, { backgroundColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.07)' }]} />
-
-                <TouchableOpacity
-                  onPress={() => {
-                    setMobileMenuOpen(false);
-                    onSelectTab('specs');
-                  }}
-                  style={[styles.appleGroupRow, activeTab === 'specs' && { backgroundColor: isDark ? 'rgba(0, 122, 255, 0.12)' : 'rgba(0, 122, 255, 0.08)' }]}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#AF52DE' }]}>
-                    <MaterialIcons name="assignment" size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: activeTab === 'specs' ? '#007AFF' : textPrimary, fontFamily: F.bold }]}>
-                      Ficha Técnica Industrial
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.appleSectionHeader}>PREFERENCIAS</Text>
-              <View style={[styles.appleGroupCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}>
-                <TouchableOpacity
-                  onPress={toggleTheme}
-                  style={styles.appleGroupRow}
-                  activeOpacity={0.7}
-                >
-                  <View style={[styles.appleSquircleIcon, { backgroundColor: '#FFCC00' }]}>
-                    <MaterialIcons name={isDark ? 'light-mode' : 'dark-mode'} size={17} color="#ffffff" />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.appleRowTitle, { color: textPrimary, fontFamily: F.semibold }]}>
-                      {isDark ? 'Modo Claro' : 'Modo Oscuro'}
-                    </Text>
-                    <Text style={[styles.appleRowSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                      {isDark ? 'Activar paleta diurna' : 'Activar paleta nocturna OLED'}
-                    </Text>
-                  </View>
-                  <MaterialIcons name="chevron-right" size={19} color={isDark ? 'rgba(255,255,255,0.25)' : 'rgba(0,0,0,0.25)'} />
-                </TouchableOpacity>
-              </View>
-
-              <TouchableOpacity
-                onPress={() => {
-                  setMobileMenuOpen(false);
-                  logout();
-                }}
-                style={[styles.appleSignOutCard, { backgroundColor: isDark ? '#1c1e24' : '#ffffff', borderColor: isDark ? 'rgba(255,255,255,0.07)' : 'rgba(0,0,0,0.05)' }]}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="logout" size={17} color="#FF3B30" />
-                <Text style={[styles.appleSignOutText, { fontFamily: F.bold }]}>
-                  Cerrar Sesión Segura
-                </Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  rootContainer: {
+  rootLayout: {
     flex: 1,
     flexDirection: 'row',
-    height: '100%',
     width: '100%',
+    height: '100%',
   },
-  sidebarRail: {
-    width: 76,
+  sidebarAside: {
+    width: 268,
+    height: '100%',
     borderRightWidth: 1,
-    paddingVertical: 20,
-    alignItems: 'center',
+    paddingVertical: 22,
     justifyContent: 'space-between',
-    zIndex: 20,
   },
-  brandMarkBadge: {
-    width: 44,
-    height: 44,
-    borderRadius: 14,
-    justifyContent: 'center',
+  sidebarBrandRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 20,
-  },
-  brandMarkImg: {
-    width: 26,
-    height: 26,
-  },
-  railNavGroup: {
     gap: 12,
-    alignItems: 'center',
+    paddingHorizontal: 8,
   },
-  railIconBtn: {
-    width: 46,
-    height: 46,
-    borderRadius: 15,
+  sidebarBrandIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  railIconActivePill: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 8,
-    elevation: 3,
+  sidebarPlantSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    padding: 10,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  railBadgeDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
+  sidebarSelectorIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sidebarNavItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 12,
+  },
+  sidebarNavBadge: {
     backgroundColor: '#ef4444',
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: '#090a0f',
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 99,
   },
-  railBadgeText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontFamily: 'Montserrat_800ExtraBold',
-  },
-  railBottomGroup: {
-    gap: 12,
-    alignItems: 'center',
+  sidebarSupportCard: {
+    padding: 14,
+    borderRadius: 12,
+    gap: 6,
   },
   mainContentArea: {
     flex: 1,
     height: '100%',
   },
-
-  // Channel Analytics Top Header Bar
-  topHeaderBar: {
-    paddingHorizontal: 28,
-    paddingVertical: 18,
+  topHeaderBarDesktop: {
+    height: 64,
+    borderBottomWidth: 1,
+    paddingHorizontal: 24,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 14,
-    flexWrap: 'wrap',
   },
-  channelAnalyticsTitle: {
-    fontSize: 26,
-    letterSpacing: -0.6,
+  headerSearchBox: {
+    width: 320,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
   },
-  liveNetBadge: {
+  headerMetaPill: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 99,
+  },
+  headerPrimaryCta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
     borderRadius: 12,
   },
-  pulsingGreenDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  searchPillContainer: {
-    width: 240,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 14,
-    gap: 8,
-  },
-  searchInput: {
-    flex: 1,
-    fontSize: 12,
-  },
-  headerIconCircle: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    borderWidth: 1,
+  headerSquareIconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
-  notifDot: {
+  headerRedDot: {
     position: 'absolute',
-    top: 9,
-    right: 10,
-    width: 6,
-    height: 6,
-    borderRadius: 3,
+    top: 6,
+    right: 6,
+    width: 8,
+    height: 8,
+    borderRadius: 4,
     backgroundColor: '#ef4444',
   },
-  headerAvatarCircle: {
-    padding: 2,
-    borderRadius: 22,
-    borderWidth: 1.5,
-  },
-  avatarCircle: {
+  headerUserCircle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // Mobile Top Header Bar
   topHeaderBarMobile: {
-    marginHorizontal: 14,
-    marginTop: 10,
-    marginBottom: 6,
     paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 22,
-    borderWidth: 1,
-    zIndex: 25,
-  },
-  mobileSearchExpandedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    height: 42,
-    borderRadius: 21,
-    borderWidth: 1.5,
-    paddingHorizontal: 12,
-    gap: 10,
-  },
-  mobileSearchInput: {
-    flex: 1,
-    fontSize: 13,
-  },
-  mobileSearchCancelBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
+    paddingVertical: 10,
+    borderBottomWidth: 1,
   },
   mobileCollapsedHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    height: 44,
   },
   mobileHamburgerBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
+    width: 38,
+    height: 38,
+    borderRadius: 10,
     borderWidth: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    position: 'relative',
-  },
-  mobilePendingBadge: {
-    position: 'absolute',
-    top: -4,
-    right: -4,
-    backgroundColor: '#ef4444',
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 4,
-    borderWidth: 1.5,
-    borderColor: '#0c0e14',
-  },
-  mobilePendingBadgeText: {
-    color: '#ffffff',
-    fontSize: 9,
-    fontFamily: 'Montserrat_800ExtraBold',
   },
   mobileBrandCenter: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
-    marginLeft: 10,
   },
   mobileBrandLogo: {
-    width: 26,
-    height: 26,
+    width: 28,
+    height: 28,
   },
   mobileHeaderRightRow: {
     flexDirection: 'row',
@@ -2450,833 +2298,288 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   mobileSearchIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 14,
-    borderWidth: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  mobileAvatarBtn: {
-    padding: 2,
-    borderRadius: 20,
-    borderWidth: 1.5,
-  },
-
-  bentoScrollContent: {
-    paddingHorizontal: 28,
-    paddingBottom: 80,
-    gap: 24,
-  },
-
-  // =========================================================
-  // ROW 1: BENTO MASTER SHOWCASE STYLES
-  // =========================================================
-  row1MasterContainer: {
-    gap: 20,
-  },
-
-  // 1.1 HERO CARD STYLES
-  modernHeroCard: {
-    borderRadius: 28,
-    borderWidth: 1,
-    padding: 28,
-    minHeight: 400,
-    justifyContent: 'space-between',
-    position: 'relative',
-    overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 24,
-    elevation: 8,
-  },
-  concentricCircleRing1: {
-    position: 'absolute',
-    right: -40,
-    top: '15%',
-    width: 320,
-    height: 320,
-    borderRadius: 160,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.04)',
-  },
-  concentricCircleRing2: {
-    position: 'absolute',
-    right: 10,
-    top: '25%',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.06)',
-  },
-  heroCardContentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    zIndex: 2,
-  },
-  heroTextCol: {
-    flex: 1.1,
-    paddingRight: 10,
-  },
-  heroEyebrowText: {
-    fontSize: 11,
-    letterSpacing: 1.2,
-    textTransform: 'uppercase',
-    marginBottom: 10,
-  },
-  heroBigTitle: {
-    letterSpacing: -0.8,
-    lineHeight: 40,
-    marginBottom: 8,
-  },
-  heroEquipmentDesc: {
-    fontSize: 12.5,
-    marginBottom: 20,
-  },
-  whitePillActionBtn: {
-    backgroundColor: '#ffffff',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 22,
-    paddingVertical: 12,
-    borderRadius: 26,
-    alignSelf: 'flex-start',
-    shadowColor: '#ffffff',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    elevation: 3,
-  },
-  whitePillActionText: {
-    color: '#0c0e14',
-    fontSize: 12.5,
-  },
-  heroImageShowcaseCol: {
-    flex: 0.9,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    minHeight: 200,
-  },
-  ambientAtmosphericGlow: {
-    position: 'absolute',
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(0, 227, 253, 0.14)',
-    ...(Platform.OS === 'web' ? { filter: 'blur(50px)' } : {}),
-  },
-  heroShowcaseImg: {
-    width: 260,
-    height: 190,
-    zIndex: 2,
-  },
-  heroFloatingPulsePill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 16,
-    borderWidth: 1,
-    marginTop: -8,
-    zIndex: 3,
-  },
-
-  // 1.2 FLOATING FROSTED GLASS TELEMETRY STRIP
-  floatingFrostedStrip: {
-    borderRadius: 22,
-    borderWidth: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 22,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 24,
-    zIndex: 3,
-    ...(Platform.OS === 'web' ? { backdropFilter: 'blur(16px)' } : {}),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.2,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  frostedMetricCol: {
-    alignItems: 'flex-start',
-  },
-  frostedMetricValue: {
-    letterSpacing: -0.5,
-    marginBottom: 2,
-  },
-  frostedLabelRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginBottom: 4,
-  },
-  metricDotIndicator: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-  },
-  frostedMetricLabel: {
-    fontSize: 10.5,
-    letterSpacing: 0.2,
-  },
-  metricAccentUnderline: {
-    width: '100%',
-    height: 2,
-    borderRadius: 1,
-  },
-  frostedArrowCircleBtn: {
     width: 36,
     height: 36,
-    borderRadius: 18,
-    backgroundColor: '#0c0e14',
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.14)',
     justifyContent: 'center',
     alignItems: 'center',
   },
-
-  // 1.3 RIGHT COLUMN: 2 STACKED CARDS
-  rightStackedCol: {
-    gap: 20,
-  },
-  topSplineWaveCard: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 20,
-    minHeight: 190,
-    justifyContent: 'space-between',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 4,
-  },
-  splineCardHeaderRow: {
+  mobileSearchExpandedRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
-  },
-  splineCardTitle: {
-    fontSize: 14.5,
-  },
-  splinePeakPillBadge: {
-    backgroundColor: '#0c0e14',
+    gap: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 10,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.15)',
-    paddingHorizontal: 10,
+  },
+  mobileSearchInput: {
+    flex: 1,
+    fontSize: 13,
     paddingVertical: 4,
-    borderRadius: 12,
   },
-  splineGraphArea: {
+  bentoScrollContent: {
+    padding: 24,
+    paddingBottom: 90,
+    gap: 24,
+  },
+  topUtilityBar: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    height: 110,
-    gap: 10,
-  },
-  splineYAxis: {
+    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    height: '100%',
-    paddingBottom: 4,
-  },
-  splineAxisText: {
-    fontSize: 10,
-  },
-  splineXAxisRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingLeft: 30,
-    paddingRight: 10,
-    marginTop: 4,
-  },
-
-  bottomSplitCard: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 20,
-    minHeight: 190,
-    flexDirection: 'row',
     alignItems: 'center',
     gap: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.16,
-    shadowRadius: 16,
-    elevation: 4,
   },
-  splitCardLeftHalf: {
-    flex: 1.1,
-    justifyContent: 'space-between',
-    height: '100%',
-  },
-  splitCardEyebrow: {
-    fontSize: 12.5,
-    marginBottom: 4,
-  },
-  splitSparklineRow: {
+  utilityStatusBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginVertical: 4,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 99,
   },
-  greenTrendPercentBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(34, 197, 94, 0.15)',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: 6,
-    gap: 2,
-  },
-  splitBigDollarMetric: {
-    fontSize: 26,
-    letterSpacing: -0.5,
-    marginVertical: 4,
-  },
-  splitTotalEarningsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  miniAssetThumb: {
-    width: 22,
-    height: 22,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  splitEarningsText: {
-    fontSize: 11,
-  },
-  splitCardRightInset: {
-    flex: 0.9,
-    borderRadius: 20,
-    borderWidth: 1,
-    padding: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    height: '100%',
-    position: 'relative',
-    overflow: 'hidden',
-  },
-  ambientSquircleGlow: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0, 227, 253, 0.14)',
-    ...(Platform.OS === 'web' ? { filter: 'blur(20px)' } : {}),
-  },
-  squircleAssetName: {
-    fontSize: 11,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-
-  // =========================================================
-  // ROW 2: SUBSISTEMAS TABLE VIEW STYLES
-  // =========================================================
-  modernSubsystemsTableCard: {
-    borderRadius: 26,
-    borderWidth: 1,
-    padding: 24,
-    width: '100%',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.2,
-    shadowRadius: 20,
-    elevation: 6,
-  },
-  tableTopHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  tableSectionTitle: {
-    letterSpacing: -0.4,
-  },
-  tableSectionSubtitle: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  tableFilterDropdownPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-  },
-  tableColumnsBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderBottomWidth: 1,
-    marginBottom: 6,
-  },
-  colHeadText: {
-    fontSize: 11.5,
-    letterSpacing: 0.5,
-  },
-  tableRowsList: {
-    gap: 4,
-  },
-  desktopTableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
-  mobileSubsystemRowCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    padding: 14,
-    marginBottom: 8,
-  },
-  mobileRowKpiStrip: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 10,
-    marginTop: 10,
-  },
-  subsystemSquircleThumb: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  subsystemRowName: {
-    fontSize: 13.5,
-  },
-  subsystemRowDesc: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-  miniStatusDot: {
+  utilityPulseDot: {
     width: 6,
     height: 6,
     borderRadius: 3,
   },
-  tableRowMenuBtn: {
-    width: 44,
-    height: 36,
-    justifyContent: 'center',
-    alignItems: 'center',
+  utilityHeadline: {
+    letterSpacing: -0.5,
   },
-  tableFooterNote: {
+  utilityActionsRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    paddingTop: 16,
-    marginTop: 16,
     flexWrap: 'wrap',
+    alignItems: 'center',
     gap: 10,
   },
-
-  // =========================================================
-  // ROW 3: SUPER ADMIN FLEET & OPERATORS STYLES
-  // =========================================================
-  superFleetContainer: {
-    borderRadius: 24,
-    borderWidth: 1,
-    padding: 22,
-    width: '100%',
-  },
-  superFleetHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginBottom: 16,
-  },
-  superFleetTitle: {
-    fontSize: 17,
-    letterSpacing: -0.3,
-  },
-  superFleetSubtitle: {
-    fontSize: 12,
-    maxWidth: 520,
-    marginTop: 2,
-  },
-  liveFleetPill: {
+  toolbarSelectBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  greenPulseDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: '#22c55e',
-  },
-  fleetKpiChipsRow: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-  },
-  fleetMiniKpi: {
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 12,
-    alignItems: 'center',
-    minWidth: 85,
-  },
-  fleetCardsScroll: {
-    gap: 14,
-    paddingVertical: 4,
-  },
-  fleetPlantCard: {
-    width: 260,
-    borderRadius: 18,
-    padding: 16,
-  },
-  fleetPlantCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 10,
-  },
-  fleetPlantModel: {
-    fontSize: 15,
-  },
-  fleetPlantBrand: {
-    fontSize: 11,
-    marginTop: 1,
-  },
-  onlineStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 10,
-  },
-  fleetPlantLocationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 6,
-  },
-  fleetPlantLocationText: {
-    fontSize: 11.5,
-    flex: 1,
-  },
-  fleetPlantOperatorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 12,
-  },
-  fleetPlantOperatorText: {
-    fontSize: 11,
-    flex: 1,
-  },
-  fleetPlantCardFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: 'rgba(255,255,255,0.06)',
-    paddingTop: 10,
-  },
-  selectPlantIndicator: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-
-  superOperatorsContainer: {
-    borderRadius: 24,
     borderWidth: 1,
-    padding: 22,
-    width: '100%',
   },
-  emptyOperatorsState: {
+  toolbarSecondaryBtn: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 36,
-    paddingHorizontal: 20,
-    borderRadius: 16,
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 12,
     borderWidth: 1,
-    borderStyle: 'dashed',
-    width: '100%',
-    gap: 8,
   },
-  emptyOperatorsTitle: {
-    fontSize: 14,
-    marginTop: 4,
-  },
-  emptyOperatorsSubtitle: {
-    fontSize: 12,
-    textAlign: 'center',
-    maxWidth: 420,
-  },
-  superOperatorsHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    flexWrap: 'wrap',
-    gap: 14,
-    marginBottom: 16,
-  },
-  manageUsersQuickBtn: {
+  toolbarPrimaryBtn: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    paddingHorizontal: 16,
+    gap: 6,
+    paddingHorizontal: 14,
     paddingVertical: 9,
     borderRadius: 12,
   },
-  filterSectionBox: {
-    marginBottom: 16,
-  },
-  filterGroupRow: {
+  perspectiveTabContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
     flexWrap: 'wrap',
+    alignSelf: 'flex-start',
+    padding: 4,
+    borderRadius: 12,
+    gap: 4,
   },
-  filterGroupLabel: {
-    fontSize: 10.5,
-    letterSpacing: 0.5,
-  },
-  filterChip: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 10,
-    borderWidth: 1,
-  },
-  operatorSearchInputRow: {
+  perspectiveTabBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    paddingHorizontal: 12,
-    height: 38,
-    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 9,
   },
-  operatorsCardsGrid: {
+  kpiGridRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 20,
+  },
+  kpiCard: {
+    flex: 1,
+    minWidth: 230,
+    padding: 20,
+    borderRadius: 14,
+    borderWidth: 1,
+    justifyContent: 'space-between',
+  },
+  kpiCardTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+  },
+  kpiEyebrow: {
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  kpiIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  kpiBigDisplay: {
+    fontSize: 34,
+    letterSpacing: -0.8,
+  },
+  kpiProgressBarTrack: {
+    width: '100%',
+    height: 8,
+    borderRadius: 99,
+    marginTop: 10,
+    overflow: 'hidden',
+  },
+  kpiProgressBarFill: {
+    height: 8,
+    borderRadius: 99,
+  },
+  bento12Grid: {
+    gap: 24,
+  },
+  bento8Col: {
+    gap: 20,
+  },
+  bento4Col: {
+    gap: 20,
+  },
+  bentoCardBox: {
+    padding: 22,
+    borderRadius: 14,
+    borderWidth: 1,
+  },
+  chartHeaderRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+    paddingBottom: 12,
+  },
+  chartFooterRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 12,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  tiers4Grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 14,
   },
-  operatorSuperCard: {
+  tierMiniCard: {
     flex: 1,
-    minWidth: 280,
-    borderRadius: 16,
-    borderWidth: 1,
+    minWidth: 165,
     padding: 16,
-  },
-  operatorSuperCardTop: {
-    flexDirection: 'row',
+    borderRadius: 14,
+    borderWidth: 1,
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-    flexWrap: 'wrap',
+  },
+  purpleScannerBtn: {
+    marginTop: 14,
+    paddingVertical: 11,
+    borderRadius: 12,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: 8,
   },
-  operatorSuperAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  operatorSuperName: {
-    fontSize: 14,
-  },
-  locationMiniTag: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  opResourcesBox: {
-    borderRadius: 10,
-    borderWidth: 1,
-    padding: 10,
-  },
-  opDirectActionBtn: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    borderRadius: 10,
-  },
-
-  // MOBILE BOTTOM NAVIGATION
-  mobileBottomNav: {
-    position: 'absolute',
-    bottom: 14,
-    left: 16,
-    right: 16,
-    height: 64,
-    borderRadius: 32,
-    borderWidth: 1,
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    zIndex: 100,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 14,
-  },
-  mobileNavItem: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    borderRadius: 18,
-  },
-  mobileNavItemActive: {
-    backgroundColor: 'rgba(0, 227, 253, 0.12)',
-  },
-  mobileNavLabel: {
-    fontSize: 9.5,
-    marginTop: 2,
-    letterSpacing: 0.2,
-  },
-
-  // APPLE DRAWER STYLES
-  mobileMenuOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.65)',
-    justifyContent: 'flex-start',
-  },
-  mobileMenuBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-  },
-  mobileMenuDrawer: {
-    width: '86%',
-    maxWidth: 360,
-    height: '100%',
-    borderRightWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 4, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 18,
-    elevation: 20,
-    paddingTop: 14,
-    paddingBottom: 24,
-    paddingHorizontal: 16,
-  },
-  appleGrabberBar: {
-    width: 36,
-    height: 4.5,
-    borderRadius: 2.5,
-    alignSelf: 'center',
-    marginBottom: 14,
-  },
-  appleProfileCard: {
+  operationalTableCard: {
     borderRadius: 14,
-    borderWidth: 1,
-    padding: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 8,
-  },
-  appleRoleBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 2,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  appleCloseBtn: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appleSectionHeader: {
-    fontSize: 11,
-    letterSpacing: 0.6,
-    textTransform: 'uppercase',
-    color: '#8E8E93',
-    marginLeft: 10,
-    marginTop: 16,
-    marginBottom: 6,
-  },
-  appleGroupCard: {
-    borderRadius: 12,
     borderWidth: 1,
     overflow: 'hidden',
   },
-  appleGroupRow: {
+  tableCardHeader: {
+    padding: 20,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 14,
+  },
+  tableFilterSearchBox: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 10,
+    gap: 8,
     paddingHorizontal: 12,
-    gap: 12,
-  },
-  appleSquircleIcon: {
-    width: 29,
-    height: 29,
-    borderRadius: 7,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  appleRowTitle: {
-    fontSize: 13,
-    letterSpacing: -0.2,
-  },
-  appleRowSubtitle: {
-    fontSize: 10.5,
-    marginTop: 1,
-  },
-  appleHairlineDivider: {
-    height: StyleSheet.hairlineWidth,
-    marginLeft: 53,
-  },
-  appleSignOutCard: {
+    paddingVertical: 6,
     borderRadius: 12,
     borderWidth: 1,
-    marginTop: 18,
-    marginBottom: 32,
-    paddingVertical: 12,
+  },
+  filterPillChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 99,
+    borderWidth: 1,
+  },
+  tableHeadRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderBottomWidth: 1,
+  },
+  tableHeadCell: {
+    fontSize: 11,
+    letterSpacing: 0.6,
+    textTransform: 'uppercase',
+  },
+  tableDataRow: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    gap: 10,
+  },
+  tablePlantThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableUserAvatar: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableActionIconBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tableCardFooter: {
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     gap: 8,
   },
-  appleSignOutText: {
-    color: '#FF3B30',
-    fontSize: 13.5,
-    letterSpacing: -0.2,
+  mobileDrawerOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    flexDirection: 'row',
+  },
+  mobileDrawerSheet: {
+    width: 280,
+    height: '100%',
+    padding: 20,
+    borderLeftWidth: 1,
   },
 });

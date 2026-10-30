@@ -201,21 +201,23 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
   // Helper to resolve geographical & categorical metadata for any plant or user
   const getZoneFromState = (st: string) => {
     const s = (st || '').toLowerCase();
+    if (!s || s === 'sin ubicación' || s === 'sin estado') return 'Sin Zona';
     if (s.includes('capital') || s.includes('caracas') || s.includes('miranda')) return 'Zona Capital';
+    if (s.includes('carabobo') || s.includes('aragua') || s.includes('valencia') || s.includes('maracay') || s.includes('biglow')) return 'Zona Central';
     if (s.includes('zulia') || s.includes('lara') || s.includes('falc')) return 'Zona Occidental';
     if (s.includes('anzo') || s.includes('bol') || s.includes('monagas') || s.includes('sucre')) return 'Zona Oriental';
     if (s.includes('táchira') || s.includes('tachira') || s.includes('mérida') || s.includes('merida')) return 'Zona Andina';
-    return 'Zona Central';
+    return st;
   };
 
   const enrichedPlants = useMemo(() => {
-    return plantasBajoControl.map((m, idx) => {
-      const loc = (m.location || '').toLowerCase();
-      const country = (m as any).country || (loc.includes('colombia') || loc.includes('bogot') ? 'Colombia' : loc.includes('panam') ? 'Panamá' : loc.includes('ee.uu') || loc.includes('miami') ? 'EE.UU.' : 'Venezuela');
-      const state = (m as any).state || (loc.includes('caracas') || loc.includes('capital') ? 'Distrito Capital' : loc.includes('miranda') ? 'Miranda' : loc.includes('zulia') || loc.includes('maracaibo') ? 'Zulia' : loc.includes('aragua') || loc.includes('maracay') ? 'Aragua' : loc.includes('lara') ? 'Lara' : idx % 3 === 1 ? 'Distrito Capital' : idx % 3 === 2 ? 'Miranda' : 'Carabobo');
+    return plantasBajoControl.map((m) => {
+      const rawLoc = (m.location || '').trim();
+      const country = (m as any).country || (rawLoc ? 'Venezuela' : 'Sin País');
+      const state = (m as any).state || rawLoc || 'Sin Ubicación';
       const zone = (m as any).zone || getZoneFromState(state);
-      const kva = m.powerKva || 35;
-      const department = (m as any).department || (kva >= 100 ? 'Generación Eléctrica' : kva >= 50 ? 'Media Tensión' : 'Mantenimiento Preventivo');
+      const kva = m.powerKva || 0;
+      const department = (m as any).department || (m.assignedOperatorName ? `Asignada a ${m.assignedOperatorName}` : 'Sin Departamento');
       const category = kva >= 100 ? 'Alta Capacidad (≥100 kVA)' : kva >= 50 ? 'Media Capacidad (50-99 kVA)' : 'Compactas (<50 kVA)';
       return {
         ...m,
@@ -241,11 +243,11 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
       if (!map.has(u.id)) map.set(u.id, { ...u, resolvedRole: u.role || 'operator', isPending: true });
     });
     return Array.from(map.values()).map((u: any) => {
-      const loc = (u.state || u.city || '').toLowerCase();
-      const country = u.country || (loc.includes('colombia') || loc.includes('bogot') ? 'Colombia' : loc.includes('panam') ? 'Panamá' : loc.includes('miami') ? 'EE.UU.' : 'Venezuela');
-      const state = u.state || u.city || 'Carabobo';
+      const rawState = (u.state || u.city || '').trim();
+      const country = u.country || (rawState ? 'Venezuela' : 'Sin País');
+      const state = rawState || 'Sin Estado';
       const zone = u.zone || getZoneFromState(state);
-      const dept = u.department || u.specialty || (u.resolvedRole === 'superadmin' ? 'Dirección Ejecutiva' : u.resolvedRole === 'client' ? 'Clientes Corporativos' : 'Generación Eléctrica');
+      const dept = u.department || u.specialty || 'Sin Departamento';
       const category = u.resolvedRole === 'superadmin' ? 'Super Admins (Jefes)' : u.resolvedRole === 'operator' ? 'Operadores Técnicos' : 'Clientes / Empresas';
       return {
         ...u,
