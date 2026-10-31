@@ -63,7 +63,7 @@ export const MainApp = () => {
     if (!drivesCompanyVehicle && activeTab === 'wallet') {
       setActiveTab('moto');
     }
-    if (isSuperAdmin && activeTab === 'specs') {
+    if (isSuperAdmin && (activeTab === 'specs' || activeTab === 'services')) {
       setActiveTab('moto');
     }
   }, [drivesCompanyVehicle, isSuperAdmin, activeTab]);
@@ -230,7 +230,7 @@ export const MainApp = () => {
   // RESPONSIVE WEB APPLICATION LAYOUT (DESKTOP, TABLET & MOBILE WEB)
   // ==========================================
   const isWeb = isWebPlatform();
-  if (isWeb) {
+  if (isWeb || isSuperAdmin) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.surface }}>
         {isAdmin ? (
@@ -246,6 +246,7 @@ export const MainApp = () => {
             onOpenStats={() => setStatsModalVisible(true)}
             onOpenReport={() => setReportModalVisible(true)}
             onOpenServicesTab={(comp?: ComponentType) => {
+              if (isSuperAdmin) return;
               setServicesInitialComp(comp || 'oil');
               handleSelectTab('services');
             }}
@@ -256,7 +257,7 @@ export const MainApp = () => {
               </View>
             )}
 
-            {visitedTabs.has('services') && (
+            {!isSuperAdmin && visitedTabs.has('services') && (
               <View style={[styles.desktopTabContainer, { flex: 1, display: activeTab === 'services' ? 'flex' : 'none', paddingHorizontal: windowWidth < 768 ? (windowWidth < 480 ? 10 : 16) : 32, paddingTop: windowWidth < 768 ? 14 : 24 }]}>
                 <ServicesTab initialComponent={servicesInitialComp} />
               </View>

@@ -762,12 +762,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     setPerspectiveTab(tab);
   };
 
-  // Sidebar items — Each section separated cleanly, NO 'Ficha Técnica OEM' for Super Admin!
+  // Sidebar items — Each section separated cleanly.
+  // Super Admin (el Jefe) does NOT have 'Ficha Técnica OEM' nor 'Mantenimiento & Servicios' (operators fill maintenance).
   const sidebarNavItems = useMemo(() => {
     return [
       {
         id: 'nav_overview',
         label: 'Resumen Ejecutivo',
+        shortLabel: 'Resumen',
         icon: 'dashboard',
         isActive: activeTab === 'moto' && perspectiveTab === 'overview',
         action: () => goToPerspective('overview'),
@@ -775,6 +777,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       {
         id: 'nav_plants',
         label: 'Disponibilidad de Plantas',
+        shortLabel: 'Plantas',
         icon: 'bolt',
         badge: allPlants.length,
         badgeColor: '#16a34a',
@@ -784,6 +787,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       {
         id: 'nav_personnel',
         label: 'Personal Operador',
+        shortLabel: 'Personal',
         icon: 'engineering',
         badge: allPersonnelList.length,
         badgeColor: '#2563eb',
@@ -793,22 +797,29 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       {
         id: 'nav_users',
         label: 'Usuarios y Clientes',
+        shortLabel: 'Usuarios',
         icon: 'groups',
         badge: (pendingUsersList?.length || 0) > 0 ? pendingUsersList.length : allUsersAndClientsList.length,
         badgeColor: (pendingUsersList?.length || 0) > 0 ? '#ef4444' : innovationPurple,
         isActive: activeTab === 'moto' && perspectiveTab === 'users',
         action: () => goToPerspective('users'),
       },
-      {
-        id: 'nav_services',
-        label: 'Mantenimiento & Servicios',
-        icon: 'build',
-        isActive: activeTab === 'services',
-        action: () => onSelectTab('services'),
-      },
+      ...(!isSuperAdmin
+        ? [
+            {
+              id: 'nav_services',
+              label: 'Mantenimiento & Servicios',
+              shortLabel: 'Servicios',
+              icon: 'build',
+              isActive: activeTab === 'services',
+              action: () => onSelectTab('services'),
+            },
+          ]
+        : []),
       {
         id: 'nav_history',
-        label: 'Bitácora & Finanzas',
+        label: isSuperAdmin ? 'Auditoría de Bitácora' : 'Bitácora & Finanzas',
+        shortLabel: 'Bitácora',
         icon: 'payments',
         isActive: activeTab === 'history',
         action: () => onSelectTab('history'),
@@ -818,6 +829,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             {
               id: 'nav_wallet',
               label: 'Guantera de Flota',
+              shortLabel: 'Wallet',
               icon: 'account-balance-wallet',
               isActive: activeTab === 'wallet',
               action: () => onSelectTab('wallet'),
@@ -827,6 +839,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       {
         id: 'nav_profile',
         label: 'Mi Perfil Ejecutivo',
+        shortLabel: 'Perfil',
         icon: 'person',
         isActive: activeTab === 'profile',
         action: () => onSelectTab('profile'),
@@ -1202,13 +1215,26 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
           </View>
 
-          {/* 4 DEDICATED PERSPECTIVE TABS BAR */}
-          <View style={[styles.perspectiveTabContainer, { backgroundColor: surfaceLow }]}>
+          {/* 4 DEDICATED PERSPECTIVE TABS BAR (Scrollable on Mobile Phones) */}
+          <ScrollView
+            horizontal={isMobile}
+            showsHorizontalScrollIndicator={false}
+            style={[
+              styles.perspectiveTabContainer,
+              { backgroundColor: surfaceLow },
+              isMobile && { flexGrow: 0 },
+            ]}
+            contentContainerStyle={
+              isMobile
+                ? { flexDirection: 'row', alignItems: 'center', gap: 6, paddingRight: 8 }
+                : { flexDirection: 'row', flexWrap: 'wrap', gap: 6, width: '100%' }
+            }
+          >
             {[
-              { id: 'overview' as const, label: '1. Resumen Ejecutivo', icon: 'dashboard', color: academicGold },
-              { id: 'plants' as const, label: `2. Disponibilidad de Plantas (${allPlants.length})`, icon: 'bolt', color: '#16a34a' },
-              { id: 'personnel' as const, label: `3. Personal Operador (${allPersonnelList.length})`, icon: 'engineering', color: '#2563eb' },
-              { id: 'users' as const, label: `4. Usuarios y Clientes (${allUsersAndClientsList.length})`, icon: 'groups', color: innovationPurple },
+              { id: 'overview' as const, label: isMobile ? '1. Resumen' : '1. Resumen Ejecutivo', icon: 'dashboard', color: academicGold },
+              { id: 'plants' as const, label: isMobile ? `2. Plantas (${allPlants.length})` : `2. Disponibilidad de Plantas (${allPlants.length})`, icon: 'bolt', color: '#16a34a' },
+              { id: 'personnel' as const, label: isMobile ? `3. Personal (${allPersonnelList.length})` : `3. Personal Operador (${allPersonnelList.length})`, icon: 'engineering', color: '#2563eb' },
+              { id: 'users' as const, label: isMobile ? `4. Usuarios (${allUsersAndClientsList.length})` : `4. Usuarios y Clientes (${allUsersAndClientsList.length})`, icon: 'groups', color: innovationPurple },
             ].map((tab) => {
               const active = perspectiveTab === tab.id;
               return (
@@ -1218,6 +1244,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   activeOpacity={0.85}
                   style={[
                     styles.perspectiveTabBtn,
+                    isMobile && { paddingHorizontal: 13, paddingVertical: 9 },
                     active && {
                       backgroundColor: cardLowest,
                       borderColor: cardBorder,
@@ -1229,7 +1256,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   <Text
                     style={{
                       fontFamily: active ? F.bold : F.medium,
-                      fontSize: 13,
+                      fontSize: isMobile ? 12.5 : 13,
                       color: active ? primaryNavy : textVariant,
                     }}
                   >
@@ -1238,7 +1265,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </TouchableOpacity>
               );
             })}
-          </View>
+          </ScrollView>
 
           {/* ===================================================================== */}
           {/* PESTAÑA 1: RESUMEN EJECUTIVO (Limpio, sin amontonar tablas abajo)     */}
@@ -1719,10 +1746,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
 
                 {/* Geographic & Availability Multi-Row Filter Box */}
-                <View style={{ marginHorizontal: 20, marginBottom: 16, padding: 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
+                <View style={{ marginHorizontal: isMobile ? 12 : 20, marginBottom: 16, padding: isMobile ? 12 : 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
                   {/* Row 1: DISPONIBILIDAD */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>DISPONIBILIDAD:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>DISPONIBILIDAD:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {(['Todas', 'Disponibles', 'Asignadas'] as const).map((status) => {
                         const active = plantAvailabilityFilter === status;
@@ -1748,8 +1775,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 2: CAPACIDAD */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>CAPACIDAD:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>CAPACIDAD:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {PLANT_CATEGORIES.map((cat) => {
                         const active = plantCategoryFilter === cat;
@@ -1775,8 +1802,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 3: PAÍS */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>PAÍS:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>PAÍS:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {COUNTRIES_LIST.map((c) => {
                         const active = plantCountryFilter === c;
@@ -1802,8 +1829,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 4: ZONA */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ZONA:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ZONA:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {ZONES_LIST.map((z) => {
                         const active = plantZoneFilter === z;
@@ -1829,8 +1856,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 5: ESTADO / SEDE */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO / SEDE:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO / SEDE:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {STATES_LIST.map((st) => {
                         const active = plantStateFilter === st;
@@ -1864,7 +1891,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                     <Text style={[styles.tableHeadCell, { flex: 1.8, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · ZONA · PAÍS)</Text>
                     <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>DISPONIBILIDAD / OPERADOR</Text>
                     <Text style={[styles.tableHeadCell, { flex: 1.1, color: textVariant, fontFamily: F.bold }]}>HORÓMETRO</Text>
-                    <Text style={[styles.tableHeadCell, { width: 110, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                    <Text style={[styles.tableHeadCell, { width: 150, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
                   </View>
                 )}
 
@@ -1891,11 +1918,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                               borderBottomColor: cardBorder,
                               flexDirection: isMobile ? 'column' : 'row',
                               alignItems: isMobile ? 'flex-start' : 'center',
+                              paddingHorizontal: isMobile ? 14 : 20,
                             },
                           ]}
                         >
                           {/* Col 1: Brand, Model & Category */}
-                          <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <View style={{ flex: 2.2, width: isMobile ? '100%' : undefined, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <View style={[styles.tablePlantThumb, { backgroundColor: surfaceLow }]}>
                               <MaterialCommunityIcons name="generator-portable" size={22} color={primaryNavy} />
                             </View>
@@ -1910,9 +1938,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 2: Serial */}
-                          <View style={{ flex: 1.3 }}>
+                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>
-                              {plant.serialNumber || plant.plate || 'Sin serial'}
+                              {isMobile ? `Serial: ${plant.serialNumber || plant.plate || 'Sin serial'}` : (plant.serialNumber || plant.plate || 'Sin serial')}
                             </Text>
                             <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
                               Año: {plant.year || '-'}
@@ -1920,7 +1948,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 3: Geographic Location */}
-                          <View style={{ flex: 1.8 }}>
+                          <View style={{ flex: 1.8, width: isMobile ? '100%' : undefined }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                               <MaterialIcons name="location-on" size={15} color={academicGold} />
                               <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
@@ -1933,7 +1961,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 4: Availability & Operator */}
-                          <View style={{ flex: 1.5 }}>
+                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
@@ -1960,7 +1988,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 5: Hours */}
-                          <View style={{ flex: 1.1 }}>
+                          <View style={{ flex: 1.1, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.extrabold, fontSize: 13.5, color: primaryNavy }}>
                               {hrs.toLocaleString()} hrs
                             </Text>
@@ -1969,26 +1997,45 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                             </Text>
                           </View>
 
-                          {/* Col 6: Actions */}
-                          <View style={{ width: isMobile ? '100%' : 110, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
-                            <TouchableOpacity
-                              onPress={() => {
-                                selectMoto(plant.id);
-                                onOpenQuickHours();
-                              }}
-                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                            >
-                              <MaterialIcons name="more-time" size={18} color={primaryNavy} />
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              onPress={() => {
-                                selectMoto(plant.id);
-                                onOpenServicesTab('oil');
-                              }}
-                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                            >
-                              <MaterialIcons name="build" size={17} color={primaryNavy} />
-                            </TouchableOpacity>
+                          {/* Col 6: Actions — Super Admin ("El Jefe") only supervises & assigns, never logs service/hours */}
+                          <View style={{ width: isMobile ? '100%' : 150, flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginTop: isMobile ? 4 : 0 }}>
+                            {isSuperAdmin ? (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  selectMoto(plant.id);
+                                  loadSystemUsers();
+                                  setUserMgmtVisible(true);
+                                }}
+                                style={[
+                                  styles.toolbarSecondaryBtn,
+                                  { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 10, paddingVertical: 6 },
+                                ]}
+                              >
+                                <MaterialIcons name="assignment-ind" size={16} color={primaryNavy} />
+                                <Text style={{ fontFamily: F.bold, fontSize: 11, color: primaryNavy }}>Asignar</Text>
+                              </TouchableOpacity>
+                            ) : (
+                              <>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    selectMoto(plant.id);
+                                    onOpenQuickHours();
+                                  }}
+                                  style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                                >
+                                  <MaterialIcons name="more-time" size={18} color={primaryNavy} />
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => {
+                                    selectMoto(plant.id);
+                                    onOpenServicesTab('oil');
+                                  }}
+                                  style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                                >
+                                  <MaterialIcons name="build" size={17} color={primaryNavy} />
+                                </TouchableOpacity>
+                              </>
+                            )}
                             <TouchableOpacity
                               onPress={() => {
                                 selectMoto(plant.id);
@@ -2082,10 +2129,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
 
                 {/* Personnel Filter Box: ROL, ASIGNACIÓN, PAÍS, ZONA, ESTADO, DEPARTAMENTO */}
-                <View style={{ marginHorizontal: 20, marginBottom: 16, padding: 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
+                <View style={{ marginHorizontal: isMobile ? 12 : 20, marginBottom: 16, padding: isMobile ? 12 : 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
                   {/* Row 1: ROL DE PERSONAL */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ROL PERSONAL:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ROL PERSONAL:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {(['Todo el Personal', 'Operadores Técnicos', 'Super Administradores'] as const).map((r) => {
                         const active = personnelRoleFilter === r;
@@ -2111,8 +2158,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 2: ASIGNACIÓN / DISPONIBILIDAD */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ASIGNACIÓN:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ASIGNACIÓN:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {(['Todos', 'Con Plantas a Cargo', 'Disponibles (0 Plantas)', 'Con Vehículo de Flota'] as const).map((a) => {
                         const active = personnelAssignFilter === a;
@@ -2138,8 +2185,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 3: PAÍS */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>PAÍS:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>PAÍS:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {COUNTRIES_LIST.map((c) => {
                         const active = personnelCountryFilter === c;
@@ -2165,8 +2212,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 4: ZONA */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ZONA:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ZONA:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {ZONES_LIST.map((z) => {
                         const active = personnelZoneFilter === z;
@@ -2192,8 +2239,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 5: ESTADO */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {STATES_LIST.map((st) => {
                         const active = personnelStateFilter === st;
@@ -2219,8 +2266,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 6: DEPARTAMENTO / ESPECIALIDAD */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>DEPARTAMENTO:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>DEPARTAMENTO:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {personnelDeptsList.map((dp) => {
                         const active = personnelDeptFilter === dp;
@@ -2296,11 +2343,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                               borderBottomColor: cardBorder,
                               flexDirection: isMobile ? 'column' : 'row',
                               alignItems: isMobile ? 'flex-start' : 'center',
+                              paddingHorizontal: isMobile ? 14 : 20,
                             },
                           ]}
                         >
                           {/* Col 1: Name, Email & Carnet */}
-                          <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <View style={{ flex: 2, width: isMobile ? '100%' : undefined, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <View style={[styles.tableUserAvatar, { backgroundColor: isSuper ? academicGold : primaryContainer }]}>
                               <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
                             </View>
@@ -2315,7 +2363,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 2: Role & Department */}
-                          <View style={{ flex: 1.3 }}>
+                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
@@ -2336,7 +2384,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 3: Location */}
-                          <View style={{ flex: 1.5 }}>
+                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
                               📍 {op.geoState}
                             </Text>
@@ -2346,7 +2394,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 4: Assigned Plants */}
-                          <View style={{ flex: 1.7 }}>
+                          <View style={{ flex: 1.7, width: isMobile ? '100%' : undefined }}>
                             {isSuper ? (
                               <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
                                 Supervisión global ejecutiva
@@ -2367,7 +2415,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 5: Assigned Vehicle */}
-                          <View style={{ flex: 1.4 }}>
+                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.semibold, fontSize: 12, color: op.assigned_vehicle_name ? textOnSurface : textOutline }}>
                               {op.assigned_vehicle_name || 'Sin vehículo asignado'}
                             </Text>
@@ -2486,10 +2534,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
 
                 {/* Users Filter Box: ESTADO DE CUENTA, PAÍS, ZONA, ESTADO */}
-                <View style={{ marginHorizontal: 20, marginBottom: 16, padding: 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
+                <View style={{ marginHorizontal: isMobile ? 12 : 20, marginBottom: 16, padding: isMobile ? 12 : 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
                   {/* Row 1: ESTADO DE CUENTA */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO CUENTA:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO CUENTA:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {(['Todos los Usuarios', 'Usuarios Activos', 'Solicitudes Pendientes'] as const).map((st) => {
                         const active = userStatusFilter === st;
@@ -2515,8 +2563,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 2: PAÍS */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>PAÍS:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>PAÍS:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {COUNTRIES_LIST.map((c) => {
                         const active = userCountryFilter === c;
@@ -2542,8 +2590,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 3: ZONA */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ZONA:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ZONA:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {ZONES_LIST.map((z) => {
                         const active = userZoneFilter === z;
@@ -2569,8 +2617,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </View>
 
                   {/* Row 4: ESTADO */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: 110 }}>ESTADO:</Text>
+                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO:</Text>
                     <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
                       {STATES_LIST.map((st) => {
                         const active = userStateFilter === st;
@@ -2635,11 +2683,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                               borderBottomColor: cardBorder,
                               flexDirection: isMobile ? 'column' : 'row',
                               alignItems: isMobile ? 'flex-start' : 'center',
+                              paddingHorizontal: isMobile ? 14 : 20,
                             },
                           ]}
                         >
                           {/* Col 1: Name & Email */}
-                          <View style={{ flex: 2.2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                          <View style={{ flex: 2.2, width: isMobile ? '100%' : undefined, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                             <View style={[styles.tableUserAvatar, { backgroundColor: u.isPending ? '#ef4444' : innovationPurple }]}>
                               <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
                             </View>
@@ -2654,7 +2703,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 2: Account Status */}
-                          <View style={{ flex: 1.3 }}>
+                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
@@ -2671,7 +2720,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 3: Location */}
-                          <View style={{ flex: 1.6 }}>
+                          <View style={{ flex: 1.6, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
                               📍 {u.geoState}
                             </Text>
@@ -2681,7 +2730,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Col 4: Phone */}
-                          <View style={{ flex: 1.4 }}>
+                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.medium, fontSize: 12, color: u.phone ? textOnSurface : textOutline }}>
                               {u.phone || 'Sin teléfono en BD'}
                             </Text>
@@ -2746,10 +2795,95 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           )}
         </ScrollView>
 
-        {/* PERSISTENT SUB-TABS CONTAINER (Services, History, Wallet, Profile) */}
+        {/* PERSISTENT SUB-TABS CONTAINER (History, Wallet, Profile) */}
         <View style={[{ flex: 1, width: '100%' }, activeTab === 'moto' && { display: 'none' }]}>
           {children}
         </View>
+
+        {/* MOBILE FIXED BOTTOM NAVIGATION BAR (Responsive Phone UX for Super Admin) */}
+        {isMobile && (
+          <View
+            style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              justifyContent: 'space-around',
+              backgroundColor: cardLowest,
+              borderTopWidth: 1,
+              borderTopColor: cardBorder,
+              paddingVertical: 8,
+              paddingHorizontal: 6,
+            }}
+          >
+            {[
+              {
+                id: 'mob_overview',
+                label: 'Resumen',
+                icon: 'dashboard',
+                active: activeTab === 'moto' && perspectiveTab === 'overview',
+                action: () => goToPerspective('overview'),
+              },
+              {
+                id: 'mob_plants',
+                label: 'Plantas',
+                icon: 'bolt',
+                active: activeTab === 'moto' && perspectiveTab === 'plants',
+                action: () => goToPerspective('plants'),
+              },
+              {
+                id: 'mob_personnel',
+                label: 'Personal',
+                icon: 'engineering',
+                active: activeTab === 'moto' && perspectiveTab === 'personnel',
+                action: () => goToPerspective('personnel'),
+              },
+              {
+                id: 'mob_users',
+                label: 'Usuarios',
+                icon: 'groups',
+                active: activeTab === 'moto' && perspectiveTab === 'users',
+                action: () => goToPerspective('users'),
+              },
+              {
+                id: 'mob_profile',
+                label: 'Perfil',
+                icon: 'person',
+                active: activeTab === 'profile',
+                action: () => onSelectTab('profile'),
+              },
+            ].map((nav) => (
+              <TouchableOpacity
+                key={nav.id}
+                onPress={nav.action}
+                activeOpacity={0.8}
+                style={{
+                  flex: 1,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  paddingVertical: 4,
+                  borderRadius: 10,
+                  backgroundColor: nav.active ? surfaceLow : 'transparent',
+                }}
+              >
+                <MaterialIcons
+                  name={nav.icon as any}
+                  size={20}
+                  color={nav.active ? primaryNavy : textVariant}
+                />
+                <Text
+                  style={{
+                    fontFamily: nav.active ? F.bold : F.medium,
+                    fontSize: 10.5,
+                    color: nav.active ? primaryNavy : textVariant,
+                    marginTop: 2,
+                  }}
+                  numberOfLines={1}
+                >
+                  {nav.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
       </View>
 
       {/* MOBILE DRAWER MENU */}
