@@ -62,6 +62,12 @@ export interface Moto {
   oilPanCapacity?: number;
   coolantCapacity?: number;
   systemVoltage?: string;
+  voltageOutput?: string;
+  dimensions?: string;
+  weightKg?: string;
+  fuelConsumptionLh?: string;
+  oilType?: string;
+  frequencyHz?: string;
   serialNumber?: string;
   location?: string;
   assignedOperatorId?: string;

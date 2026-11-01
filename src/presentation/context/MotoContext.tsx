@@ -22,6 +22,7 @@ interface MotoContextType {
   operatorsList: any[];
   clientsList: any[];
   loadSystemUsers: () => Promise<void>;
+  reloadPlantsFromCloud: (preferredMotoId?: string) => Promise<void>;
   approveUser: (userId: string) => Promise<boolean>;
   rejectUser: (userId: string) => Promise<boolean>;
   changeUserRole: (userId: string, newRole: 'superadmin' | 'admin' | 'operator' | 'client') => Promise<boolean>;
@@ -71,11 +72,14 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
   const [operatorsList, setOperatorsList] = useState<any[]>([]);
   const [clientsList, setClientsList] = useState<any[]>([]);
 
-  // Optimización de carga concurrente de usuarios y métricas
+  // Optimización de carga concurrente desde las 3 tablas separadas en BD (administradores, operadores, usuarios_clientes)
   const loadSystemUsers = useCallback(async () => {
     try {
-      const [metricsRes, rpcProfilesRes] = await Promise.all([
+      const [metricsRes, adminsTableRes, opsTableRes, clientsTableRes, rpcProfilesRes] = await Promise.all([
         supabase.rpc('get_system_metrics'),
+        supabase.from('administradores').select('*').order('created_at', { ascending: false }),
+        supabase.from('operadores').select('*').order('created_at', { ascending: false }),
+        supabase.from('usuarios_clientes').select('*').order('created_at', { ascending: false }),
         supabase.rpc('get_all_system_profiles'),
       ]);
 
@@ -94,12 +98,41 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         profiles = selectProfiles;
       }
 
-      if (profiles) {
-        setPendingUsersList(profiles.filter((p: any) => p.approval_status === 'pending'));
-        setSuperAdminsList(profiles.filter((p: any) => p.role === 'superadmin' || p.role === 'admin'));
-        setOperatorsList(profiles.filter((p: any) => p.role === 'operator' || p.role === 'technician'));
-        setClientsList(profiles.filter((p: any) => p.role === 'client' || p.role === 'user'));
-      }
+      // 1. Tabla Jefes / Super Administradores (public.administradores)
+      const adminsRows =
+        !adminsTableRes.error && adminsTableRes.data && adminsTableRes.data.length > 0
+          ? adminsTableRes.data
+          : (profiles || []).filter((p: any) => p.role === 'superadmin' || p.role === 'admin');
+
+      // 2. Tabla Personal Operador Técnico (public.operadores)
+      const opsRows =
+        !opsTableRes.error && opsTableRes.data && opsTableRes.data.length > 0
+          ? opsTableRes.data
+          : (profiles || []).filter((p: any) => p.role === 'operator' || p.role === 'technician');
+
+      // 3. Tabla Usuarios y Clientes Finales (public.usuarios_clientes)
+      const clientsRows =
+        !clientsTableRes.error && clientsTableRes.data && clientsTableRes.data.length > 0
+          ? clientsTableRes.data
+          : (profiles || []).filter((p: any) => p.role === 'client' || p.role === 'user');
+
+      setSuperAdminsList(adminsRows.map((a: any) => ({ ...a, id: a.user_id || a.id, role: 'superadmin' })));
+      setOperatorsList(opsRows.map((o: any) => ({ ...o, id: o.user_id || o.id, role: 'operator' })));
+      setClientsList(clientsRows.map((c: any) => ({ ...c, id: c.user_id || c.id, role: 'client' })));
+
+      const allPending = [
+        ...clientsRows.filter((p: any) => p.approval_status === 'pending'),
+        ...(profiles || []).filter((p: any) => p.approval_status === 'pending'),
+      ];
+      const seenPending = new Set<string>();
+      setPendingUsersList(
+        allPending.filter((p: any) => {
+          const uid = p.user_id || p.id;
+          if (!uid || seenPending.has(uid)) return false;
+          seenPending.add(uid);
+          return true;
+        })
+      );
     } catch (err) {
       console.warn('Notice al cargar usuarios del sistema:', err);
     }
@@ -307,6 +340,12 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         oilPanCapacity: p.oil_pan_capacity ? Number(p.oil_pan_capacity) : 10.9,
         coolantCapacity: p.coolant_capacity ? Number(p.coolant_capacity) : 7.2,
         systemVoltage: p.system_voltage || '24V DC',
+        voltageOutput: p.voltage_output || '208V / 220V / 440V / 480V',
+        dimensions: p.dimensions,
+        weightKg: p.weight_kg,
+        fuelConsumptionLh: p.fuel_consumption_lh,
+        oilType: p.oil_type || 'SAE 15W-40 API CI-4 / CK-4 Diésel',
+        frequencyHz: p.frequency_hz || '60 Hz / 1800 RPM',
         serialNumber: p.serial_number,
         location: p.location,
         assignedOperatorId: p.assigned_operator_id,
@@ -694,6 +733,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     operatorsList,
     clientsList,
     loadSystemUsers,
+    reloadPlantsFromCloud: loadDataFromCloud,
     approveUser,
     rejectUser,
     changeUserRole,
@@ -728,6 +768,7 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
     operatorsList,
     clientsList,
     loadSystemUsers,
+    loadDataFromCloud,
     approveUser,
     rejectUser,
     changeUserRole,

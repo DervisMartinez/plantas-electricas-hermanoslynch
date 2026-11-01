@@ -23,6 +23,7 @@ import { UserManagementModal } from '../UserManagementModal';
 import { OperatorAgendaModal } from '../OperatorAgendaModal';
 import { CreateOperatorModal } from '../CreateOperatorModal';
 import { AssignOperatorModal } from '../AssignOperatorModal';
+import { SuperAdminPlantCatalogModal } from '../SuperAdminPlantCatalogModal';
 
 // Brand Assets
 const HL_LOGO_REQUIRE = require('../../../../assets/images/logo and media coorporative/logo-sin-nombre.png');
@@ -386,12 +387,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     return name.slice(0, 2).toUpperCase();
   }, [userName, userEmail]);
 
-  // Dedicated Super Admin Tabs (Each domain has its own independent tab — nothing piled up together!)
+  // Dedicated Super Admin Tabs (Each DB table has its own independent tab — never mixed!)
   // 'overview' = Resumen Ejecutivo
-  // 'plants'   = Disponibilidad de Plantas
-  // 'personnel'= Personal Operador & Técnicos
-  // 'users'    = Usuarios / Clientes & Solicitudes
-  const [perspectiveTab, setPerspectiveTab] = useState<'overview' | 'plants' | 'personnel' | 'users'>('overview');
+  // 'plants'   = Tabla public.plantas (Disponibilidad y Catálogo de Plantas)
+  // 'personnel'= Tabla public.operadores (EXCLUSIVAMENTE Personal Operador Técnico)
+  // 'users'    = Tabla public.usuarios_clientes (EXCLUSIVAMENTE Usuarios / Clientes)
+  // 'bosses'   = Tabla public.administradores (EXCLUSIVAMENTE Jefes / Super Administradores)
+  const [perspectiveTab, setPerspectiveTab] = useState<'overview' | 'plants' | 'personnel' | 'users' | 'bosses'>('overview');
 
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -421,8 +423,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const [agendaVisible, setAgendaVisible] = useState(false);
   const [createOperatorVisible, setCreateOperatorVisible] = useState(false);
   const [assigningOperator, setAssigningOperator] = useState<any | null>(null);
+  const [catalogModalVisible, setCatalogModalVisible] = useState(false);
 
-  const { updateMoto } = useMyMoto();
+  const { updateMoto, reloadPlantsFromCloud } = useMyMoto();
 
   const openPlantEditor = (plant: any) => {
     setEditingPlant(plant);
@@ -610,39 +613,47 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     };
   };
 
-  // 1. Dedicated Personnel List (ONLY Operators & Super Admins)
+  // 1. TABLA public.operadores — EXCLUSIVAMENTE Personal Operador Técnico (NUNCA ligar con Jefes ni Clientes)
   const allPersonnelList = useMemo(() => {
     const map = new Map<string, any>();
-    (superAdminsList || []).forEach((u: any) => {
-      map.set(u.id, enrichProfileRecord(u, 'superadmin'));
-    });
     (operatorsList || []).forEach((u: any) => {
-      if (!map.has(u.id)) {
+      if (u.role !== 'superadmin' && u.role !== 'admin' && u.role !== 'client' && u.role !== 'user') {
         map.set(u.id, enrichProfileRecord(u, 'operator'));
       }
     });
     return Array.from(map.values());
-  }, [superAdminsList, operatorsList, allPlants]);
+  }, [operatorsList, allPlants]);
 
-  // 2. Dedicated Users / Clients List (ONLY Regular Clients & Pending Approvals)
+  // 2. TABLA public.usuarios_clientes — EXCLUSIVAMENTE Usuarios y Clientes Finales (NUNCA ligar con Operadores ni Jefes)
   const allUsersAndClientsList = useMemo(() => {
     const map = new Map<string, any>();
     (clientsList || []).forEach((u: any) => {
-      map.set(u.id, {
-        ...enrichProfileRecord(u, 'client'),
-        isPending: u.approval_status === 'pending',
-      });
+      if (u.role !== 'superadmin' && u.role !== 'admin' && u.role !== 'operator' && u.role !== 'technician') {
+        map.set(u.id, {
+          ...enrichProfileRecord(u, 'client'),
+          isPending: u.approval_status === 'pending',
+        });
+      }
     });
     (pendingUsersList || []).forEach((u: any) => {
-      if (!map.has(u.id)) {
+      if (!map.has(u.id) && u.role !== 'superadmin' && u.role !== 'admin' && u.role !== 'operator') {
         map.set(u.id, {
-          ...enrichProfileRecord(u, (u.role as any) || 'client'),
+          ...enrichProfileRecord(u, 'client'),
           isPending: true,
         });
       }
     });
     return Array.from(map.values());
   }, [clientsList, pendingUsersList, allPlants]);
+
+  // 3. TABLA public.administradores — EXCLUSIVAMENTE Jefes / Super Administradores (NUNCA ligar con Operadores ni Clientes)
+  const allSuperAdminsOnlyList = useMemo(() => {
+    const map = new Map<string, any>();
+    (superAdminsList || []).forEach((u: any) => {
+      map.set(u.id, enrichProfileRecord(u, 'superadmin'));
+    });
+    return Array.from(map.values());
+  }, [superAdminsList, allPlants]);
 
   // =========================================================================
   // TAB 2 FILTERS: DISPONIBILIDAD DE PLANTAS (Estilo "Transacción")
@@ -950,7 +961,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const textOutline = isDark ? '#64748b' : '#74777f';
 
   // Helper to navigate to a specific Super Admin perspective tab
-  const goToPerspective = (tab: 'overview' | 'plants' | 'personnel' | 'users') => {
+  const goToPerspective = (tab: 'overview' | 'plants' | 'personnel' | 'users' | 'bosses') => {
     onSelectTab('moto');
     setPerspectiveTab(tab);
   };
@@ -979,8 +990,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       },
       {
         id: 'nav_personnel',
-        label: 'Personal Operador',
-        shortLabel: 'Personal',
+        label: 'Tabla Operadores',
+        shortLabel: 'Operadores',
         icon: 'engineering',
         badge: allPersonnelList.length,
         badgeColor: '#2563eb',
@@ -989,13 +1000,23 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       },
       {
         id: 'nav_users',
-        label: 'Usuarios y Clientes',
+        label: 'Tabla Usuarios / Clientes',
         shortLabel: 'Usuarios',
         icon: 'groups',
         badge: (pendingUsersList?.length || 0) > 0 ? pendingUsersList.length : allUsersAndClientsList.length,
         badgeColor: (pendingUsersList?.length || 0) > 0 ? '#ef4444' : innovationPurple,
         isActive: activeTab === 'moto' && perspectiveTab === 'users',
         action: () => goToPerspective('users'),
+      },
+      {
+        id: 'nav_bosses',
+        label: 'Tabla Jefes / Super Admins',
+        shortLabel: 'Jefes',
+        icon: 'admin-panel-settings',
+        badge: allSuperAdminsOnlyList.length,
+        badgeColor: academicGold,
+        isActive: activeTab === 'moto' && perspectiveTab === 'bosses',
+        action: () => goToPerspective('bosses'),
       },
       ...(!isSuperAdmin
         ? [
@@ -1044,6 +1065,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     allPlants.length,
     allPersonnelList.length,
     allUsersAndClientsList.length,
+    allSuperAdminsOnlyList.length,
     pendingUsersList,
     drivesCompanyVehicle,
     isSuperAdmin,
@@ -1294,13 +1316,13 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </TouchableOpacity>
 
               <TouchableOpacity
-                onPress={() => setIsAddingMoto(true)}
+                onPress={() => setCatalogModalVisible(true)}
                 activeOpacity={0.85}
                 style={[styles.headerPrimaryCta, { backgroundColor: isDark ? '#2563eb' : '#002045' }]}
               >
                 <MaterialIcons name="add-circle" size={17} color="#ffc250" />
                 <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: '#ffffff' }}>
-                  Incorporar Planta
+                  Catálogo / Incorporar Planta
                 </Text>
               </TouchableOpacity>
 
@@ -1365,17 +1387,19 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
                 <Text style={{ color: textOutline, fontSize: 12 }}>•</Text>
                 <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textVariant }}>
-                  {allPlants.length} Plantas · {allPersonnelList.length} Personal · {allUsersAndClientsList.length} Usuarios
+                  {allPlants.length} Plantas (BD) · {allPersonnelList.length} Operadores (BD) · {allUsersAndClientsList.length} Usuarios (BD) · {allSuperAdminsOnlyList.length} Jefes (BD)
                 </Text>
               </View>
               <Text style={[styles.utilityHeadline, { color: primaryNavy, fontFamily: F.bold, fontSize: isMobile ? 22 : 28 }]}>
                 {perspectiveTab === 'overview'
                   ? 'Resumen Ejecutivo & Analítica Global'
                   : perspectiveTab === 'plants'
-                  ? 'Disponibilidad de Plantas Eléctricas'
+                  ? 'Disponibilidad y Catálogo de Plantas Eléctricas (Tabla plantas)'
                   : perspectiveTab === 'personnel'
-                  ? 'Personal Operador & Administradores'
-                  : 'Directorio de Usuarios y Clientes'}
+                  ? 'Directorio de Personal Operador Técnico (Tabla operadores)'
+                  : perspectiveTab === 'users'
+                  ? 'Directorio de Usuarios y Clientes (Tabla usuarios_clientes)'
+                  : 'Directorio de Jefes / Super Administradores (Tabla administradores)'}
               </Text>
             </View>
 
@@ -1408,7 +1432,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             </View>
           </View>
 
-          {/* 4 DEDICATED PERSPECTIVE TABS BAR (Scrollable on Mobile Phones) */}
+          {/* 5 DEDICATED PERSPECTIVE TABS BAR (1 Tab per Database Table — Never Mixed!) */}
           <ScrollView
             horizontal={isMobile}
             showsHorizontalScrollIndicator={false}
@@ -1426,8 +1450,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
             {[
               { id: 'overview' as const, label: isMobile ? '1. Resumen' : '1. Resumen Ejecutivo', icon: 'dashboard', color: academicGold },
               { id: 'plants' as const, label: isMobile ? `2. Plantas (${allPlants.length})` : `2. Disponibilidad de Plantas (${allPlants.length})`, icon: 'bolt', color: '#16a34a' },
-              { id: 'personnel' as const, label: isMobile ? `3. Personal (${allPersonnelList.length})` : `3. Personal Operador (${allPersonnelList.length})`, icon: 'engineering', color: '#2563eb' },
+              { id: 'personnel' as const, label: isMobile ? `3. Operadores (${allPersonnelList.length})` : `3. Personal Operador (${allPersonnelList.length})`, icon: 'engineering', color: '#2563eb' },
               { id: 'users' as const, label: isMobile ? `4. Usuarios (${allUsersAndClientsList.length})` : `4. Usuarios y Clientes (${allUsersAndClientsList.length})`, icon: 'groups', color: innovationPurple },
+              { id: 'bosses' as const, label: isMobile ? `5. Jefes (${allSuperAdminsOnlyList.length})` : `5. Jefes / Super Admins (${allSuperAdminsOnlyList.length})`, icon: 'admin-panel-settings', color: academicGold },
             ].map((tab) => {
               const active = perspectiveTab === tab.id;
               return (
@@ -1934,11 +1959,11 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
-                      onPress={() => setIsAddingMoto(true)}
+                      onPress={() => setCatalogModalVisible(true)}
                       style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
                     >
                       <MaterialIcons name="add-circle" size={16} color="#ffc250" />
-                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Incorporar Planta</Text>
+                      <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Catálogo / Incorporar Planta</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity
@@ -2237,18 +2262,18 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   </Text>
                 </View>
 
-                {/* Table Header (Desktop — Estilo "Transacción") */}
+                {/* Table Header (Desktop — Estilo "Transacción" con Características Técnicas Completas) */}
                 {!isMobile && (
                   <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopWidth: 0, borderBottomColor: cardBorder }]}>
-                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Marca</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Modelo</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 0.9, color: textOnSurface, fontFamily: F.bold }]}>Capacidad ⇅</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textOnSurface, fontFamily: F.bold }]}>Categoría ⇅</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>N.º de serie del dispositivo</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Estado Operativo</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textOnSurface, fontFamily: F.bold }]}>Operador a Cargo</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 0.9, color: textOnSurface, fontFamily: F.bold }]}>Horómetro</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textOnSurface, fontFamily: F.bold }]}>Ubicación</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Marca & Modelo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Potencia ⇅</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.7, color: textOnSurface, fontFamily: F.bold }]}>Motor & Alternador</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.6, color: textOnSurface, fontFamily: F.bold }]}>Control & Capacidades</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.1, color: textOnSurface, fontFamily: F.bold }]}>N.º de serie</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.1, color: textOnSurface, fontFamily: F.bold }]}>Estado Operativo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Operador (Tabla Op.)</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 0.8, color: textOnSurface, fontFamily: F.bold }]}>Horómetro</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>Ubicación</Text>
                     <Text style={[styles.tableHeadCell, { width: 115, textAlign: 'right', color: textOnSurface, fontFamily: F.bold }]}>Acciones</Text>
                   </View>
                 )}
@@ -2265,6 +2290,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                   ) : (
                     filteredFleetPlants.map((plant) => {
                       const kva = plant.powerKva || 0;
+                      const kw = plant.powerKw || Math.round(kva * 0.8);
                       const hrs = plant.currentHours || plant.currentOdometer || 0;
                       return (
                         <TouchableOpacity
@@ -2283,43 +2309,55 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                             },
                           ]}
                         >
-                          {/* Marca */}
+                          {/* Marca & Modelo */}
                           <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
-                              {plant.brand || 'Blue Power'}
-                            </Text>
-                          </View>
-
-                          {/* Modelo */}
-                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }} numberOfLines={1}>
                               {plant.model || '--'}
                             </Text>
-                          </View>
-
-                          {/* Capacidad */}
-                          <View style={{ flex: 0.9, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }}>
-                              {kva} kVA
+                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
+                              {plant.brand || 'Blue Power Generation'}
                             </Text>
                           </View>
 
-                          {/* Categoría */}
-                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                          {/* Potencia (kVA / kW) */}
+                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }}>
+                              {kva} kVA / {kw} kW
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
                               {plant.category}
                             </Text>
                           </View>
 
+                          {/* Motor & Alternador */}
+                          <View style={{ flex: 1.7, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textOnSurface }} numberOfLines={1}>
+                              ⚙️ {plant.engineBrand || 'Cummins'} {plant.engineModel || 'Serie B/C'}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
+                              ⚡ {plant.alternatorBrand || 'Leroy Somer'} {plant.alternatorModel || '3F 12P'}
+                            </Text>
+                          </View>
+
+                          {/* Control & Capacidades (Tanque / Aceite / Coolant) */}
+                          <View style={{ flex: 1.6, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textOnSurface }} numberOfLines={1}>
+                              🖥️ {plant.controllerModel || 'ComAp InteliLite IL-9'}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
+                              ⛽ {plant.fuelTankCapacity || 180}L · 🛢️ {plant.oilPanCapacity || 10.9}L · ❄️ {plant.coolantCapacity || 7.2}L
+                            </Text>
+                          </View>
+
                           {/* N.º de serie */}
-                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                          <View style={{ flex: 1.1, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }} numberOfLines={1}>
                               {plant.serialNumber || plant.plate || '--'}
                             </Text>
                           </View>
 
                           {/* Estado Operativo */}
-                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
+                          <View style={{ flex: 1.1, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
@@ -2342,21 +2380,21 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                           </View>
 
                           {/* Operador a Cargo */}
-                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.medium, fontSize: 12, color: plant.assignedOperatorName ? textOnSurface : textOutline }} numberOfLines={1}>
                               {plant.assignedOperatorName || '--'}
                             </Text>
                           </View>
 
                           {/* Horómetro */}
-                          <View style={{ flex: 0.9, width: isMobile ? '100%' : undefined }}>
+                          <View style={{ flex: 0.8, width: isMobile ? '100%' : undefined }}>
                             <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
                               {hrs.toLocaleString()} hrs
                             </Text>
                           </View>
 
                           {/* Ubicación */}
-                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
+                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
                             <Text
                               style={{
                                 fontFamily: F.semibold,
@@ -2435,31 +2473,35 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           )}
 
           {/* ===================================================================== */}
-          {/* PESTAÑA 3: PERSONAL OPERADOR & ADMINS (Estilo "Transacción")          */}
+          {/* PESTAÑA 3: PERSONAL OPERADOR TÉCNICO (Tabla public.operadores)        */}
           {/* ===================================================================== */}
           {perspectiveTab === 'personnel' && (
             <View style={{ gap: 18 }}>
-              {/* 4 Mini-KPIs de Personal */}
+              {/* 4 Mini-KPIs de Tabla public.operadores */}
               <View style={styles.kpiGridRow}>
                 <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
-                  <Text style={[styles.kpiEyebrow, { color: textVariant, fontFamily: F.semibold }]}>TOTAL PERSONAL INTERNO</Text>
-                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: primaryNavy, marginTop: 6 }}>{allPersonnelList.length}</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Equipo técnico y directivo</Text>
-                </View>
-                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
-                  <Text style={[styles.kpiEyebrow, { color: '#2563eb', fontFamily: F.semibold }]}>OPERADORES TÉCNICOS</Text>
-                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#2563eb', marginTop: 6 }}>{(operatorsList || []).length}</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Personal de campo y soporte</Text>
-                </View>
-                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
-                  <Text style={[styles.kpiEyebrow, { color: academicGold, fontFamily: F.semibold }]}>SUPER ADMINISTRADORES</Text>
-                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: academicGold, marginTop: 6 }}>{(superAdminsList || []).length}</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Dirección y control global</Text>
+                  <Text style={[styles.kpiEyebrow, { color: '#2563eb', fontFamily: F.semibold }]}>TABLA OPERADORES TÉCNICOS</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#2563eb', marginTop: 6 }}>{allPersonnelList.length}</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Registros en public.operadores</Text>
                 </View>
                 <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
                   <Text style={[styles.kpiEyebrow, { color: '#16a34a', fontFamily: F.semibold }]}>CON PLANTAS A CARGO</Text>
                   <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: '#16a34a', marginTop: 6 }}>{personnelWithPlantsCount}</Text>
-                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Responsables activos en red</Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Operadores responsables activos</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: primaryNavy, fontFamily: F.semibold }]}>DISPONIBLES SIN PLANTA</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: primaryNavy, marginTop: 6 }}>
+                    {Math.max(0, allPersonnelList.length - personnelWithPlantsCount)}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Listos para nueva asignación</Text>
+                </View>
+                <View style={[styles.kpiCard, { backgroundColor: cardLowest, borderColor: cardBorder, padding: 16 }]}>
+                  <Text style={[styles.kpiEyebrow, { color: academicGold, fontFamily: F.semibold }]}>CON VEHÍCULO DE FLOTA</Text>
+                  <Text style={{ fontFamily: F.extrabold, fontSize: 28, color: academicGold, marginTop: 6 }}>
+                    {allPersonnelList.filter((op: any) => !!op.assigned_vehicle_name).length}
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant, marginTop: 2 }}>Móviles de soporte técnico</Text>
                 </View>
               </View>
 
@@ -2469,7 +2511,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 <View style={[styles.tableCardHeader, { borderBottomWidth: 1, borderBottomColor: cardBorder, paddingVertical: 14 }]}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap', flex: 1 }}>
                     <Text style={{ fontFamily: F.bold, fontSize: 18, color: primaryNavy }}>
-                      Personal Operador y Administradores ({filteredPersonnelList.length})
+                      Personal Operador Técnico ({filteredPersonnelList.length})
                     </Text>
                     <TouchableOpacity
                       onPress={onOpenReport}
@@ -3545,6 +3587,120 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
               </View>
             </View>
           )}
+
+          {/* ===================================================================== */}
+          {/* PESTAÑA 5: JEFES / SUPER ADMINISTRADORES (Tabla public.administradores)*/}
+          {/* ===================================================================== */}
+          {perspectiveTab === 'bosses' && (
+            <View style={{ gap: 18 }}>
+              <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
+                <View style={[styles.tableCardHeader, { borderBottomWidth: 1, borderBottomColor: cardBorder, paddingVertical: 14 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, flexWrap: 'wrap', flex: 1 }}>
+                    <MaterialIcons name="admin-panel-settings" size={22} color={academicGold} />
+                    <View>
+                      <Text style={{ fontFamily: F.bold, fontSize: 18, color: primaryNavy }}>
+                        Jefes / Super Administradores ({allSuperAdminsOnlyList.length})
+                      </Text>
+                      <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                        Tabla exclusiva public.administradores — Dirección Ejecutiva sin plantas ni flota asignada a cargo personal
+                      </Text>
+                    </View>
+                  </View>
+
+                  <TouchableOpacity
+                    onPress={() => setCreateOperatorVisible(true)}
+                    style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
+                  >
+                    <MaterialIcons name="person-add" size={16} color="#ffc250" />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
+                      Nuevo Super Administrador
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopWidth: 0, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Nombre</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Apellido</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>ID Ejecutivo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textOnSurface, fontFamily: F.bold }]}>Correo Institucional</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textOnSurface, fontFamily: F.bold }]}>Departamento</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>Alcance</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>Ubicación</Text>
+                    <Text style={[styles.tableHeadCell, { width: 110, textAlign: 'right', color: textOnSurface, fontFamily: F.bold }]}>Acciones</Text>
+                  </View>
+                )}
+
+                <View>
+                  {allSuperAdminsOnlyList.map((boss: any, idx: number) => (
+                    <TouchableOpacity
+                      key={boss.id}
+                      onPress={() => setAssigningOperator(boss)}
+                      activeOpacity={0.75}
+                      style={[
+                        styles.tableDataRow,
+                        {
+                          backgroundColor: cardLowest,
+                          borderBottomColor: cardBorder,
+                          flexDirection: isMobile ? 'column' : 'row',
+                          alignItems: isMobile ? 'flex-start' : 'center',
+                          paddingHorizontal: isMobile ? 14 : 20,
+                          paddingVertical: 12,
+                        },
+                      ]}
+                    >
+                      <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                        <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                          {boss.firstName}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                          {boss.lastName}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                          {boss.operator_code || `HL-SUPER-${idx + 1}`}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
+                        <Text style={{ fontFamily: F.medium, fontSize: 12, color: textOnSurface }} numberOfLines={1}>
+                          {boss.email}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }} numberOfLines={1}>
+                          {boss.deptLabel.toUpperCase()}
+                        </Text>
+                      </View>
+                      <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                        <View style={{ alignSelf: 'flex-start', backgroundColor: secondaryFixed, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 99 }}>
+                          <Text style={{ fontFamily: F.bold, fontSize: 10, color: onSecondaryFixed }}>
+                            SUPERVISIÓN GLOBAL
+                          </Text>
+                        </View>
+                      </View>
+                      <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                        <Text style={{ fontFamily: F.semibold, fontSize: 12, color: boss.geoState === 'Sin Estado en BD' ? '#f59e0b' : textOnSurface }}>
+                          {boss.geoState === 'Sin Estado en BD' ? '+ Asignar Estado' : boss.geoState}
+                        </Text>
+                      </View>
+                      <View style={{ width: isMobile ? '100%' : 110, flexDirection: 'row', justifyContent: 'flex-end' }}>
+                        <TouchableOpacity
+                          onPress={() => setAssigningOperator(boss)}
+                          style={[styles.toolbarSecondaryBtn, { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 9, paddingVertical: 5 }]}
+                        >
+                          <MaterialIcons name="edit" size={14} color={primaryNavy} />
+                          <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: primaryNavy }}>Editar</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              </View>
+            </View>
+          )}
         </ScrollView>
 
         {/* PERSISTENT SUB-TABS CONTAINER (History, Wallet, Profile) */}
@@ -3693,6 +3849,16 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       )}
 
       {/* MODALS */}
+      <SuperAdminPlantCatalogModal
+        visible={catalogModalVisible}
+        onClose={() => setCatalogModalVisible(false)}
+        operatorsList={operatorsList}
+        existingPlants={allPlants}
+        onPlantsAdded={async () => {
+          await reloadPlantsFromCloud();
+          setPerspectiveTab('plants');
+        }}
+      />
       <UserManagementModal visible={userMgmtVisible} onClose={() => setUserMgmtVisible(false)} />
       <CreateOperatorModal
         visible={createOperatorVisible}
