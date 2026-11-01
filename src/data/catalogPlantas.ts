@@ -27,7 +27,7 @@ export interface CatalogPlanta {
 }
 
 const IMG_C125 = require('../../assets/images/plantas electricas/Blue power generation/C125-1-300x300-removebg-preview.png');
-const IMG_C75 = require('../../assets/images/plantas electricas/Blue power generation/C75 - BLUE POWER GENERATORS.png');
+const IMG_C75 = IMG_C125;
 
 export const PLANTAS_CATALOG: CatalogPlanta[] = [
   {
