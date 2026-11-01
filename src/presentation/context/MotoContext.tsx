@@ -384,6 +384,11 @@ export const MotoProvider = ({ children }: { children: ReactNode }) => {
         setMotos(allUnits);
 
         setMyMoto((prev) => {
+          if (isSuperProfile) {
+            // El Jefe / Super Administrador no tiene plantas a su cargo personal,
+            // ya que supervisa y audita el catálogo global y a todos los operadores
+            return null;
+          }
           const targetId = preferredMotoId || prev?.id;
           if (targetId) {
             const found = allUnits.find(u => u.id === targetId);

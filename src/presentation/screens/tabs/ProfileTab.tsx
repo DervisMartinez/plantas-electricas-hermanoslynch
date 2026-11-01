@@ -28,6 +28,7 @@ import { isWebPlatform } from '../../utils/platformMode';
 import { isCar, isPlanta } from '../../../domain/entities/Moto';
 import { VehicleReportModal } from '../../components/VehicleReportModal';
 import { UserManagementModal } from '../../components/UserManagementModal';
+import { SuperAdminPlantCatalogModal } from '../../components/SuperAdminPlantCatalogModal';
 
 interface ProfileTabProps {
   onOpenReport?: () => void;
@@ -53,17 +54,19 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
     operatorsList,
     clientsList,
     pendingUsersList,
-    loadSystemUsers
+    loadSystemUsers,
+    reloadPlantsFromCloud,
   } = useMyMoto();
   const { colors, mode, isDark, toggleTheme } = useTheme();
   
-  const isVehiclePlanta = isPlanta(myMoto);
+  const isVehiclePlanta = myMoto ? isPlanta(myMoto) : true;
   
   const [userData, setUserData] = useState<any>(null);
   const [uploading, setUploading] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [showReportModal, setShowReportModal] = useState(false);
   const [showUserMgmtModal, setShowUserMgmtModal] = useState(false);
+  const [showPlantCatalogModal, setShowPlantCatalogModal] = useState(false);
 
   // Super Admin Executive Classifier State
   const [execTab, setExecTab] = useState<'plants' | 'operators' | 'users'>('plants');
@@ -182,7 +185,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
     }
   }, [myMoto?.year, myMoto?.id]);
 
-  if (!myMoto) return null;
+  if (!myMoto && !isSuperAdmin && !isAdmin) return null;
 
   const isOperatorOrAdmin = isAdmin || userRole === 'admin';
   const displayName = firstName || userName || (isSuperAdmin ? 'Kalioverload' : (isOperatorOrAdmin ? 'Operador Técnico' : 'Titular de Planta'));
@@ -461,7 +464,11 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
   };
 
   const handleAddMoto = () => {
-    setIsAddingMoto(true);
+    if (isSuperAdmin) {
+      setShowPlantCatalogModal(true);
+    } else {
+      setIsAddingMoto(true);
+    }
   };
 
   const bloodTypes = ['O+', 'O-', 'A+', 'A-', 'B+', 'B-', 'AB+', 'AB-'];
@@ -837,8 +844,8 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               showsHorizontalScrollIndicator={false} 
               contentContainerStyle={{ gap: 12, paddingVertical: 4 }}
             >
-              {(plantasBajoControl.length > 0 ? plantasBajoControl : [myMoto]).map((m) => {
-                const isSelected = m.id === myMoto.id;
+              {(plantasBajoControl.length > 0 ? plantasBajoControl : (myMoto ? [myMoto] : [])).map((m) => {
+                const isSelected = myMoto ? m.id === myMoto.id : false;
                 return (
                   <TouchableOpacity 
                     key={m.id}
@@ -1147,7 +1154,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
           )}
 
           {/* DETALLES DE LA PLANTA O VEHÍCULO ACTUAL (SOLO OPERADORES Y CLIENTES, NO SUPER ADMIN) */}
-          {!isSuperAdmin && (
+          {!isSuperAdmin && myMoto && (
           <View style={[styles.cardSection, { backgroundColor: colors.surfaceContainerLow, borderColor: colors.outlineVariant }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <Text style={{ fontSize: 15, fontFamily: F.bold, color: colors.onSurface }}>
@@ -1326,19 +1333,33 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
         initialDoc={selectedLegalDoc}
         onClose={() => setShowLegalModal(false)}
       />
-      <AssignedOperatorModal
-        visible={showSOSModal}
-        onClose={() => setShowSOSModal(false)}
-        myMoto={myMoto}
-      />
-      <VehicleReportModal
-        visible={showReportModal}
-        onClose={() => setShowReportModal(false)}
-        myMoto={myMoto}
-      />
+      {myMoto && (
+        <AssignedOperatorModal
+          visible={showSOSModal}
+          onClose={() => setShowSOSModal(false)}
+          myMoto={myMoto}
+        />
+      )}
+      {myMoto && (
+        <VehicleReportModal
+          visible={showReportModal}
+          onClose={() => setShowReportModal(false)}
+          myMoto={myMoto}
+        />
+      )}
       <UserManagementModal
         visible={showUserMgmtModal}
         onClose={() => setShowUserMgmtModal(false)}
+      />
+      <SuperAdminPlantCatalogModal
+        visible={showPlantCatalogModal}
+        onClose={() => setShowPlantCatalogModal(false)}
+        operatorsList={operatorsList}
+        existingPlants={motos}
+        onPlantsAdded={async () => {
+          await reloadPlantsFromCloud();
+          await loadSystemUsers();
+        }}
       />
     </SafeAreaView>
   );
