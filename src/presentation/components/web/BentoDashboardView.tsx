@@ -16,6 +16,7 @@ import {
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 import { useMyMoto } from '../../context/MotoContext';
+import { supabase } from '../../../data/supabaseClient';
 import { isCar, isPlanta, Moto } from '../../../domain/entities/Moto';
 import { ComponentType } from '../../../constants/telemetry';
 import { UserManagementModal } from '../UserManagementModal';
@@ -395,12 +396,84 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const [showFilterBar, setShowFilterBar] = useState(true);
+
+  // Reusable Dropdown Picker Modal State ("Por favor, seleccione. v")
+  const [dropdownConfig, setDropdownConfig] = useState<{
+    title: string;
+    options: string[];
+    selected: string;
+    onSelect: (val: string) => void;
+  } | null>(null);
+
+  // Quick Plant Editor Modal State (when clicking a plant row in Tab 2)
+  const [editingPlant, setEditingPlant] = useState<any | null>(null);
+  const [editPlantBrand, setEditPlantBrand] = useState('');
+  const [editPlantModel, setEditPlantModel] = useState('');
+  const [editPlantSerial, setEditPlantSerial] = useState('');
+  const [editPlantKva, setEditPlantKva] = useState('');
+  const [editPlantLocation, setEditPlantLocation] = useState('');
+  const [editPlantOperatorId, setEditPlantOperatorId] = useState<string | null>(null);
+  const [savingPlantEdit, setSavingPlantEdit] = useState(false);
 
   // Modals
   const [userMgmtVisible, setUserMgmtVisible] = useState(false);
   const [agendaVisible, setAgendaVisible] = useState(false);
   const [createOperatorVisible, setCreateOperatorVisible] = useState(false);
   const [assigningOperator, setAssigningOperator] = useState<any | null>(null);
+
+  const { updateMoto } = useMyMoto();
+
+  const openPlantEditor = (plant: any) => {
+    setEditingPlant(plant);
+    setEditPlantBrand(plant.brand || '');
+    setEditPlantModel(plant.model || '');
+    setEditPlantSerial(plant.serialNumber || plant.plate || '');
+    setEditPlantKva(String(plant.powerKva || 35));
+    setEditPlantLocation(plant.location || (plant.geoState !== 'Sin Estado en BD' ? plant.geoState : ''));
+    setEditPlantOperatorId(plant.assignedOperatorId || null);
+  };
+
+  const handleSavePlantEdit = async () => {
+    if (!editingPlant?.id) return;
+    setSavingPlantEdit(true);
+    try {
+      const selectedOp = operatorsList.find((op: any) => op.id === editPlantOperatorId);
+      const nextOpName = selectedOp ? (selectedOp.full_name || selectedOp.email || '') : null;
+
+      await supabase
+        .from('plantas')
+        .update({
+          brand: editPlantBrand.trim() || editingPlant.brand,
+          model: editPlantModel.trim() || editingPlant.model,
+          serial_number: editPlantSerial.trim() || editingPlant.serialNumber,
+          power_kva: Number(editPlantKva) || editingPlant.powerKva || 35,
+          location: editPlantLocation.trim(),
+          assigned_operator_id: editPlantOperatorId || null,
+          assigned_operator_name: nextOpName,
+        })
+        .eq('id', editingPlant.id);
+
+      await updateMoto({
+        ...editingPlant,
+        brand: editPlantBrand.trim() || editingPlant.brand,
+        model: editPlantModel.trim() || editingPlant.model,
+        serialNumber: editPlantSerial.trim() || editingPlant.serialNumber,
+        plate: editPlantSerial.trim() || editingPlant.plate,
+        powerKva: Number(editPlantKva) || editingPlant.powerKva || 35,
+        location: editPlantLocation.trim(),
+        assignedOperatorId: editPlantOperatorId || undefined,
+        assignedOperatorName: nextOpName || undefined,
+      });
+
+      await loadSystemUsers();
+      setEditingPlant(null);
+    } catch (e) {
+      console.error('Error updating plant:', e);
+    } finally {
+      setSavingPlantEdit(false);
+    }
+  };
 
   // =========================================================================
   // 100% REAL DATA FROM SUPABASE / MOTOCONTEXT
@@ -427,68 +500,102 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     });
   }, [motos]);
 
+  // Helper to enrich a profile with structured specialty ("Dept | State | Zone | Country | Obs") + plant location fallback
+  const enrichProfileRecord = (u: any, resolvedRole: 'superadmin' | 'operator' | 'client') => {
+    const rawSpec = (u.specialty || '').trim();
+    let parsedDept = (u.department || '').trim();
+    let parsedState = (u.state || u.city || u.location || '').trim();
+    let parsedZone = (u.zone || '').trim();
+    let parsedCountry = (u.country || '').trim();
+    let parsedObs = '';
+
+    if (rawSpec.includes('|')) {
+      const parts = rawSpec.split('|').map((s: string) => s.trim());
+      parsedDept = parts[0] || parsedDept;
+      parsedState = parts[1] || parsedState;
+      parsedZone = parts[2] || parsedZone;
+      parsedCountry = parts[3] || parsedCountry;
+      parsedObs = parts[4] || '';
+    } else if (rawSpec) {
+      parsedDept = parsedDept || rawSpec;
+    }
+
+    // If employee/user still has no explicit state, check if they have an assigned plant in `allPlants`
+    const linkedPlant = allPlants.find(
+      (p) =>
+        p.assignedOperatorId === u.id ||
+        (p as any).user_id === u.id ||
+        (p as any).userId === u.id ||
+        (p.assignedOperatorName && u.full_name && p.assignedOperatorName.toLowerCase().trim() === u.full_name.toLowerCase().trim())
+    );
+
+    const geo = resolveRealGeo({
+      state: parsedState,
+      zone: parsedZone,
+      country: parsedCountry,
+      location: parsedState || linkedPlant?.location || '',
+    });
+
+    const fullNameStr = (u.full_name || u.email?.split('@')[0] || 'Sin Nombre').trim();
+    const nameParts = fullNameStr.split(/\s+/);
+    const firstName = nameParts[0] || fullNameStr;
+    const lastName = nameParts.length > 1 ? nameParts.slice(1).join(' ') : '--';
+
+    return {
+      ...u,
+      firstName,
+      lastName,
+      resolvedRole,
+      geoCountry: geo.country,
+      geoZone: geo.zone,
+      geoState: geo.state,
+      deptLabel:
+        parsedDept ||
+        (resolvedRole === 'superadmin'
+          ? 'Dirección Ejecutiva'
+          : resolvedRole === 'operator'
+          ? 'Plantas Eléctricas'
+          : 'Cliente Titular'),
+      observations: parsedObs || u.phone || '--',
+    };
+  };
+
   // 1. Dedicated Personnel List (ONLY Operators & Super Admins)
   const allPersonnelList = useMemo(() => {
     const map = new Map<string, any>();
     (superAdminsList || []).forEach((u: any) => {
-      const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
-      map.set(u.id, {
-        ...u,
-        resolvedRole: 'superadmin',
-        geoCountry: geo.country,
-        geoZone: geo.zone,
-        geoState: geo.state,
-        deptLabel: (u.department || u.specialty || 'Dirección Ejecutiva').trim(),
-      });
+      map.set(u.id, enrichProfileRecord(u, 'superadmin'));
     });
     (operatorsList || []).forEach((u: any) => {
       if (!map.has(u.id)) {
-        const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
-        map.set(u.id, {
-          ...u,
-          resolvedRole: 'operator',
-          geoCountry: geo.country,
-          geoZone: geo.zone,
-          geoState: geo.state,
-          deptLabel: (u.department || u.specialty || 'Soporte Técnico').trim(),
-        });
+        map.set(u.id, enrichProfileRecord(u, 'operator'));
       }
     });
     return Array.from(map.values());
-  }, [superAdminsList, operatorsList]);
+  }, [superAdminsList, operatorsList, allPlants]);
 
   // 2. Dedicated Users / Clients List (ONLY Regular Clients & Pending Approvals)
   const allUsersAndClientsList = useMemo(() => {
     const map = new Map<string, any>();
     (clientsList || []).forEach((u: any) => {
-      const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
       map.set(u.id, {
-        ...u,
-        resolvedRole: 'client',
+        ...enrichProfileRecord(u, 'client'),
         isPending: u.approval_status === 'pending',
-        geoCountry: geo.country,
-        geoZone: geo.zone,
-        geoState: geo.state,
       });
     });
     (pendingUsersList || []).forEach((u: any) => {
       if (!map.has(u.id)) {
-        const geo = resolveRealGeo({ state: u.state, city: u.city, country: u.country, location: u.location });
         map.set(u.id, {
-          ...u,
-          resolvedRole: u.role || 'client',
+          ...enrichProfileRecord(u, (u.role as any) || 'client'),
           isPending: true,
-          geoCountry: geo.country,
-          geoZone: geo.zone,
-          geoState: geo.state,
         });
       }
     });
     return Array.from(map.values());
-  }, [clientsList, pendingUsersList]);
+  }, [clientsList, pendingUsersList, allPlants]);
 
   // =========================================================================
-  // TAB 2 FILTERS: DISPONIBILIDAD DE PLANTAS (País, Zona, Estado, Capacidad, Disponibilidad)
+  // TAB 2 FILTERS: DISPONIBILIDAD DE PLANTAS (Estilo "Transacción")
   // =========================================================================
   const [plantAvailabilityFilter, setPlantAvailabilityFilter] = useState<'Todas' | 'Disponibles' | 'Asignadas'>('Todas');
   const [plantCategoryFilter, setPlantCategoryFilter] = useState('Todas');
@@ -496,6 +603,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const [plantZoneFilter, setPlantZoneFilter] = useState('Todas');
   const [plantStateFilter, setPlantStateFilter] = useState('Todos');
   const [plantSearch, setPlantSearch] = useState('');
+  const [plantSerialSearch, setPlantSerialSearch] = useState('');
 
   const COUNTRIES_LIST = ['Todos', 'Venezuela', 'Colombia', 'Panamá', 'EE.UU.'];
   const ZONES_LIST = ['Todas', 'Zona Central', 'Zona Capital', 'Zona Occidental', 'Zona Oriental', 'Zona Los Andes', 'Zona Guayana'];
@@ -506,8 +614,11 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       if (p.location && p.location.trim()) set.add(p.location.trim());
       if (p.geoState && p.geoState !== 'Sin Estado en BD') set.add(p.geoState);
     });
+    allPersonnelList.forEach((op) => {
+      if (op.geoState && op.geoState !== 'Sin Estado en BD') set.add(op.geoState);
+    });
     return Array.from(set);
-  }, [allPlants]);
+  }, [allPlants, allPersonnelList]);
 
   const PLANT_CATEGORIES = [
     'Todas',
@@ -529,6 +640,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         !(plant.location || '').toLowerCase().includes(plantStateFilter.toLowerCase())
       ) {
         return false;
+      }
+
+      if (plantSerialSearch.trim()) {
+        const sq = plantSerialSearch.toLowerCase().trim();
+        const serialMatch = (plant.serialNumber || plant.plate || plant.id || '').toLowerCase().includes(sq);
+        if (!serialMatch) return false;
       }
 
       const q = (plantSearch || searchQuery).toLowerCase().trim();
@@ -553,11 +670,12 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     plantZoneFilter,
     plantStateFilter,
     plantSearch,
+    plantSerialSearch,
     searchQuery,
   ]);
 
   // =========================================================================
-  // TAB 3 FILTERS: PERSONAL OPERADOR & TÉCNICOS (Rol, País, Zona, Estado, Departamento)
+  // TAB 3 FILTERS: PERSONAL OPERADOR & TÉCNICOS (Estilo "Transacción")
   // =========================================================================
   const [personnelRoleFilter, setPersonnelRoleFilter] = useState<'Todo el Personal' | 'Operadores Técnicos' | 'Super Administradores'>('Todo el Personal');
   const [personnelAssignFilter, setPersonnelAssignFilter] = useState<'Todos' | 'Con Plantas a Cargo' | 'Disponibles (0 Plantas)' | 'Con Vehículo de Flota'>('Todos');
@@ -566,6 +684,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   const [personnelStateFilter, setPersonnelStateFilter] = useState('Todos');
   const [personnelDeptFilter, setPersonnelDeptFilter] = useState('Todos');
   const [personnelSearch, setPersonnelSearch] = useState('');
+  const [personnelIdSearch, setPersonnelIdSearch] = useState('');
 
   const personnelDeptsList = useMemo(() => {
     const set = new Set<string>([
@@ -574,6 +693,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       'Especialista Técnico Senior',
       'Mantenimiento Preventivo',
       'Dirección Ejecutiva',
+      'Soporte de Campo',
+      'Control de Operaciones',
     ]);
     allPersonnelList.forEach((p: any) => {
       if (p.deptLabel) set.add(p.deptLabel);
@@ -601,6 +722,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       if (personnelStateFilter !== 'Todos' && op.geoState.toLowerCase() !== personnelStateFilter.toLowerCase()) return false;
       if (personnelDeptFilter !== 'Todos' && op.deptLabel.toLowerCase() !== personnelDeptFilter.toLowerCase()) return false;
 
+      if (personnelIdSearch.trim()) {
+        const idq = personnelIdSearch.toLowerCase().trim();
+        const idMatch =
+          (op.operator_code || '').toLowerCase().includes(idq) ||
+          (op.id || '').toLowerCase().includes(idq);
+        if (!idMatch) return false;
+      }
+
       const q = (personnelSearch || searchQuery).toLowerCase().trim();
       if (q) {
         const match =
@@ -623,17 +752,19 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     personnelStateFilter,
     personnelDeptFilter,
     personnelSearch,
+    personnelIdSearch,
     searchQuery,
   ]);
 
   // =========================================================================
-  // TAB 4 FILTERS: USUARIOS Y CLIENTES (Estado de Cuenta, País, Zona, Estado)
+  // TAB 4 FILTERS: USUARIOS Y CLIENTES (Estilo "Transacción")
   // =========================================================================
   const [userStatusFilter, setUserStatusFilter] = useState<'Todos los Usuarios' | 'Usuarios Activos' | 'Solicitudes Pendientes'>('Todos los Usuarios');
   const [userCountryFilter, setUserCountryFilter] = useState('Todos');
   const [userZoneFilter, setUserZoneFilter] = useState('Todas');
   const [userStateFilter, setUserStateFilter] = useState('Todos');
   const [userSearch, setUserSearch] = useState('');
+  const [userIdSearch, setUserIdSearch] = useState('');
 
   const filteredUsersList = useMemo(() => {
     return allUsersAndClientsList.filter((u: any) => {
@@ -642,6 +773,15 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       if (userCountryFilter !== 'Todos' && u.geoCountry.toLowerCase() !== userCountryFilter.toLowerCase()) return false;
       if (userZoneFilter !== 'Todas' && u.geoZone.toLowerCase() !== userZoneFilter.toLowerCase()) return false;
       if (userStateFilter !== 'Todos' && u.geoState.toLowerCase() !== userStateFilter.toLowerCase()) return false;
+
+      if (userIdSearch.trim()) {
+        const idq = userIdSearch.toLowerCase().trim();
+        const idMatch =
+          (u.operator_code || '').toLowerCase().includes(idq) ||
+          (u.id || '').toLowerCase().includes(idq) ||
+          (u.phone || '').toLowerCase().includes(idq);
+        if (!idMatch) return false;
+      }
 
       const q = (userSearch || searchQuery).toLowerCase().trim();
       if (q) {
@@ -662,6 +802,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
     userZoneFilter,
     userStateFilter,
     userSearch,
+    userIdSearch,
     searchQuery,
   ]);
 
@@ -1712,190 +1853,355 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
               </View>
 
-              {/* Main Plants Availability Card & Geographic Filter Matrix */}
+              {/* Main Plants Availability Card — Estilo "Transacción" */}
               <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                <View style={styles.tableCardHeader}>
-                  <View style={{ flex: 1, minWidth: 240 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
-                      Disponibilidad de Plantas Eléctricas y Maquinaria ({filteredFleetPlants.length})
+                {/* Top Action Bar (Exportar + Título + Acciones Derecha) */}
+                <View style={[styles.tableCardHeader, { borderBottomWidth: 1, borderBottomColor: cardBorder, paddingVertical: 14 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap', flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 18, color: primaryNavy }}>
+                      Disponibilidad de Plantas Eléctricas ({filteredFleetPlants.length})
                     </Text>
-                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                      Navega y filtra el parque de plantas por Disponibilidad, Capacidad, País, Zona y Estado
-                    </Text>
+                    <TouchableOpacity
+                      onPress={onOpenReport}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: surfaceLow,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <MaterialIcons name="file-download" size={16} color={primaryNavy} />
+                      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: primaryNavy }}>Exportar</Text>
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
-                      <MaterialIcons name="search" size={18} color={textOutline} />
-                      <TextInput
-                        value={plantSearch}
-                        onChangeText={setPlantSearch}
-                        placeholder="Buscar modelo, serial, estado o sede..."
-                        placeholderTextColor={textOutline}
-                        style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 210, paddingVertical: 4 }}
-                      />
-                    </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
                       onPress={() => setIsAddingMoto(true)}
-                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 9 }]}
+                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
                     >
                       <MaterialIcons name="add-circle" size={16} color="#ffc250" />
                       <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Incorporar Planta</Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setShowFilterBar((prev) => !prev)}
+                      style={[styles.tableActionIconBtn, { backgroundColor: showFilterBar ? 'rgba(255, 91, 87, 0.14)' : surfaceLow }]}
+                    >
+                      <MaterialIcons name="filter-alt" size={18} color={showFilterBar ? '#ff5b57' : textVariant} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => loadSystemUsers()}
+                      style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                    >
+                      <MaterialIcons name="refresh" size={18} color={textVariant} />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Geographic & Availability Multi-Row Filter Box */}
-                <View style={{ marginHorizontal: isMobile ? 12 : 20, marginBottom: 16, padding: isMobile ? 12 : 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
-                  {/* Row 1: DISPONIBILIDAD */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>DISPONIBILIDAD:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {(['Todas', 'Disponibles', 'Asignadas'] as const).map((status) => {
-                        const active = plantAvailabilityFilter === status;
-                        return (
-                          <TouchableOpacity
-                            key={status}
-                            onPress={() => setPlantAvailabilityFilter(status)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? '#16a34a' : cardLowest,
-                                borderColor: active ? '#16a34a' : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {status === 'Disponibles' ? 'Disponibles (Libres)' : status === 'Asignadas' ? 'En Operación (Asignadas)' : 'Todas las Plantas'}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                {/* Horizontal Multi-Field Filter Bar (Referencia "Transacción") */}
+                {showFilterBar && (
+                  <View
+                    style={{
+                      paddingHorizontal: isMobile ? 14 : 20,
+                      paddingVertical: 16,
+                      backgroundColor: surfaceLow,
+                      borderBottomWidth: 1,
+                      borderBottomColor: cardBorder,
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      alignItems: 'flex-end',
+                      gap: 12,
+                    }}
+                  >
+                    {/* Field 1: Marca / Modelo */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '100%' : 170 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Planta / Modelo
+                      </Text>
+                      <TextInput
+                        value={plantSearch}
+                        onChangeText={setPlantSearch}
+                        placeholder="Introduzca la palabra clave."
+                        placeholderTextColor={textOutline}
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          fontFamily: F.medium,
+                          fontSize: 12,
+                          color: textOnSurface,
+                        }}
+                      />
+                    </View>
 
-                  {/* Row 2: CAPACIDAD */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>CAPACIDAD:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {PLANT_CATEGORIES.map((cat) => {
-                        const active = plantCategoryFilter === cat;
-                        return (
-                          <TouchableOpacity
-                            key={cat}
-                            onPress={() => setPlantCategoryFilter(cat)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? primaryContainer : cardLowest,
-                                borderColor: active ? primaryContainer : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {cat}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 2: ID / Serial */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '100%' : 155 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        ID / N.º de serie
+                      </Text>
+                      <TextInput
+                        value={plantSerialSearch}
+                        onChangeText={setPlantSerialSearch}
+                        placeholder="Introduzca la palabra clave."
+                        placeholderTextColor={textOutline}
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          fontFamily: F.medium,
+                          fontSize: 12,
+                          color: textOnSurface,
+                        }}
+                      />
+                    </View>
 
-                  {/* Row 3: PAÍS */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>PAÍS:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {COUNTRIES_LIST.map((c) => {
-                        const active = plantCountryFilter === c;
-                        return (
-                          <TouchableOpacity
-                            key={c}
-                            onPress={() => setPlantCountryFilter(c)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? academicGold : cardLowest,
-                                borderColor: active ? academicGold : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {c}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 3: Capacidad / Categoría Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 170 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Categoría / Capacidad
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Seleccionar Categoría de Capacidad',
+                            options: PLANT_CATEGORIES,
+                            selected: plantCategoryFilter,
+                            onSelect: (val) => setPlantCategoryFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: plantCategoryFilter === 'Todas' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {plantCategoryFilter === 'Todas' ? 'Por favor, seleccione.' : plantCategoryFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Row 4: ZONA */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ZONA:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {ZONES_LIST.map((z) => {
-                        const active = plantZoneFilter === z;
-                        return (
-                          <TouchableOpacity
-                            key={z}
-                            onPress={() => setPlantZoneFilter(z)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? primaryContainer : cardLowest,
-                                borderColor: active ? primaryContainer : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {z}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 4: Ubicación (Estado / Sede) Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 170 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Estado / Ubicación
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Seleccionar Estado o Sede',
+                            options: STATES_LIST,
+                            selected: plantStateFilter,
+                            onSelect: (val) => setPlantStateFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: plantStateFilter === 'Todos' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {plantStateFilter === 'Todos' ? 'Por favor, seleccione.' : plantStateFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Row 5: ESTADO / SEDE */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO / SEDE:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {STATES_LIST.map((st) => {
-                        const active = plantStateFilter === st;
-                        return (
-                          <TouchableOpacity
-                            key={st}
-                            onPress={() => setPlantStateFilter(st)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? innovationPurple : cardLowest,
-                                borderColor: active ? innovationPurple : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {st}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                </View>
+                    {/* Field 5: Zona / País Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 155 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Zona / País
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Seleccionar Zona Geográfica',
+                            options: ZONES_LIST,
+                            selected: plantZoneFilter,
+                            onSelect: (val) => setPlantZoneFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: plantZoneFilter === 'Todas' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {plantZoneFilter === 'Todas' ? 'Por favor, seleccione.' : plantZoneFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                {/* Table Header (Desktop) */}
-                {!isMobile && (
-                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
-                    <Text style={[styles.tableHeadCell, { flex: 2.2, color: textVariant, fontFamily: F.bold }]}>PLANTA & CAPACIDAD</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>SERIAL / CÓDIGO</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.8, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · ZONA · PAÍS)</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>DISPONIBILIDAD / OPERADOR</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.1, color: textVariant, fontFamily: F.bold }]}>HORÓMETRO</Text>
-                    <Text style={[styles.tableHeadCell, { width: 150, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                    {/* Field 6: Disponibilidad Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 155 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Disponibilidad
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Filtrar por Disponibilidad',
+                            options: ['Todas', 'Disponibles', 'Asignadas'],
+                            selected: plantAvailabilityFilter,
+                            onSelect: (val) => setPlantAvailabilityFilter(val as any),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: plantAvailabilityFilter === 'Todas' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {plantAvailabilityFilter === 'Todas' ? 'Todas las unidades' : plantAvailabilityFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Botones Filtro y Restablecer */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => {}}
+                        activeOpacity={0.85}
+                        style={{
+                          height: 38,
+                          paddingHorizontal: 20,
+                          borderRadius: 19,
+                          backgroundColor: '#ff5b57',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Filtro</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setPlantSearch('');
+                          setPlantSerialSearch('');
+                          setPlantCategoryFilter('Todas');
+                          setPlantStateFilter('Todos');
+                          setPlantZoneFilter('Todas');
+                          setPlantCountryFilter('Todos');
+                          setPlantAvailabilityFilter('Todas');
+                        }}
+                        activeOpacity={0.85}
+                        style={{
+                          height: 38,
+                          paddingHorizontal: 16,
+                          borderRadius: 19,
+                          backgroundColor: cardLowest,
+                          borderWidth: 1,
+                          borderColor: textOnSurface,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }}>Restablecer</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 
-                {/* Plants Rows */}
+                {/* Hint Banner */}
+                <View style={{ paddingHorizontal: 20, paddingVertical: 8, backgroundColor: isDark ? 'rgba(37, 99, 235, 0.08)' : '#f8fafc', borderBottomWidth: 1, borderBottomColor: cardBorder, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="touch-app" size={15} color={academicGold} />
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    Haz clic sobre cualquier fila de planta para <Text style={{ fontFamily: F.bold, color: primaryNavy }}>editar sus datos, asignar Estado/Ubicación o cambiar su operador responsable</Text>.
+                  </Text>
+                </View>
+
+                {/* Table Header (Desktop — Estilo "Transacción") */}
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopWidth: 0, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Marca</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Modelo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 0.9, color: textOnSurface, fontFamily: F.bold }]}>Capacidad ⇅</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textOnSurface, fontFamily: F.bold }]}>Categoría ⇅</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>N.º de serie del dispositivo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Estado Operativo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textOnSurface, fontFamily: F.bold }]}>Operador a Cargo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 0.9, color: textOnSurface, fontFamily: F.bold }]}>Horómetro</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textOnSurface, fontFamily: F.bold }]}>Ubicación</Text>
+                    <Text style={[styles.tableHeadCell, { width: 115, textAlign: 'right', color: textOnSurface, fontFamily: F.bold }]}>Acciones</Text>
+                  </View>
+                )}
+
+                {/* Plants Rows (Clickable for instant editing!) */}
                 <View>
                   {filteredFleetPlants.length === 0 ? (
                     <View style={{ padding: 36, alignItems: 'center' }}>
@@ -1909,8 +2215,10 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       const kva = plant.powerKva || 0;
                       const hrs = plant.currentHours || plant.currentOdometer || 0;
                       return (
-                        <View
+                        <TouchableOpacity
                           key={plant.id}
+                          onPress={() => openPlantEditor(plant)}
+                          activeOpacity={0.75}
                           style={[
                             styles.tableDataRow,
                             {
@@ -1919,153 +2227,163 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                               flexDirection: isMobile ? 'column' : 'row',
                               alignItems: isMobile ? 'flex-start' : 'center',
                               paddingHorizontal: isMobile ? 14 : 20,
+                              paddingVertical: 12,
                             },
                           ]}
                         >
-                          {/* Col 1: Brand, Model & Category */}
-                          <View style={{ flex: 2.2, width: isMobile ? '100%' : undefined, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View style={[styles.tablePlantThumb, { backgroundColor: surfaceLow }]}>
-                              <MaterialCommunityIcons name="generator-portable" size={22} color={primaryNavy} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontFamily: F.bold, fontSize: 14.5, color: primaryNavy }} numberOfLines={1}>
-                                {plant.brand} {plant.model} · {kva} kVA
-                              </Text>
-                              <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: innovationPurple }} numberOfLines={1}>
-                                {plant.category} · {plant.fuelType || 'Diesel'}
-                              </Text>
-                            </View>
+                          {/* Marca */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              {plant.brand || 'Blue Power'}
+                            </Text>
                           </View>
 
-                          {/* Col 2: Serial */}
+                          {/* Modelo */}
+                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: primaryNavy }} numberOfLines={1}>
+                              {plant.model || '--'}
+                            </Text>
+                          </View>
+
+                          {/* Capacidad */}
+                          <View style={{ flex: 0.9, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }}>
+                              {kva} kVA
+                            </Text>
+                          </View>
+
+                          {/* Categoría */}
+                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                              {plant.category}
+                            </Text>
+                          </View>
+
+                          {/* N.º de serie */}
                           <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.bold, fontSize: 13, color: textOnSurface }}>
-                              {isMobile ? `Serial: ${plant.serialNumber || plant.plate || 'Sin serial'}` : (plant.serialNumber || plant.plate || 'Sin serial')}
-                            </Text>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                              Año: {plant.year || '-'}
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }} numberOfLines={1}>
+                              {plant.serialNumber || plant.plate || '--'}
                             </Text>
                           </View>
 
-                          {/* Col 3: Geographic Location */}
-                          <View style={{ flex: 1.8, width: isMobile ? '100%' : undefined }}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                              <MaterialIcons name="location-on" size={15} color={academicGold} />
-                              <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
-                                {plant.location || plant.geoState}
-                              </Text>
-                            </View>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant, marginTop: 2 }} numberOfLines={1}>
-                              {plant.geoZone} · {plant.geoCountry}
-                            </Text>
-                          </View>
-
-                          {/* Col 4: Availability & Operator */}
-                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
+                          {/* Estado Operativo */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
                                 backgroundColor: plant.isAssigned ? 'rgba(37, 99, 235, 0.14)' : 'rgba(22, 163, 74, 0.14)',
-                                paddingHorizontal: 9,
+                                paddingHorizontal: 8,
                                 paddingVertical: 3,
                                 borderRadius: 99,
-                                marginBottom: 3,
                               }}
                             >
                               <Text
                                 style={{
                                   fontFamily: F.bold,
-                                  fontSize: 10.5,
+                                  fontSize: 10,
                                   color: plant.isAssigned ? '#2563eb' : '#16a34a',
                                 }}
                               >
-                                {plant.isAssigned ? 'EN OPERACIÓN' : 'DISPONIBLE (LIBRE)'}
+                                {plant.isAssigned ? 'EN OPERACIÓN' : 'DISPONIBLE'}
                               </Text>
                             </View>
-                            <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
-                              {plant.assignedOperatorName ? `Op: ${plant.assignedOperatorName}` : 'Sin operador asignado'}
+                          </View>
+
+                          {/* Operador a Cargo */}
+                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: plant.assignedOperatorName ? textOnSurface : textOutline }} numberOfLines={1}>
+                              {plant.assignedOperatorName || '--'}
                             </Text>
                           </View>
 
-                          {/* Col 5: Hours */}
-                          <View style={{ flex: 1.1, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.extrabold, fontSize: 13.5, color: primaryNavy }}>
+                          {/* Horómetro */}
+                          <View style={{ flex: 0.9, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
                               {hrs.toLocaleString()} hrs
                             </Text>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
-                              Horómetro real
+                          </View>
+
+                          {/* Ubicación */}
+                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
+                            <Text
+                              style={{
+                                fontFamily: F.semibold,
+                                fontSize: 12,
+                                color: plant.geoState === 'Sin Estado en BD' ? '#f59e0b' : textOnSurface,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {plant.location || (plant.geoState === 'Sin Estado en BD' ? '+ Asignar Estado' : plant.geoState)}
+                            </Text>
+                            <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
+                              {plant.geoZone !== 'Sin Zona en BD' ? `${plant.geoZone} · ${plant.geoCountry}` : plant.geoCountry}
                             </Text>
                           </View>
 
-                          {/* Col 6: Actions — Super Admin ("El Jefe") only supervises & assigns, never logs service/hours */}
-                          <View style={{ width: isMobile ? '100%' : 150, flexDirection: 'row', justifyContent: 'flex-end', gap: 6, marginTop: isMobile ? 4 : 0 }}>
-                            {isSuperAdmin ? (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  selectMoto(plant.id);
-                                  loadSystemUsers();
-                                  setUserMgmtVisible(true);
-                                }}
-                                style={[
-                                  styles.toolbarSecondaryBtn,
-                                  { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 10, paddingVertical: 6 },
-                                ]}
-                              >
-                                <MaterialIcons name="assignment-ind" size={16} color={primaryNavy} />
-                                <Text style={{ fontFamily: F.bold, fontSize: 11, color: primaryNavy }}>Asignar</Text>
-                              </TouchableOpacity>
-                            ) : (
-                              <>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    selectMoto(plant.id);
-                                    onOpenQuickHours();
-                                  }}
-                                  style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                                >
-                                  <MaterialIcons name="more-time" size={18} color={primaryNavy} />
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => {
-                                    selectMoto(plant.id);
-                                    onOpenServicesTab('oil');
-                                  }}
-                                  style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
-                                >
-                                  <MaterialIcons name="build" size={17} color={primaryNavy} />
-                                </TouchableOpacity>
-                              </>
-                            )}
+                          {/* Acciones */}
+                          <View style={{ width: isMobile ? '100%' : 115, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                            <TouchableOpacity
+                              onPress={() => openPlantEditor(plant)}
+                              style={[
+                                styles.toolbarSecondaryBtn,
+                                { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 8, paddingVertical: 5 },
+                              ]}
+                            >
+                              <MaterialIcons name="edit-location-alt" size={15} color={primaryNavy} />
+                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: primaryNavy }}>Editar</Text>
+                            </TouchableOpacity>
                             <TouchableOpacity
                               onPress={() => {
                                 selectMoto(plant.id);
                                 onOpenReport();
                               }}
-                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow, width: 30, height: 30 }]}
                             >
-                              <MaterialIcons name="picture-as-pdf" size={18} color={primaryNavy} />
+                              <MaterialIcons name="picture-as-pdf" size={16} color={primaryNavy} />
                             </TouchableOpacity>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })
                   )}
                 </View>
 
-                <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
-                    Mostrando {filteredFleetPlants.length} de {allPlants.length} plantas eléctricas registradas en Supabase
-                  </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                    {fleetStats.unassigned} Disponibles · {fleetStats.assigned} Asignadas
-                  </Text>
+                {/* Bottom Pagination Bar (Referencia "Transacción") */}
+                <View style={[styles.tableCardFooter, { backgroundColor: cardLowest, borderTopColor: cardBorder }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 99,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        backgroundColor: surfaceLow,
+                      }}
+                    >
+                      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }}>20</Text>
+                      <MaterialIcons name="keyboard-arrow-down" size={16} color={textVariant} />
+                    </View>
+                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                      Mostrando {filteredFleetPlants.length} de {allPlants.length} plantas ({fleetStats.unassigned} disponibles · {fleetStats.assigned} asignadas)
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <MaterialIcons name="chevron-left" size={20} color={textOutline} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>1</Text>
+                    <MaterialIcons name="chevron-right" size={20} color={textOutline} />
+                  </View>
                 </View>
               </View>
             </View>
           )}
 
           {/* ===================================================================== */}
-          {/* PESTAÑA 3: PERSONAL OPERADOR & ADMINS (Exclusivo para Personal HL)    */}
+          {/* PESTAÑA 3: PERSONAL OPERADOR & ADMINS (Estilo "Transacción")          */}
           {/* ===================================================================== */}
           {perspectiveTab === 'personnel' && (
             <View style={{ gap: 18 }}>
@@ -2093,219 +2411,359 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
               </View>
 
-              {/* Main Personnel Table & Multi-Criteria Filter Matrix */}
+              {/* Main Personnel Directory Card — Estilo "Transacción" */}
               <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                <View style={styles.tableCardHeader}>
-                  <View style={{ flex: 1, minWidth: 240 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
-                      Directorio de Personal Operador y Administradores ({filteredPersonnelList.length})
+                {/* Top Action Bar */}
+                <View style={[styles.tableCardHeader, { borderBottomWidth: 1, borderBottomColor: cardBorder, paddingVertical: 14 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap', flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 18, color: primaryNavy }}>
+                      Personal Operador y Administradores ({filteredPersonnelList.length})
                     </Text>
-                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                      Filtra el personal técnico por Rol, Disponibilidad, País, Zona, Estado y Departamento
-                    </Text>
+                    <TouchableOpacity
+                      onPress={onOpenReport}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: surfaceLow,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <MaterialIcons name="file-download" size={16} color={primaryNavy} />
+                      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: primaryNavy }}>Exportar</Text>
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
-                      <MaterialIcons name="search" size={18} color={textOutline} />
-                      <TextInput
-                        value={personnelSearch}
-                        onChangeText={setPersonnelSearch}
-                        placeholder="Buscar operador, carnet HL, especialidad..."
-                        placeholderTextColor={textOutline}
-                        style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 210, paddingVertical: 4 }}
-                      />
-                    </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
                       onPress={() => setCreateOperatorVisible(true)}
-                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 9 }]}
+                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
                     >
                       <MaterialIcons name="person-add" size={16} color="#ffc250" />
                       <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
-                        Registrar Operador / Super Admin
+                        Registrar Empleado / Admin
                       </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setShowFilterBar((prev) => !prev)}
+                      style={[styles.tableActionIconBtn, { backgroundColor: showFilterBar ? 'rgba(255, 91, 87, 0.14)' : surfaceLow }]}
+                    >
+                      <MaterialIcons name="filter-alt" size={18} color={showFilterBar ? '#ff5b57' : textVariant} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => loadSystemUsers()}
+                      style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                    >
+                      <MaterialIcons name="refresh" size={18} color={textVariant} />
                     </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Personnel Filter Box: ROL, ASIGNACIÓN, PAÍS, ZONA, ESTADO, DEPARTAMENTO */}
-                <View style={{ marginHorizontal: isMobile ? 12 : 20, marginBottom: 16, padding: isMobile ? 12 : 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
-                  {/* Row 1: ROL DE PERSONAL */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ROL PERSONAL:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {(['Todo el Personal', 'Operadores Técnicos', 'Super Administradores'] as const).map((r) => {
-                        const active = personnelRoleFilter === r;
-                        return (
-                          <TouchableOpacity
-                            key={r}
-                            onPress={() => setPersonnelRoleFilter(r)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? primaryContainer : cardLowest,
-                                borderColor: active ? primaryContainer : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {r}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                {/* Horizontal Multi-Field Filter Bar (Referencia "Transacción") */}
+                {showFilterBar && (
+                  <View
+                    style={{
+                      paddingHorizontal: isMobile ? 14 : 20,
+                      paddingVertical: 16,
+                      backgroundColor: surfaceLow,
+                      borderBottomWidth: 1,
+                      borderBottomColor: cardBorder,
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      alignItems: 'flex-end',
+                      gap: 12,
+                    }}
+                  >
+                    {/* Field 1: Nombre completo */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '100%' : 170 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Nombre completo
+                      </Text>
+                      <TextInput
+                        value={personnelSearch}
+                        onChangeText={setPersonnelSearch}
+                        placeholder="Introduzca la palabra clave."
+                        placeholderTextColor={textOutline}
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          fontFamily: F.medium,
+                          fontSize: 12,
+                          color: textOnSurface,
+                        }}
+                      />
+                    </View>
 
-                  {/* Row 2: ASIGNACIÓN / DISPONIBILIDAD */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ASIGNACIÓN:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {(['Todos', 'Con Plantas a Cargo', 'Disponibles (0 Plantas)', 'Con Vehículo de Flota'] as const).map((a) => {
-                        const active = personnelAssignFilter === a;
-                        return (
-                          <TouchableOpacity
-                            key={a}
-                            onPress={() => setPersonnelAssignFilter(a)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? '#16a34a' : cardLowest,
-                                borderColor: active ? '#16a34a' : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {a}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 2: ID / Carnet */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '100%' : 145 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        ID
+                      </Text>
+                      <TextInput
+                        value={personnelIdSearch}
+                        onChangeText={setPersonnelIdSearch}
+                        placeholder="Introduzca la palabra clave."
+                        placeholderTextColor={textOutline}
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          fontFamily: F.medium,
+                          fontSize: 12,
+                          color: textOnSurface,
+                        }}
+                      />
+                    </View>
 
-                  {/* Row 3: PAÍS */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>PAÍS:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {COUNTRIES_LIST.map((c) => {
-                        const active = personnelCountryFilter === c;
-                        return (
-                          <TouchableOpacity
-                            key={c}
-                            onPress={() => setPersonnelCountryFilter(c)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? academicGold : cardLowest,
-                                borderColor: active ? academicGold : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {c}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 3: Departamento Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 165 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Departamento
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Seleccionar Departamento',
+                            options: personnelDeptsList,
+                            selected: personnelDeptFilter,
+                            onSelect: (val) => setPersonnelDeptFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: personnelDeptFilter === 'Todos' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {personnelDeptFilter === 'Todos' ? 'Por favor, seleccione.' : personnelDeptFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Row 4: ZONA */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ZONA:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {ZONES_LIST.map((z) => {
-                        const active = personnelZoneFilter === z;
-                        return (
-                          <TouchableOpacity
-                            key={z}
-                            onPress={() => setPersonnelZoneFilter(z)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? primaryContainer : cardLowest,
-                                borderColor: active ? primaryContainer : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {z}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 4: Estado / Ubicación Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 165 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Ubicación (Estado)
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Filtrar Personal por Estado / Sede',
+                            options: STATES_LIST,
+                            selected: personnelStateFilter,
+                            onSelect: (val) => setPersonnelStateFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: personnelStateFilter === 'Todos' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {personnelStateFilter === 'Todos' ? 'Por favor, seleccione.' : personnelStateFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Row 5: ESTADO */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {STATES_LIST.map((st) => {
-                        const active = personnelStateFilter === st;
-                        return (
-                          <TouchableOpacity
-                            key={st}
-                            onPress={() => setPersonnelStateFilter(st)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? '#2563eb' : cardLowest,
-                                borderColor: active ? '#2563eb' : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {st}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 5: Rol / Nivel Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 155 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Rol Personal
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Filtrar por Rol de Personal',
+                            options: ['Todo el Personal', 'Operadores Técnicos', 'Super Administradores'],
+                            selected: personnelRoleFilter,
+                            onSelect: (val) => setPersonnelRoleFilter(val as any),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: personnelRoleFilter === 'Todo el Personal' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {personnelRoleFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Row 6: DEPARTAMENTO / ESPECIALIDAD */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>DEPARTAMENTO:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {personnelDeptsList.map((dp) => {
-                        const active = personnelDeptFilter === dp;
-                        return (
-                          <TouchableOpacity
-                            key={dp}
-                            onPress={() => setPersonnelDeptFilter(dp)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? innovationPurple : cardLowest,
-                                borderColor: active ? innovationPurple : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {dp}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                </View>
+                    {/* Field 6: Device / Asignación Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 165 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Device / Asignación
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Filtrar por Planta o Vehículo Asignado',
+                            options: ['Todos', 'Con Plantas a Cargo', 'Disponibles (0 Plantas)', 'Con Vehículo de Flota'],
+                            selected: personnelAssignFilter,
+                            onSelect: (val) => setPersonnelAssignFilter(val as any),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: personnelAssignFilter === 'Todos' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {personnelAssignFilter === 'Todos' ? 'Por favor, seleccione.' : personnelAssignFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                {/* Table Header (Desktop) */}
-                {!isMobile && (
-                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
-                    <Text style={[styles.tableHeadCell, { flex: 2, color: textVariant, fontFamily: F.bold }]}>PERSONAL & CARNET HL</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>ROL & ESPECIALIDAD</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · PAÍS)</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.7, color: textVariant, fontFamily: F.bold }]}>PLANTAS BAJO SU CARGO</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textVariant, fontFamily: F.bold }]}>VEHÍCULO DE FLOTA</Text>
-                    <Text style={[styles.tableHeadCell, { width: 150, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                    {/* Botones Filtro y Restablecer */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => {}}
+                        activeOpacity={0.85}
+                        style={{
+                          height: 38,
+                          paddingHorizontal: 20,
+                          borderRadius: 19,
+                          backgroundColor: '#ff5b57',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Filtro</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setPersonnelSearch('');
+                          setPersonnelIdSearch('');
+                          setPersonnelDeptFilter('Todos');
+                          setPersonnelStateFilter('Todos');
+                          setPersonnelZoneFilter('Todas');
+                          setPersonnelCountryFilter('Todos');
+                          setPersonnelRoleFilter('Todo el Personal');
+                          setPersonnelAssignFilter('Todos');
+                        }}
+                        activeOpacity={0.85}
+                        style={{
+                          height: 38,
+                          paddingHorizontal: 16,
+                          borderRadius: 19,
+                          backgroundColor: cardLowest,
+                          borderWidth: 1,
+                          borderColor: textOnSurface,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }}>Restablecer</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 
-                {/* Personnel Rows */}
+                {/* Hint Banner */}
+                <View style={{ paddingHorizontal: 20, paddingVertical: 8, backgroundColor: isDark ? 'rgba(37, 99, 235, 0.08)' : '#f8fafc', borderBottomWidth: 1, borderBottomColor: cardBorder, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="touch-app" size={15} color={academicGold} />
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    Haz clic directamente sobre cualquier empleado para <Text style={{ fontFamily: F.bold, color: primaryNavy }}>editar su Nombre, Carnet, Departamento, asignar su Estado/Zona/País, Vehículo o Plantas</Text>.
+                  </Text>
+                </View>
+
+                {/* Table Header (Desktop — Columnas Exactas Referencia "Transacción") */}
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopWidth: 0, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Nombre</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Apellido</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 0.9, color: textOnSurface, fontFamily: F.bold }]}>ID ⇅</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.5, color: textOnSurface, fontFamily: F.bold }]}>Departamento ⇅</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.1, color: textOnSurface, fontFamily: F.bold }]}>Rol</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.6, color: textOnSurface, fontFamily: F.bold }]}>Nombre del dispositivo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>N.º de serie del dispositivo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Vehículo Flota</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>Ubicación</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.1, color: textOnSurface, fontFamily: F.bold }]}>Observaciones</Text>
+                    <Text style={[styles.tableHeadCell, { width: 120, textAlign: 'right', color: textOnSurface, fontFamily: F.bold }]}>Acciones</Text>
+                  </View>
+                )}
+
+                {/* Personnel Rows (Click on any row to edit employee data, state, plants & vehicle!) */}
                 <View>
                   {filteredPersonnelList.length === 0 ? (
                     <View style={{ padding: 36, alignItems: 'center' }}>
@@ -2315,14 +2773,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       </Text>
                     </View>
                   ) : (
-                    filteredPersonnelList.map((op: any) => {
-                      const initials = (op.full_name || op.email || 'OP')
-                        .split(' ')
-                        .map((n: string) => n[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase();
-
+                    filteredPersonnelList.map((op: any, idx: number) => {
                       const assignedPlants = allPlants.filter(
                         (p) =>
                           p.assignedOperatorId === op.id ||
@@ -2332,10 +2783,21 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       );
 
                       const isSuper = op.resolvedRole === 'superadmin';
+                      const primaryPlant = assignedPlants[0];
+                      const deviceName = isSuper
+                        ? 'CONTROL GLOBAL HL'
+                        : primaryPlant
+                        ? `${primaryPlant.brand} ${primaryPlant.model} (${primaryPlant.powerKva || 0} kVA)`
+                        : '--';
+                      const deviceSerial = primaryPlant
+                        ? primaryPlant.serialNumber || primaryPlant.plate || '--'
+                        : '--';
 
                       return (
-                        <View
+                        <TouchableOpacity
                           key={op.id}
+                          onPress={() => setAssigningOperator(op)}
+                          activeOpacity={0.75}
                           style={[
                             styles.tableDataRow,
                             {
@@ -2344,90 +2806,105 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                               flexDirection: isMobile ? 'column' : 'row',
                               alignItems: isMobile ? 'flex-start' : 'center',
                               paddingHorizontal: isMobile ? 14 : 20,
+                              paddingVertical: 12,
                             },
                           ]}
                         >
-                          {/* Col 1: Name, Email & Carnet */}
-                          <View style={{ flex: 2, width: isMobile ? '100%' : undefined, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View style={[styles.tableUserAvatar, { backgroundColor: isSuper ? academicGold : primaryContainer }]}>
-                              <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }} numberOfLines={1}>
-                                {op.full_name || 'Sin nombre en BD'}
-                              </Text>
-                              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
-                                {op.operator_code ? `Carnet: ${op.operator_code} · ` : ''}{op.email || 'Sin correo'}
-                              </Text>
-                            </View>
+                          {/* Col 1: Nombre */}
+                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              {op.firstName}
+                            </Text>
                           </View>
 
-                          {/* Col 2: Role & Department */}
-                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                          {/* Col 2: Apellido */}
+                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              {op.lastName}
+                            </Text>
+                          </View>
+
+                          {/* Col 3: ID / Carnet */}
+                          <View style={{ flex: 0.9, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                              {op.operator_code || `#${idx + 1}`}
+                            </Text>
+                          </View>
+
+                          {/* Col 4: Departamento */}
+                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }} numberOfLines={1}>
+                              {op.deptLabel.toUpperCase()}
+                            </Text>
+                          </View>
+
+                          {/* Col 5: Rol */}
+                          <View style={{ flex: 1.1, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
                                 backgroundColor: isSuper ? secondaryFixed : 'rgba(37, 99, 235, 0.14)',
-                                paddingHorizontal: 9,
+                                paddingHorizontal: 8,
                                 paddingVertical: 3,
                                 borderRadius: 99,
-                                marginBottom: 3,
                               }}
                             >
-                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: isSuper ? onSecondaryFixed : '#2563eb' }}>
-                                {isSuper ? 'SUPER ADMIN' : 'OPERADOR TÉCNICO'}
+                              <Text style={{ fontFamily: F.bold, fontSize: 10, color: isSuper ? onSecondaryFixed : '#2563eb' }}>
+                                {isSuper ? 'SUPER ADMIN' : 'OPERADOR'}
                               </Text>
                             </View>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
-                              {op.deptLabel}
+                          </View>
+
+                          {/* Col 6: Nombre del dispositivo */}
+                          <View style={{ flex: 1.6, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: primaryPlant ? primaryNavy : textVariant }} numberOfLines={1}>
+                              {deviceName}
+                              {assignedPlants.length > 1 ? ` (+${assignedPlants.length - 1})` : ''}
                             </Text>
                           </View>
 
-                          {/* Col 3: Location */}
-                          <View style={{ flex: 1.5, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
-                              📍 {op.geoState}
-                            </Text>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
-                              {op.geoZone} · {op.geoCountry}
+                          {/* Col 7: N.º de serie del dispositivo */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                              {deviceSerial}
                             </Text>
                           </View>
 
-                          {/* Col 4: Assigned Plants */}
-                          <View style={{ flex: 1.7, width: isMobile ? '100%' : undefined }}>
-                            {isSuper ? (
-                              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
-                                Supervisión global ejecutiva
-                              </Text>
-                            ) : assignedPlants.length === 0 ? (
-                              <Text style={{ fontFamily: F.medium, fontSize: 12, color: textOutline }}>
-                                0 plantas asignadas (Disponible)
-                              </Text>
-                            ) : (
-                              assignedPlants.map((ap) => (
-                                <TouchableOpacity key={ap.id} onPress={() => selectMoto(ap.id)}>
-                                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                                    ⚡ {ap.brand} {ap.model} ({ap.powerKva || 0} kVA)
-                                  </Text>
-                                </TouchableOpacity>
-                              ))
-                            )}
+                          {/* Col 8: Vehículo Flota */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: op.assigned_vehicle_name ? textOnSurface : textOutline }} numberOfLines={1}>
+                              {op.assigned_vehicle_name ? `${op.assigned_vehicle_name} (${op.assigned_vehicle_plate || ''})` : '--'}
+                            </Text>
                           </View>
 
-                          {/* Col 5: Assigned Vehicle */}
-                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.semibold, fontSize: 12, color: op.assigned_vehicle_name ? textOnSurface : textOutline }}>
-                              {op.assigned_vehicle_name || 'Sin vehículo asignado'}
+                          {/* Col 9: Ubicación (Estado / Zona / País) */}
+                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                            <Text
+                              style={{
+                                fontFamily: F.semibold,
+                                fontSize: 12,
+                                color: op.geoState === 'Sin Estado en BD' ? '#f59e0b' : textOnSurface,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {op.geoState === 'Sin Estado en BD' ? '+ Asignar Estado' : op.geoState}
                             </Text>
-                            {op.assigned_vehicle_plate && (
-                              <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }}>
-                                Placa: {op.assigned_vehicle_plate}
+                            {op.geoZone !== 'Sin Zona en BD' && (
+                              <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
+                                {op.geoZone} · {op.geoCountry}
                               </Text>
                             )}
                           </View>
 
-                          {/* Col 6: Actions */}
-                          <View style={{ width: isMobile ? '100%' : 150, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                          {/* Col 10: Observaciones / Contacto */}
+                          <View style={{ flex: 1.1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
+                              {op.observations || op.email || '--'}
+                            </Text>
+                          </View>
+
+                          {/* Col 11: Acciones */}
+                          <View style={{ width: isMobile ? '100%' : 120, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
                             {op.phone ? (
                               <TouchableOpacity
                                 onPress={() => {
@@ -2435,42 +2912,64 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                                   const phone = rawDigits.startsWith('58') ? rawDigits : '58' + rawDigits.replace(/^0/, '');
                                   Linking.openURL('https://wa.me/' + phone).catch(() => {});
                                 }}
-                                style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)' }]}
+                                style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)', width: 30, height: 30 }]}
                               >
-                                <MaterialCommunityIcons name="whatsapp" size={18} color="#16a34a" />
+                                <MaterialCommunityIcons name="whatsapp" size={16} color="#16a34a" />
                               </TouchableOpacity>
                             ) : null}
                             <TouchableOpacity
                               onPress={() => setAssigningOperator(op)}
                               style={[
                                 styles.toolbarSecondaryBtn,
-                                { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 10, paddingVertical: 6 },
+                                { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 9, paddingVertical: 5 },
                               ]}
                             >
-                              <MaterialIcons name="assignment-ind" size={16} color={primaryNavy} />
-                              <Text style={{ fontFamily: F.bold, fontSize: 11, color: primaryNavy }}>Asignar</Text>
+                              <MaterialIcons name="edit" size={14} color={primaryNavy} />
+                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: primaryNavy }}>Editar</Text>
                             </TouchableOpacity>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })
                   )}
                 </View>
 
-                <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
-                    Mostrando {filteredPersonnelList.length} de {allPersonnelList.length} integrantes del personal interno
-                  </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                    {(operatorsList || []).length} Operadores · {(superAdminsList || []).length} Super Admins
-                  </Text>
+                {/* Bottom Pagination Bar (Referencia "Transacción") */}
+                <View style={[styles.tableCardFooter, { backgroundColor: cardLowest, borderTopColor: cardBorder }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 99,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        backgroundColor: surfaceLow,
+                      }}
+                    >
+                      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }}>20</Text>
+                      <MaterialIcons name="keyboard-arrow-down" size={16} color={textVariant} />
+                    </View>
+                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                      Mostrando {filteredPersonnelList.length} de {allPersonnelList.length} integrantes ({(operatorsList || []).length} Operadores · {(superAdminsList || []).length} Super Admins)
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <MaterialIcons name="chevron-left" size={20} color={textOutline} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>1</Text>
+                    <MaterialIcons name="chevron-right" size={20} color={textOutline} />
+                  </View>
                 </View>
               </View>
             </View>
           )}
 
           {/* ===================================================================== */}
-          {/* PESTAÑA 4: USUARIOS Y CLIENTES (Exclusivo para Clientes y Solicitudes)*/}
+          {/* PESTAÑA 4: USUARIOS Y CLIENTES (Estilo "Transacción")                 */}
           {/* ===================================================================== */}
           {perspectiveTab === 'users' && (
             <View style={{ gap: 18 }}>
@@ -2498,164 +2997,315 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                 </View>
               </View>
 
-              {/* Main Users & Clients Table & Geographic Filter Matrix */}
+              {/* Main Users & Clients Table — Estilo "Transacción" */}
               <View style={[styles.operationalTableCard, { backgroundColor: cardLowest, borderColor: cardBorder }]}>
-                <View style={styles.tableCardHeader}>
-                  <View style={{ flex: 1, minWidth: 240 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 20, color: primaryNavy }}>
-                      Directorio de Usuarios Regulares y Clientes Titulares ({filteredUsersList.length})
+                {/* Top Action Bar */}
+                <View style={[styles.tableCardHeader, { borderBottomWidth: 1, borderBottomColor: cardBorder, paddingVertical: 14 }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14, flexWrap: 'wrap', flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 18, color: primaryNavy }}>
+                      Directorio de Usuarios y Clientes ({filteredUsersList.length})
                     </Text>
-                    <Text style={{ fontFamily: F.medium, fontSize: 13, color: textVariant, marginTop: 2 }}>
-                      Navega por Estado de Cuenta, País, Zona y Estado, o aprueba solicitudes pendientes
-                    </Text>
+                    <TouchableOpacity
+                      onPress={onOpenReport}
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                        paddingHorizontal: 12,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        backgroundColor: surfaceLow,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                      }}
+                    >
+                      <MaterialIcons name="file-download" size={16} color={primaryNavy} />
+                      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: primaryNavy }}>Exportar</Text>
+                    </TouchableOpacity>
                   </View>
 
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-                    <View style={[styles.tableFilterSearchBox, { backgroundColor: surfaceLow, borderColor: cardBorder }]}>
-                      <MaterialIcons name="search" size={18} color={textOutline} />
-                      <TextInput
-                        value={userSearch}
-                        onChangeText={setUserSearch}
-                        placeholder="Buscar cliente, correo, teléfono o estado..."
-                        placeholderTextColor={textOutline}
-                        style={{ fontFamily: F.medium, fontSize: 12.5, color: textOnSurface, minWidth: 210, paddingVertical: 4 }}
-                      />
-                    </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                     <TouchableOpacity
                       onPress={() => setCreateOperatorVisible(true)}
-                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 9 }]}
+                      style={[styles.toolbarPrimaryBtn, { backgroundColor: isDark ? '#2563eb' : '#002045', paddingVertical: 8 }]}
                     >
                       <MaterialIcons name="person-add" size={16} color="#ffc250" />
                       <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>
                         Crear Cuenta de Usuario
                       </Text>
                     </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => setShowFilterBar((prev) => !prev)}
+                      style={[styles.tableActionIconBtn, { backgroundColor: showFilterBar ? 'rgba(255, 91, 87, 0.14)' : surfaceLow }]}
+                    >
+                      <MaterialIcons name="filter-alt" size={18} color={showFilterBar ? '#ff5b57' : textVariant} />
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      onPress={() => loadSystemUsers()}
+                      style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                    >
+                      <MaterialIcons name="refresh" size={18} color={textVariant} />
+                    </TouchableOpacity>
                   </View>
                 </View>
 
-                {/* Users Filter Box: ESTADO DE CUENTA, PAÍS, ZONA, ESTADO */}
-                <View style={{ marginHorizontal: isMobile ? 12 : 20, marginBottom: 16, padding: isMobile ? 12 : 14, borderRadius: 14, backgroundColor: surfaceLow, borderWidth: 1, borderColor: cardBorder, gap: 10 }}>
-                  {/* Row 1: ESTADO DE CUENTA */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO CUENTA:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {(['Todos los Usuarios', 'Usuarios Activos', 'Solicitudes Pendientes'] as const).map((st) => {
-                        const active = userStatusFilter === st;
-                        return (
-                          <TouchableOpacity
-                            key={st}
-                            onPress={() => setUserStatusFilter(st)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? innovationPurple : cardLowest,
-                                borderColor: active ? innovationPurple : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {st}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                {/* Horizontal Multi-Field Filter Bar (Referencia "Transacción") */}
+                {showFilterBar && (
+                  <View
+                    style={{
+                      paddingHorizontal: isMobile ? 14 : 20,
+                      paddingVertical: 16,
+                      backgroundColor: surfaceLow,
+                      borderBottomWidth: 1,
+                      borderBottomColor: cardBorder,
+                      flexDirection: 'row',
+                      flexWrap: 'wrap',
+                      alignItems: 'flex-end',
+                      gap: 12,
+                    }}
+                  >
+                    {/* Field 1: Nombre completo */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '100%' : 180 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Nombre completo / Correo
+                      </Text>
+                      <TextInput
+                        value={userSearch}
+                        onChangeText={setUserSearch}
+                        placeholder="Introduzca la palabra clave."
+                        placeholderTextColor={textOutline}
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          fontFamily: F.medium,
+                          fontSize: 12,
+                          color: textOnSurface,
+                        }}
+                      />
+                    </View>
 
-                  {/* Row 2: PAÍS */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>PAÍS:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {COUNTRIES_LIST.map((c) => {
-                        const active = userCountryFilter === c;
-                        return (
-                          <TouchableOpacity
-                            key={c}
-                            onPress={() => setUserCountryFilter(c)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? academicGold : cardLowest,
-                                borderColor: active ? academicGold : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {c}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 2: ID / Teléfono */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '100%' : 155 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        ID / Teléfono
+                      </Text>
+                      <TextInput
+                        value={userIdSearch}
+                        onChangeText={setUserIdSearch}
+                        placeholder="Introduzca la palabra clave."
+                        placeholderTextColor={textOutline}
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          fontFamily: F.medium,
+                          fontSize: 12,
+                          color: textOnSurface,
+                        }}
+                      />
+                    </View>
 
-                  {/* Row 3: ZONA */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ZONA:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {ZONES_LIST.map((z) => {
-                        const active = userZoneFilter === z;
-                        return (
-                          <TouchableOpacity
-                            key={z}
-                            onPress={() => setUserZoneFilter(z)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? primaryContainer : cardLowest,
-                                borderColor: active ? primaryContainer : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {z}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
+                    {/* Field 3: Estado de Cuenta Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 170 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Estado de Cuenta
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Filtrar por Estado de Cuenta',
+                            options: ['Todos los Usuarios', 'Usuarios Activos', 'Solicitudes Pendientes'],
+                            selected: userStatusFilter,
+                            onSelect: (val) => setUserStatusFilter(val as any),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: userStatusFilter === 'Todos los Usuarios' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {userStatusFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                  {/* Row 4: ESTADO */}
-                  <View style={{ flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'flex-start' : 'center', gap: isMobile ? 4 : 8 }}>
-                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, width: isMobile ? '100%' : 110 }}>ESTADO:</Text>
-                    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
-                      {STATES_LIST.map((st) => {
-                        const active = userStateFilter === st;
-                        return (
-                          <TouchableOpacity
-                            key={st}
-                            onPress={() => setUserStateFilter(st)}
-                            style={[
-                              styles.filterPillChip,
-                              {
-                                backgroundColor: active ? '#2563eb' : cardLowest,
-                                borderColor: active ? '#2563eb' : cardBorder,
-                              },
-                            ]}
-                          >
-                            <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textVariant }}>
-                              {st}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                </View>
+                    {/* Field 4: Ubicación (Estado) Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 170 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Ubicación (Estado)
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Filtrar Usuarios por Estado / Sede',
+                            options: STATES_LIST,
+                            selected: userStateFilter,
+                            onSelect: (val) => setUserStateFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: userStateFilter === 'Todos' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {userStateFilter === 'Todos' ? 'Por favor, seleccione.' : userStateFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
 
-                {/* Users Table Header (Desktop) */}
-                {!isMobile && (
-                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopColor: cardBorder, borderBottomColor: cardBorder }]}>
-                    <Text style={[styles.tableHeadCell, { flex: 2.2, color: textVariant, fontFamily: F.bold }]}>USUARIO / CLIENTE</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textVariant, fontFamily: F.bold }]}>ESTADO DE CUENTA</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.6, color: textVariant, fontFamily: F.bold }]}>UBICACIÓN (ESTADO · PAÍS)</Text>
-                    <Text style={[styles.tableHeadCell, { flex: 1.4, color: textVariant, fontFamily: F.bold }]}>TELÉFONO / CONTACTO</Text>
-                    <Text style={[styles.tableHeadCell, { width: 180, textAlign: 'right', color: textVariant, fontFamily: F.bold }]}>ACCIONES</Text>
+                    {/* Field 5: Zona / País Dropdown */}
+                    <View style={{ flex: 1, minWidth: isMobile ? '47%' : 160 }}>
+                      <Text style={{ fontFamily: F.semibold, fontSize: 11.5, color: textVariant, marginBottom: 6 }}>
+                        Zona / País
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() =>
+                          setDropdownConfig({
+                            title: 'Seleccionar Zona Geográfica',
+                            options: ZONES_LIST,
+                            selected: userZoneFilter,
+                            onSelect: (val) => setUserZoneFilter(val),
+                          })
+                        }
+                        style={{
+                          height: 38,
+                          borderRadius: 19,
+                          borderWidth: 1,
+                          borderColor: cardBorder,
+                          backgroundColor: cardLowest,
+                          paddingHorizontal: 14,
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                        }}
+                      >
+                        <Text
+                          style={{
+                            fontFamily: F.medium,
+                            fontSize: 12,
+                            color: userZoneFilter === 'Todas' ? textOutline : textOnSurface,
+                            flex: 1,
+                          }}
+                          numberOfLines={1}
+                        >
+                          {userZoneFilter === 'Todas' ? 'Por favor, seleccione.' : userZoneFilter}
+                        </Text>
+                        <MaterialIcons name="keyboard-arrow-down" size={18} color={textVariant} />
+                      </TouchableOpacity>
+                    </View>
+
+                    {/* Botones Filtro y Restablecer */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={() => {}}
+                        activeOpacity={0.85}
+                        style={{
+                          height: 38,
+                          paddingHorizontal: 20,
+                          borderRadius: 19,
+                          backgroundColor: '#ff5b57',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>Filtro</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity
+                        onPress={() => {
+                          setUserSearch('');
+                          setUserIdSearch('');
+                          setUserStatusFilter('Todos los Usuarios');
+                          setUserStateFilter('Todos');
+                          setUserZoneFilter('Todas');
+                          setUserCountryFilter('Todos');
+                        }}
+                        activeOpacity={0.85}
+                        style={{
+                          height: 38,
+                          paddingHorizontal: 16,
+                          borderRadius: 19,
+                          backgroundColor: cardLowest,
+                          borderWidth: 1,
+                          borderColor: textOnSurface,
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                      >
+                        <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }}>Restablecer</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
                 )}
 
-                {/* Users Rows */}
+                {/* Hint Banner */}
+                <View style={{ paddingHorizontal: 20, paddingVertical: 8, backgroundColor: isDark ? 'rgba(37, 99, 235, 0.08)' : '#f8fafc', borderBottomWidth: 1, borderBottomColor: cardBorder, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="touch-app" size={15} color={academicGold} />
+                  <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                    Haz clic sobre cualquier fila de usuario para <Text style={{ fontFamily: F.bold, color: primaryNavy }}>editar su ficha, asignar Estado/Ubicación o cambiar su nivel de acceso</Text>.
+                  </Text>
+                </View>
+
+                {/* Users Table Header (Desktop — Columnas Exactas Referencia "Transacción") */}
+                {!isMobile && (
+                  <View style={[styles.tableHeadRow, { backgroundColor: surfaceLow, borderTopWidth: 0, borderBottomColor: cardBorder }]}>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Nombre</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1, color: textOnSurface, fontFamily: F.bold }]}>Apellido</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 0.9, color: textOnSurface, fontFamily: F.bold }]}>ID ⇅</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.7, color: textOnSurface, fontFamily: F.bold }]}>Correo Electrónico</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Estado de Cuenta</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.6, color: textOnSurface, fontFamily: F.bold }]}>Nombre del dispositivo</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>N.º de serie</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.3, color: textOnSurface, fontFamily: F.bold }]}>Ubicación</Text>
+                    <Text style={[styles.tableHeadCell, { flex: 1.2, color: textOnSurface, fontFamily: F.bold }]}>Observaciones / Tel.</Text>
+                    <Text style={[styles.tableHeadCell, { width: 160, textAlign: 'right', color: textOnSurface, fontFamily: F.bold }]}>Acciones</Text>
+                  </View>
+                )}
+
+                {/* Users Rows (Clickable to edit!) */}
                 <View>
                   {filteredUsersList.length === 0 ? (
                     <View style={{ padding: 36, alignItems: 'center' }}>
@@ -2665,17 +3315,15 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                       </Text>
                     </View>
                   ) : (
-                    filteredUsersList.map((u: any) => {
-                      const initials = (u.full_name || u.email || 'CL')
-                        .split(' ')
-                        .map((n: string) => n[0])
-                        .slice(0, 2)
-                        .join('')
-                        .toUpperCase();
+                    filteredUsersList.map((u: any, idx: number) => {
+                      const clientPlants = allPlants.filter((p) => (p as any).user_id === u.id || (p as any).userId === u.id);
+                      const primaryPlant = clientPlants[0];
 
                       return (
-                        <View
+                        <TouchableOpacity
                           key={u.id}
+                          onPress={() => setAssigningOperator(u)}
+                          activeOpacity={0.75}
                           style={[
                             styles.tableDataRow,
                             {
@@ -2684,111 +3332,159 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                               flexDirection: isMobile ? 'column' : 'row',
                               alignItems: isMobile ? 'flex-start' : 'center',
                               paddingHorizontal: isMobile ? 14 : 20,
+                              paddingVertical: 12,
                             },
                           ]}
                         >
-                          {/* Col 1: Name & Email */}
-                          <View style={{ flex: 2.2, width: isMobile ? '100%' : undefined, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                            <View style={[styles.tableUserAvatar, { backgroundColor: u.isPending ? '#ef4444' : innovationPurple }]}>
-                              <Text style={{ fontFamily: F.bold, fontSize: 12, color: '#ffffff' }}>{initials}</Text>
-                            </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }} numberOfLines={1}>
-                                {u.full_name || 'Usuario Registrado'}
-                              </Text>
-                              <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }} numberOfLines={1}>
-                                {u.email || 'Sin correo'}
-                              </Text>
-                            </View>
+                          {/* Nombre */}
+                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              {u.firstName}
+                            </Text>
                           </View>
 
-                          {/* Col 2: Account Status */}
-                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                          {/* Apellido */}
+                          <View style={{ flex: 1, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
+                              {u.lastName}
+                            </Text>
+                          </View>
+
+                          {/* ID */}
+                          <View style={{ flex: 0.9, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                              {u.operator_code || `#${idx + 1}`}
+                            </Text>
+                          </View>
+
+                          {/* Correo */}
+                          <View style={{ flex: 1.7, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textOnSurface }} numberOfLines={1}>
+                              {u.email || '--'}
+                            </Text>
+                          </View>
+
+                          {/* Estado de Cuenta */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
                             <View
                               style={{
                                 alignSelf: 'flex-start',
                                 backgroundColor: u.isPending ? 'rgba(239, 68, 68, 0.14)' : 'rgba(22, 163, 74, 0.14)',
-                                paddingHorizontal: 10,
-                                paddingVertical: 4,
+                                paddingHorizontal: 8,
+                                paddingVertical: 3,
                                 borderRadius: 99,
                               }}
                             >
-                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: u.isPending ? '#ef4444' : '#16a34a' }}>
-                                {u.isPending ? 'PENDIENTE APROBACIÓN' : 'CLIENTE ACTIVO'}
+                              <Text style={{ fontFamily: F.bold, fontSize: 10, color: u.isPending ? '#ef4444' : '#16a34a' }}>
+                                {u.isPending ? 'PENDIENTE' : 'ACTIVO'}
                               </Text>
                             </View>
                           </View>
 
-                          {/* Col 3: Location */}
+                          {/* Nombre del dispositivo */}
                           <View style={{ flex: 1.6, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.semibold, fontSize: 12.5, color: textOnSurface }} numberOfLines={1}>
-                              📍 {u.geoState}
-                            </Text>
-                            <Text style={{ fontFamily: F.medium, fontSize: 11, color: textVariant }} numberOfLines={1}>
-                              {u.geoZone} · {u.geoCountry}
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: primaryPlant ? primaryNavy : textVariant }} numberOfLines={1}>
+                              {primaryPlant ? `${primaryPlant.brand} ${primaryPlant.model}` : '--'}
                             </Text>
                           </View>
 
-                          {/* Col 4: Phone */}
-                          <View style={{ flex: 1.4, width: isMobile ? '100%' : undefined }}>
-                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: u.phone ? textOnSurface : textOutline }}>
-                              {u.phone || 'Sin teléfono en BD'}
+                          {/* N.º de serie */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }} numberOfLines={1}>
+                              {primaryPlant ? primaryPlant.serialNumber || primaryPlant.plate || '--' : '--'}
                             </Text>
                           </View>
 
-                          {/* Col 5: Actions */}
-                          <View style={{ width: isMobile ? '100%' : 180, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
+                          {/* Ubicación */}
+                          <View style={{ flex: 1.3, width: isMobile ? '100%' : undefined }}>
+                            <Text
+                              style={{
+                                fontFamily: F.semibold,
+                                fontSize: 12,
+                                color: u.geoState === 'Sin Estado en BD' ? '#f59e0b' : textOnSurface,
+                              }}
+                              numberOfLines={1}
+                            >
+                              {u.geoState === 'Sin Estado en BD' ? '+ Asignar Estado' : u.geoState}
+                            </Text>
+                            {u.geoZone !== 'Sin Zona en BD' && (
+                              <Text style={{ fontFamily: F.medium, fontSize: 10.5, color: textVariant }} numberOfLines={1}>
+                                {u.geoZone} · {u.geoCountry}
+                              </Text>
+                            )}
+                          </View>
+
+                          {/* Teléfono / Observaciones */}
+                          <View style={{ flex: 1.2, width: isMobile ? '100%' : undefined }}>
+                            <Text style={{ fontFamily: F.medium, fontSize: 12, color: u.phone ? textOnSurface : textOutline }} numberOfLines={1}>
+                              {u.phone || u.observations || '--'}
+                            </Text>
+                          </View>
+
+                          {/* Acciones */}
+                          <View style={{ width: isMobile ? '100%' : 160, flexDirection: 'row', justifyContent: 'flex-end', gap: 6 }}>
                             {u.isPending && (
                               <>
                                 <TouchableOpacity
                                   onPress={() => approveUser(u.id)}
-                                  style={{ backgroundColor: '#16a34a', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                  style={{ backgroundColor: '#16a34a', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 }}
                                 >
-                                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: '#ffffff' }}>Aprobar</Text>
+                                  <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: '#ffffff' }}>Aprobar</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
                                   onPress={() => rejectUser(u.id)}
-                                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.14)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 }}
+                                  style={{ backgroundColor: 'rgba(239, 68, 68, 0.14)', paddingHorizontal: 8, paddingVertical: 5, borderRadius: 8 }}
                                 >
-                                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: '#ef4444' }}>Rechazar</Text>
+                                  <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: '#ef4444' }}>Rechazar</Text>
                                 </TouchableOpacity>
                               </>
                             )}
-                            {u.phone ? (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  const rawDigits = String(u.phone).replace(/\D/g, '');
-                                  const phone = rawDigits.startsWith('58') ? rawDigits : '58' + rawDigits.replace(/^0/, '');
-                                  Linking.openURL('https://wa.me/' + phone).catch(() => {});
-                                }}
-                                style={[styles.tableActionIconBtn, { backgroundColor: 'rgba(37, 211, 102, 0.14)' }]}
-                              >
-                                <MaterialCommunityIcons name="whatsapp" size={18} color="#16a34a" />
-                              </TouchableOpacity>
-                            ) : null}
                             <TouchableOpacity
-                              onPress={() => {
-                                loadSystemUsers();
-                                setUserMgmtVisible(true);
-                              }}
-                              style={[styles.tableActionIconBtn, { backgroundColor: surfaceLow }]}
+                              onPress={() => setAssigningOperator(u)}
+                              style={[
+                                styles.toolbarSecondaryBtn,
+                                { backgroundColor: surfaceLow, borderColor: cardBorder, paddingHorizontal: 9, paddingVertical: 5 },
+                              ]}
                             >
-                              <MaterialIcons name="manage-accounts" size={18} color={primaryNavy} />
+                              <MaterialIcons name="edit" size={14} color={primaryNavy} />
+                              <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: primaryNavy }}>Editar</Text>
                             </TouchableOpacity>
                           </View>
-                        </View>
+                        </TouchableOpacity>
                       );
                     })
                   )}
                 </View>
 
-                <View style={[styles.tableCardFooter, { backgroundColor: surfaceLow, borderTopColor: cardBorder }]}>
-                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
-                    Mostrando {filteredUsersList.length} de {allUsersAndClientsList.length} cuentas de usuarios y clientes
-                  </Text>
-                  <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>
-                    {(clientsList || []).length} Activos · {(pendingUsersList || []).length} Pendientes
-                  </Text>
+                {/* Bottom Pagination Bar (Referencia "Transacción") */}
+                <View style={[styles.tableCardFooter, { backgroundColor: cardLowest, borderTopColor: cardBorder }]}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                    <View
+                      style={{
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 5,
+                        borderRadius: 99,
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        backgroundColor: surfaceLow,
+                      }}
+                    >
+                      <Text style={{ fontFamily: F.semibold, fontSize: 12, color: textOnSurface }}>20</Text>
+                      <MaterialIcons name="keyboard-arrow-down" size={16} color={textVariant} />
+                    </View>
+                    <Text style={{ fontFamily: F.medium, fontSize: 12, color: textVariant }}>
+                      Mostrando {filteredUsersList.length} de {allUsersAndClientsList.length} cuentas ({(clientsList || []).length} Activos · {(pendingUsersList || []).length} Pendientes)
+                    </Text>
+                  </View>
+
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+                    <MaterialIcons name="chevron-left" size={20} color={textOutline} />
+                    <Text style={{ fontFamily: F.bold, fontSize: 12, color: primaryNavy }}>1</Text>
+                    <MaterialIcons name="chevron-right" size={20} color={textOutline} />
+                  </View>
                 </View>
               </View>
             </View>
@@ -2960,6 +3656,409 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         visible={agendaVisible}
         onClose={() => setAgendaVisible(false)}
       />
+
+      {/* DROPDOWN SELECTOR MODAL ("Por favor, seleccione. v") */}
+      {dropdownConfig && (
+        <Modal
+          visible={!!dropdownConfig}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setDropdownConfig(null)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={() => setDropdownConfig(null)}
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(15, 23, 42, 0.55)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 20,
+            }}
+          >
+            <View
+              style={{
+                width: '100%',
+                maxWidth: 420,
+                maxHeight: '75%',
+                backgroundColor: cardLowest,
+                borderRadius: 16,
+                borderWidth: 1,
+                borderColor: cardBorder,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingHorizontal: 18,
+                  paddingVertical: 14,
+                  borderBottomWidth: 1,
+                  borderBottomColor: cardBorder,
+                  backgroundColor: surfaceLow,
+                }}
+              >
+                <Text style={{ fontFamily: F.bold, fontSize: 14, color: primaryNavy }}>
+                  {dropdownConfig.title}
+                </Text>
+                <TouchableOpacity onPress={() => setDropdownConfig(null)}>
+                  <MaterialIcons name="close" size={20} color={textVariant} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView contentContainerStyle={{ padding: 10 }}>
+                {dropdownConfig.options.map((opt) => {
+                  const isSelected = dropdownConfig.selected === opt;
+                  return (
+                    <TouchableOpacity
+                      key={opt}
+                      onPress={() => {
+                        dropdownConfig.onSelect(opt);
+                        setDropdownConfig(null);
+                      }}
+                      style={{
+                        flexDirection: 'row',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        paddingHorizontal: 14,
+                        paddingVertical: 12,
+                        borderRadius: 10,
+                        backgroundColor: isSelected ? 'rgba(26, 54, 93, 0.1)' : 'transparent',
+                        marginBottom: 4,
+                      }}
+                    >
+                      <Text
+                        style={{
+                          fontFamily: isSelected ? F.bold : F.medium,
+                          fontSize: 13.5,
+                          color: isSelected ? primaryNavy : textOnSurface,
+                        }}
+                      >
+                        {opt === 'ALL' ? 'Todos (Ver todos los registros)' : opt}
+                      </Text>
+                      {isSelected && <MaterialIcons name="check-circle" size={18} color={primaryContainer} />}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+      )}
+
+      {/* PLANT QUICK EDITOR MODAL (Click on any Plant Row in Tab 2) */}
+      {editingPlant && (
+        <Modal
+          visible={!!editingPlant}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setEditingPlant(null)}
+        >
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(15, 23, 42, 0.65)',
+              justifyContent: 'center',
+              alignItems: 'center',
+              padding: 16,
+            }}
+          >
+            <View
+              style={{
+                width: '100%',
+                maxWidth: 540,
+                maxHeight: '90%',
+                backgroundColor: cardLowest,
+                borderRadius: 18,
+                borderWidth: 1,
+                borderColor: cardBorder,
+                overflow: 'hidden',
+              }}
+            >
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  paddingHorizontal: 20,
+                  paddingVertical: 16,
+                  borderBottomWidth: 1,
+                  borderBottomColor: cardBorder,
+                  backgroundColor: surfaceLow,
+                }}
+              >
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                  <View
+                    style={{
+                      width: 38,
+                      height: 38,
+                      borderRadius: 10,
+                      backgroundColor: primaryContainer,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                    }}
+                  >
+                    <MaterialCommunityIcons name="generator-portable" size={20} color={academicGold} />
+                  </View>
+                  <View>
+                    <Text style={{ fontFamily: F.extrabold, fontSize: 15, color: primaryNavy }}>
+                      Editar Planta Eléctrica y Estado
+                    </Text>
+                    <Text style={{ fontFamily: F.medium, fontSize: 11.5, color: textVariant }}>
+                      Actualización directa en Base de Datos
+                    </Text>
+                  </View>
+                </View>
+                <TouchableOpacity onPress={() => setEditingPlant(null)}>
+                  <MaterialIcons name="close" size={22} color={textVariant} />
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView contentContainerStyle={{ padding: 20, gap: 12 }}>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, marginBottom: 4 }}>
+                      MARCA
+                    </Text>
+                    <TextInput
+                      value={editPlantBrand}
+                      onChangeText={setEditPlantBrand}
+                      placeholder="Ej. Cummins / Perkins"
+                      placeholderTextColor={textVariant}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        fontFamily: F.medium,
+                        fontSize: 13,
+                        color: textOnSurface,
+                        backgroundColor: surfaceLow,
+                      }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, marginBottom: 4 }}>
+                      MODELO DEL EQUIPO
+                    </Text>
+                    <TextInput
+                      value={editPlantModel}
+                      onChangeText={setEditPlantModel}
+                      placeholder="Ej. C150D6"
+                      placeholderTextColor={textVariant}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        fontFamily: F.medium,
+                        fontSize: 13,
+                        color: textOnSurface,
+                        backgroundColor: surfaceLow,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, marginBottom: 4 }}>
+                      N.º DE SERIE / ID
+                    </Text>
+                    <TextInput
+                      value={editPlantSerial}
+                      onChangeText={setEditPlantSerial}
+                      placeholder="Ej. SN-88291"
+                      placeholderTextColor={textVariant}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        fontFamily: F.bold,
+                        fontSize: 13,
+                        color: primaryNavy,
+                        backgroundColor: surfaceLow,
+                      }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, marginBottom: 4 }}>
+                      CAPACIDAD (kVA)
+                    </Text>
+                    <TextInput
+                      value={editPlantKva}
+                      onChangeText={setEditPlantKva}
+                      keyboardType="numeric"
+                      placeholder="Ej. 150"
+                      placeholderTextColor={textVariant}
+                      style={{
+                        borderWidth: 1,
+                        borderColor: cardBorder,
+                        borderRadius: 8,
+                        paddingHorizontal: 12,
+                        paddingVertical: 9,
+                        fontFamily: F.bold,
+                        fontSize: 13,
+                        color: textOnSurface,
+                        backgroundColor: surfaceLow,
+                      }}
+                    />
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, marginBottom: 4 }}>
+                    ASIGNACIÓN DE ESTADO / UBICACIÓN SEDE
+                  </Text>
+                  <TextInput
+                    value={editPlantLocation}
+                    onChangeText={setEditPlantLocation}
+                    placeholder="Ej. Carabobo - Valencia"
+                    placeholderTextColor={textVariant}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: cardBorder,
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      paddingVertical: 9,
+                      fontFamily: F.medium,
+                      fontSize: 13,
+                      color: textOnSurface,
+                      backgroundColor: surfaceLow,
+                    }}
+                  />
+                  <Text style={{ fontFamily: F.bold, fontSize: 10.5, color: textVariant, marginTop: 8, marginBottom: 6 }}>
+                    SELECCIÓN RÁPIDA DE ESTADO (1 CLIC):
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    {[
+                      'Carabobo',
+                      'Distrito Capital',
+                      'Miranda',
+                      'Aragua',
+                      'Zulia',
+                      'Lara',
+                      'Anzoátegui',
+                      'Táchira',
+                      'Bolívar',
+                    ].map((st) => {
+                      const active = editPlantLocation.toLowerCase().includes(st.toLowerCase());
+                      return (
+                        <TouchableOpacity
+                          key={st}
+                          onPress={() => setEditPlantLocation(st)}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 5,
+                            borderRadius: 99,
+                            borderWidth: 1,
+                            borderColor: active ? primaryContainer : cardBorder,
+                            backgroundColor: active ? primaryContainer : surfaceLow,
+                          }}
+                        >
+                          <Text style={{ fontFamily: F.bold, fontSize: 11, color: active ? '#fff' : textOnSurface }}>
+                            {st}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+
+                <View>
+                  <Text style={{ fontFamily: F.bold, fontSize: 11, color: textVariant, marginBottom: 6 }}>
+                    OPERADOR RESPONSABLE ASIGNADO
+                  </Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+                    <TouchableOpacity
+                      onPress={() => setEditPlantOperatorId(null)}
+                      style={{
+                        paddingHorizontal: 10,
+                        paddingVertical: 6,
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: !editPlantOperatorId ? '#10b981' : cardBorder,
+                        backgroundColor: !editPlantOperatorId ? 'rgba(16, 185, 129, 0.14)' : surfaceLow,
+                      }}
+                    >
+                      <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: !editPlantOperatorId ? '#10b981' : textVariant }}>
+                        Disponible (Sin asignar)
+                      </Text>
+                    </TouchableOpacity>
+                    {operatorsList.map((op: any) => {
+                      const active = editPlantOperatorId === op.id;
+                      return (
+                        <TouchableOpacity
+                          key={op.id}
+                          onPress={() => setEditPlantOperatorId(op.id)}
+                          style={{
+                            paddingHorizontal: 10,
+                            paddingVertical: 6,
+                            borderRadius: 8,
+                            borderWidth: 1,
+                            borderColor: active ? primaryContainer : cardBorder,
+                            backgroundColor: active ? primaryContainer : surfaceLow,
+                          }}
+                        >
+                          <Text style={{ fontFamily: F.bold, fontSize: 11.5, color: active ? '#fff' : textOnSurface }}>
+                            {op.full_name || op.email}
+                          </Text>
+                        </TouchableOpacity>
+                      );
+                    })}
+                  </View>
+                </View>
+              </ScrollView>
+
+              <View
+                style={{
+                  flexDirection: 'row',
+                  justifyContent: 'flex-end',
+                  gap: 10,
+                  paddingHorizontal: 20,
+                  paddingVertical: 14,
+                  borderTopWidth: 1,
+                  borderTopColor: cardBorder,
+                  backgroundColor: surfaceLow,
+                }}
+              >
+                <TouchableOpacity
+                  onPress={() => setEditingPlant(null)}
+                  style={{
+                    paddingHorizontal: 16,
+                    paddingVertical: 10,
+                    borderRadius: 8,
+                    borderWidth: 1,
+                    borderColor: cardBorder,
+                    backgroundColor: cardLowest,
+                  }}
+                >
+                  <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: textVariant }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={handleSavePlantEdit}
+                  disabled={savingPlantEdit}
+                  style={{
+                    paddingHorizontal: 18,
+                    paddingVertical: 10,
+                    borderRadius: 8,
+                    backgroundColor: '#ff5b57',
+                  }}
+                >
+                  <Text style={{ fontFamily: F.bold, fontSize: 12.5, color: '#ffffff' }}>
+                    {savingPlantEdit ? 'Guardando...' : 'Guardar Cambios'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </Modal>
+      )}
     </View>
   );
 };

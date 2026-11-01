@@ -22,12 +22,64 @@ interface OperatorUser {
   email: string;
   full_name?: string;
   operator_code?: string;
+  role?: string;
+  resolvedRole?: string;
+  phone?: string;
   specialty?: string;
+  deptLabel?: string;
+  geoState?: string;
+  geoZone?: string;
+  geoCountry?: string;
+  observations?: string;
   drives_company_vehicle?: boolean;
   assigned_vehicle_name?: string;
   assigned_vehicle_plate?: string;
   assigned_vehicle_image?: string;
 }
+
+const STATE_TO_ZONE_MAP: Record<string, { zone: string; country: string }> = {
+  Carabobo: { zone: 'Zona Central', country: 'Venezuela' },
+  Aragua: { zone: 'Zona Central', country: 'Venezuela' },
+  'Distrito Capital': { zone: 'Zona Capital', country: 'Venezuela' },
+  Miranda: { zone: 'Zona Capital', country: 'Venezuela' },
+  Zulia: { zone: 'Zona Occidental', country: 'Venezuela' },
+  Lara: { zone: 'Zona Occidental', country: 'Venezuela' },
+  Anzoátegui: { zone: 'Zona Oriental', country: 'Venezuela' },
+  Táchira: { zone: 'Zona Los Andes', country: 'Venezuela' },
+  Bolívar: { zone: 'Zona Guayana', country: 'Venezuela' },
+};
+
+const QUICK_STATES = [
+  'Carabobo',
+  'Distrito Capital',
+  'Miranda',
+  'Aragua',
+  'Zulia',
+  'Lara',
+  'Anzoátegui',
+  'Táchira',
+  'Bolívar',
+];
+
+const QUICK_ZONES = [
+  'Zona Central',
+  'Zona Capital',
+  'Zona Occidental',
+  'Zona Oriental',
+  'Zona Los Andes',
+  'Zona Guayana',
+];
+
+const QUICK_COUNTRIES = ['Venezuela', 'Colombia', 'Panamá', 'EE.UU.'];
+
+const QUICK_DEPARTMENTS = [
+  'Plantas Eléctricas',
+  'Mantenimiento Preventivo',
+  'Especialista Técnico Senior',
+  'Dirección Ejecutiva',
+  'Soporte de Campo',
+  'Control de Operaciones',
+];
 
 interface FleetVehicle {
   id: string;
@@ -77,6 +129,17 @@ export const AssignOperatorModal: React.FC<Props> = ({
   const [selectedPlantIds, setSelectedPlantIds] = useState<Set<string>>(new Set());
   const [searchQuery, setSearchQuery] = useState('');
 
+  // Editable Employee / User Profile State
+  const [editFullName, setEditFullName] = useState('');
+  const [editCode, setEditCode] = useState('');
+  const [editPhone, setEditPhone] = useState('');
+  const [editRole, setEditRole] = useState<'superadmin' | 'operator' | 'client'>('operator');
+  const [editDepartment, setEditDepartment] = useState('');
+  const [editState, setEditState] = useState('');
+  const [editZone, setEditZone] = useState('');
+  const [editCountry, setEditCountry] = useState('Venezuela');
+  const [editObservations, setEditObservations] = useState('');
+
   // Real Fleet Vehicle Assignment State
   const [drivesVehicle, setDrivesVehicle] = useState(false);
   const [fleetVehicles, setFleetVehicles] = useState<FleetVehicle[]>([]);
@@ -114,6 +177,36 @@ export const AssignOperatorModal: React.FC<Props> = ({
   // Load plants and existing assignment when operator changes
   useEffect(() => {
     if (visible && operator) {
+      setEditFullName(operator.full_name || '');
+      setEditCode(operator.operator_code || '');
+      setEditPhone(operator.phone || '');
+
+      const r = operator.resolvedRole || operator.role || 'operator';
+      setEditRole(
+        r === 'superadmin' || r === 'admin'
+          ? 'superadmin'
+          : r === 'client' || r === 'user'
+          ? 'client'
+          : 'operator'
+      );
+
+      // Parse structured specialty ("Departamento | Estado | Zona | País | Observaciones")
+      const rawSpec = operator.specialty || '';
+      if (rawSpec.includes('|')) {
+        const parts = rawSpec.split('|').map((s) => s.trim());
+        setEditDepartment(parts[0] || operator.deptLabel || 'Plantas Eléctricas');
+        setEditState(parts[1] || (operator.geoState !== 'Sin Estado en BD' ? operator.geoState || '' : ''));
+        setEditZone(parts[2] || (operator.geoZone !== 'Sin Zona en BD' ? operator.geoZone || '' : ''));
+        setEditCountry(parts[3] || (operator.geoCountry !== 'Sin País en BD' ? operator.geoCountry || 'Venezuela' : 'Venezuela'));
+        setEditObservations(parts[4] || operator.observations || '');
+      } else {
+        setEditDepartment(operator.deptLabel || rawSpec || 'Plantas Eléctricas');
+        setEditState(operator.geoState && operator.geoState !== 'Sin Estado en BD' ? operator.geoState : '');
+        setEditZone(operator.geoZone && operator.geoZone !== 'Sin Zona en BD' ? operator.geoZone : '');
+        setEditCountry(operator.geoCountry && operator.geoCountry !== 'Sin País en BD' ? operator.geoCountry : 'Venezuela');
+        setEditObservations(operator.observations || '');
+      }
+
       setDrivesVehicle(!!operator.drives_company_vehicle);
       setVehicleName(operator.assigned_vehicle_name || '');
       setVehiclePlate(operator.assigned_vehicle_plate || '');
@@ -266,11 +359,27 @@ export const AssignOperatorModal: React.FC<Props> = ({
     });
   };
 
+  const handleSelectQuickState = (st: string) => {
+    setEditState(st);
+    const mapped = STATE_TO_ZONE_MAP[st];
+    if (mapped) {
+      setEditZone(mapped.zone);
+      setEditCountry(mapped.country);
+    }
+  };
+
   const handleSaveAssignments = async () => {
     if (!operator) return;
     setSaving(true);
     try {
-      const operatorName = operator.full_name || operator.email;
+      const operatorName = editFullName.trim() || operator.full_name || operator.email;
+      const structuredSpecialty = [
+        editDepartment.trim() || (editRole === 'superadmin' ? 'Dirección Ejecutiva' : 'Plantas Eléctricas'),
+        editState.trim(),
+        editZone.trim(),
+        editCountry.trim() || 'Venezuela',
+        editObservations.trim(),
+      ].join(' | ');
 
       // 1. Update plants assigned to this operator
       const selectedArray = Array.from(selectedPlantIds);
@@ -301,16 +410,23 @@ export const AssignOperatorModal: React.FC<Props> = ({
           .in('id', unselectedArray);
       }
 
-      // 2. Update operator profile with vehicle assignment
-      await supabase
+      // 2. Update employee/user profile (Name, ID/Carnet, Role, Phone, Department/State/Zone/Country, and Vehicle)
+      const { error: profErr } = await supabase
         .from('profiles')
         .update({
+          full_name: operatorName,
+          operator_code: editCode.trim() || null,
+          role: editRole,
+          phone: editPhone.trim() || null,
+          specialty: structuredSpecialty,
           drives_company_vehicle: drivesVehicle,
           assigned_vehicle_name: drivesVehicle && vehicleName.trim() ? vehicleName.trim() : null,
           assigned_vehicle_plate: drivesVehicle && vehiclePlate.trim() ? vehiclePlate.trim().toUpperCase() : null,
           assigned_vehicle_image: drivesVehicle && vehicleImage.trim() ? vehicleImage.trim() : null,
         })
         .eq('id', operator.id);
+
+      if (profErr) throw profErr;
 
       // 3. Link or unlink vehicle in vehiculos_empresa
       if (drivesVehicle && selectedFleetId) {
@@ -326,9 +442,9 @@ export const AssignOperatorModal: React.FC<Props> = ({
       }
 
       if (Platform.OS === 'web') {
-        window.alert(`Asignaciones guardadas para el operador ${operatorName}.`);
+        window.alert(`Ficha, ubicación y asignaciones guardadas para ${operatorName}.`);
       } else {
-        Alert.alert('Asignación Exitosa', `Se han actualizado las plantas y vehículo para ${operatorName}.`);
+        Alert.alert('Cambios Guardados', `Se actualizaron los datos, ubicación y asignaciones de ${operatorName}.`);
       }
 
       onSaveSuccess();
@@ -336,9 +452,9 @@ export const AssignOperatorModal: React.FC<Props> = ({
     } catch (err: any) {
       console.error('Error al guardar asignaciones:', err);
       if (Platform.OS === 'web') {
-        window.alert('Error al guardar asignaciones: ' + (err.message || 'Intenta de nuevo.'));
+        window.alert('Error al guardar cambios: ' + (err.message || 'Intenta de nuevo.'));
       } else {
-        Alert.alert('Error', err.message || 'No se pudieron guardar las asignaciones.');
+        Alert.alert('Error', err.message || 'No se pudieron guardar los cambios.');
       }
     } finally {
       setSaving(false);
@@ -371,14 +487,14 @@ export const AssignOperatorModal: React.FC<Props> = ({
           <View style={styles.headerRow}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={[styles.headerIconBadge, { backgroundColor: 'rgba(26, 92, 255, 0.15)' }]}>
-                <MaterialIcons name="assignment-ind" size={24} color={accentBlue} />
+                <MaterialIcons name="manage-accounts" size={24} color={accentBlue} />
               </View>
               <View>
                 <Text style={[styles.headerTitle, { color: textPrimary, fontFamily: F.extrabold }]}>
-                  Asignación de Plantas y Móvil de Flota
+                  Editar Empleado / Usuario, Ubicación y Asignaciones
                 </Text>
                 <Text style={[styles.headerSubtitle, { color: textSecondary, fontFamily: F.medium }]}>
-                  Operador: <Text style={{ color: textPrimary, fontFamily: F.bold }}>{operator.full_name || operator.email}</Text> • {operator.operator_code || 'Técnico HL'}
+                  {editFullName || operator.full_name || operator.email} • {operator.email}
                 </Text>
               </View>
             </View>
@@ -389,6 +505,216 @@ export const AssignOperatorModal: React.FC<Props> = ({
           </View>
 
           <ScrollView style={styles.bodyScroll} showsVerticalScrollIndicator={false}>
+
+            {/* SECCIÓN 0: DATOS PERSONALES, ROL, DEPARTAMENTO Y ASIGNACIÓN DE ESTADO / ZONA */}
+            <View style={[styles.sectionBox, { backgroundColor: cardSubBg, borderColor: borderModal }]}>
+              <View style={styles.sectionHeaderRow}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <MaterialIcons name="badge" size={20} color={accentBlue} />
+                  <Text style={[styles.sectionTitle, { color: textPrimary, fontFamily: F.bold }]}>
+                    Datos del Empleado / Usuario y Asignación de Ubicación
+                  </Text>
+                </View>
+              </View>
+
+              <Text style={[styles.sectionDesc, { color: textSecondary, fontFamily: F.medium }]}>
+                Edita el nombre, ID/carnet, departamento, rol y asigna su Estado, Zona y País en la base de datos.
+              </Text>
+
+              {/* Row 1: Nombre Completo & ID / Carnet */}
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 12 }}>
+                <View style={{ flex: 2, minWidth: 200 }}>
+                  <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                    NOMBRE Y APELLIDO COMPLETO
+                  </Text>
+                  <TextInput
+                    value={editFullName}
+                    onChangeText={setEditFullName}
+                    placeholder="Ej. Ing. Marcos Pinto"
+                    placeholderTextColor={textSecondary}
+                    style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                  />
+                </View>
+                <View style={{ flex: 1, minWidth: 140 }}>
+                  <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                    ID / CARNET HL
+                  </Text>
+                  <TextInput
+                    value={editCode}
+                    onChangeText={setEditCode}
+                    placeholder="Ej. HL-TECH-3018"
+                    placeholderTextColor={textSecondary}
+                    style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                  />
+                </View>
+                <View style={{ flex: 1.2, minWidth: 150 }}>
+                  <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                    TELÉFONO / WHATSAPP
+                  </Text>
+                  <TextInput
+                    value={editPhone}
+                    onChangeText={setEditPhone}
+                    placeholder="Ej. 0414-0000000"
+                    placeholderTextColor={textSecondary}
+                    style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                  />
+                </View>
+              </View>
+
+              {/* Row 2: Rol en el Sistema */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  ROL Y PRIVILEGIO EN EL SISTEMA
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {[
+                    { id: 'operator' as const, label: 'Operador Técnico', color: '#2563eb' },
+                    { id: 'superadmin' as const, label: 'Super Administrador', color: '#d97706' },
+                    { id: 'client' as const, label: 'Cliente / Usuario', color: '#16a34a' },
+                  ].map((r) => {
+                    const active = editRole === r.id;
+                    return (
+                      <TouchableOpacity
+                        key={r.id}
+                        onPress={() => setEditRole(r.id)}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 8,
+                          borderRadius: 10,
+                          borderWidth: 1.5,
+                          borderColor: active ? r.color : borderModal,
+                          backgroundColor: active ? `${r.color}22` : (isDark ? '#141721' : '#ffffff'),
+                        }}
+                      >
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 12, color: active ? r.color : textPrimary }}>
+                          {r.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+
+              {/* Row 3: Departamento / Especialidad */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  DEPARTAMENTO / UNIDAD OPERATIVA
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 8 }}>
+                  {QUICK_DEPARTMENTS.map((dep) => {
+                    const active = editDepartment.toLowerCase() === dep.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={dep}
+                        onPress={() => setEditDepartment(dep)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 99,
+                          borderWidth: 1,
+                          borderColor: active ? accentBlue : borderModal,
+                          backgroundColor: active ? accentBlue : (isDark ? '#141721' : '#ffffff'),
+                        }}
+                      >
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textSecondary }}>
+                          {dep}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+                <TextInput
+                  value={editDepartment}
+                  onChangeText={setEditDepartment}
+                  placeholder="Escribe o selecciona el departamento (ej. OFICINAS EDV - VALENCIA)"
+                  placeholderTextColor={textSecondary}
+                  style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                />
+              </View>
+
+              {/* Row 4: Asignación de Estado / Sede, Zona y País */}
+              <View style={{ marginBottom: 12 }}>
+                <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  SELECCIÓN RÁPIDA DE ESTADO / SEDE (Auto-asigna Zona y País)
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, marginBottom: 10 }}>
+                  {QUICK_STATES.map((st) => {
+                    const active = editState.toLowerCase() === st.toLowerCase();
+                    return (
+                      <TouchableOpacity
+                        key={st}
+                        onPress={() => handleSelectQuickState(st)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 99,
+                          borderWidth: 1,
+                          borderColor: active ? '#16a34a' : borderModal,
+                          backgroundColor: active ? '#16a34a' : (isDark ? '#141721' : '#ffffff'),
+                        }}
+                      >
+                        <Text style={{ fontFamily: active ? F.bold : F.medium, fontSize: 11.5, color: active ? '#ffffff' : textSecondary }}>
+                          📍 {st}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10 }}>
+                  <View style={{ flex: 1, minWidth: 140 }}>
+                    <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                      ESTADO / SEDE
+                    </Text>
+                    <TextInput
+                      value={editState}
+                      onChangeText={setEditState}
+                      placeholder="Ej. Carabobo"
+                      placeholderTextColor={textSecondary}
+                      style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                    />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 140 }}>
+                    <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                      ZONA GEOGRÁFICA
+                    </Text>
+                    <TextInput
+                      value={editZone}
+                      onChangeText={setEditZone}
+                      placeholder="Ej. Zona Central"
+                      placeholderTextColor={textSecondary}
+                      style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                    />
+                  </View>
+                  <View style={{ flex: 1, minWidth: 120 }}>
+                    <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                      PAÍS
+                    </Text>
+                    <TextInput
+                      value={editCountry}
+                      onChangeText={setEditCountry}
+                      placeholder="Ej. Venezuela"
+                      placeholderTextColor={textSecondary}
+                      style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                    />
+                  </View>
+                </View>
+              </View>
+
+              {/* Row 5: Observaciones */}
+              <View>
+                <Text style={[styles.inputLabel, { color: textSecondary, fontFamily: F.semibold }]}>
+                  OBSERVACIONES / GUARDIA / TURNO
+                </Text>
+                <TextInput
+                  value={editObservations}
+                  onChangeText={setEditObservations}
+                  placeholder="Observaciones operativas o notas del empleado..."
+                  placeholderTextColor={textSecondary}
+                  style={[styles.textInput, { color: textPrimary, borderColor: borderModal, backgroundColor: isDark ? '#141721' : '#ffffff', fontFamily: F.medium }]}
+                />
+              </View>
+            </View>
 
             {/* SECCIÓN 1: ASIGNACIÓN DE VEHÍCULO CORPORATIVO */}
             <View style={[styles.sectionBox, { backgroundColor: cardSubBg, borderColor: borderModal }]}>
