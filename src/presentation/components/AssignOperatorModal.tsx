@@ -182,36 +182,46 @@ export const AssignOperatorModal: React.FC<Props> = ({
       setEditPhone(operator.phone || '');
 
       const r = operator.resolvedRole || operator.role || 'operator';
-      setEditRole(
+      const resolvedRoleVal: 'superadmin' | 'operator' | 'client' =
         r === 'superadmin' || r === 'admin'
           ? 'superadmin'
           : r === 'client' || r === 'user'
           ? 'client'
-          : 'operator'
-      );
+          : 'operator';
+      setEditRole(resolvedRoleVal);
 
       // Parse structured specialty ("Departamento | Estado | Zona | País | Observaciones")
       const rawSpec = operator.specialty || '';
       if (rawSpec.includes('|')) {
         const parts = rawSpec.split('|').map((s) => s.trim());
-        setEditDepartment(parts[0] || operator.deptLabel || 'Plantas Eléctricas');
+        setEditDepartment(parts[0] || operator.deptLabel || (resolvedRoleVal === 'superadmin' ? 'Dirección Ejecutiva' : 'Plantas Eléctricas'));
         setEditState(parts[1] || (operator.geoState !== 'Sin Estado en BD' ? operator.geoState || '' : ''));
         setEditZone(parts[2] || (operator.geoZone !== 'Sin Zona en BD' ? operator.geoZone || '' : ''));
         setEditCountry(parts[3] || (operator.geoCountry !== 'Sin País en BD' ? operator.geoCountry || 'Venezuela' : 'Venezuela'));
         setEditObservations(parts[4] || operator.observations || '');
       } else {
-        setEditDepartment(operator.deptLabel || rawSpec || 'Plantas Eléctricas');
+        setEditDepartment(operator.deptLabel || rawSpec || (resolvedRoleVal === 'superadmin' ? 'Dirección Ejecutiva' : 'Plantas Eléctricas'));
         setEditState(operator.geoState && operator.geoState !== 'Sin Estado en BD' ? operator.geoState : '');
         setEditZone(operator.geoZone && operator.geoZone !== 'Sin Zona en BD' ? operator.geoZone : '');
         setEditCountry(operator.geoCountry && operator.geoCountry !== 'Sin País en BD' ? operator.geoCountry : 'Venezuela');
         setEditObservations(operator.observations || '');
       }
 
-      setDrivesVehicle(!!operator.drives_company_vehicle);
-      setVehicleName(operator.assigned_vehicle_name || '');
-      setVehiclePlate(operator.assigned_vehicle_plate || '');
-      setVehicleImage(operator.assigned_vehicle_image || '');
-      fetchPlants();
+      if (resolvedRoleVal === 'operator') {
+        setDrivesVehicle(!!operator.drives_company_vehicle);
+        setVehicleName(operator.assigned_vehicle_name || '');
+        setVehiclePlate(operator.assigned_vehicle_plate || '');
+        setVehicleImage(operator.assigned_vehicle_image || '');
+      } else {
+        // Super Admins ("Jefes") and Clients never have operational fleet vehicles or plants in charge
+        setDrivesVehicle(false);
+        setSelectedFleetId(null);
+        setVehicleName('');
+        setVehiclePlate('');
+        setVehicleImage('');
+        setSelectedPlantIds(new Set());
+      }
+      fetchPlants(resolvedRoleVal);
       fetchFleet();
     }
   }, [visible, operator]);
@@ -291,8 +301,9 @@ export const AssignOperatorModal: React.FC<Props> = ({
     }
   };
 
-  const fetchPlants = async () => {
+  const fetchPlants = async (roleOverride?: 'superadmin' | 'operator' | 'client') => {
     if (!operator) return;
+    const currentRole = roleOverride || editRole;
     setLoadingPlants(true);
     try {
       // 1. Fetch all plants
@@ -318,7 +329,8 @@ export const AssignOperatorModal: React.FC<Props> = ({
       const mappedPlants: PlantWithClient[] = (plantsData || []).map((p: any) => {
         const client = profilesMap.get(p.user_id);
         const isAssignedToThis = p.assigned_operator_id === operator.id;
-        if (isAssignedToThis) {
+        // Only technical operators can have plants assigned in charge; Super Admins ("Jefes") never do
+        if (isAssignedToThis && currentRole === 'operator') {
           initialSelected.add(p.id);
         }
         return {
@@ -373,6 +385,7 @@ export const AssignOperatorModal: React.FC<Props> = ({
     setSaving(true);
     try {
       const operatorName = editFullName.trim() || operator.full_name || operator.email;
+      const isTechnicalOperator = editRole === 'operator';
       const structuredSpecialty = [
         editDepartment.trim() || (editRole === 'superadmin' ? 'Dirección Ejecutiva' : 'Plantas Eléctricas'),
         editState.trim(),
@@ -381,60 +394,94 @@ export const AssignOperatorModal: React.FC<Props> = ({
         editObservations.trim(),
       ].join(' | ');
 
-      // 1. Update plants assigned to this operator
-      const selectedArray = Array.from(selectedPlantIds);
-      
-      // Assign selected
-      if (selectedArray.length > 0) {
-        await supabase
-          .from('plantas')
-          .update({
-            assigned_operator_id: operator.id,
-            assigned_operator_name: operatorName,
-          })
-          .in('id', selectedArray);
-      }
+      if (isTechnicalOperator) {
+        // 1. Update plants assigned to this technical operator
+        const selectedArray = Array.from(selectedPlantIds);
 
-      // Unassign previously assigned plants that were unchecked
-      const unselectedArray = plantsList
-        .filter((p) => p.assigned_operator_id === operator.id && !selectedPlantIds.has(p.id))
-        .map((p) => p.id);
+        // Assign selected
+        if (selectedArray.length > 0) {
+          await supabase
+            .from('plantas')
+            .update({
+              assigned_operator_id: operator.id,
+              assigned_operator_name: operatorName,
+            })
+            .in('id', selectedArray);
+        }
 
-      if (unselectedArray.length > 0) {
+        // Unassign previously assigned plants that were unchecked
+        const unselectedArray = plantsList
+          .filter((p) => p.assigned_operator_id === operator.id && !selectedPlantIds.has(p.id))
+          .map((p) => p.id);
+
+        if (unselectedArray.length > 0) {
+          await supabase
+            .from('plantas')
+            .update({
+              assigned_operator_id: null,
+              assigned_operator_name: null,
+            })
+            .in('id', unselectedArray);
+        }
+      } else {
+        // Super Admins ("Jefes") and Clients NEVER have plants in their personal charge — release any accidental assignment
         await supabase
           .from('plantas')
           .update({
             assigned_operator_id: null,
             assigned_operator_name: null,
           })
-          .in('id', unselectedArray);
+          .eq('assigned_operator_id', operator.id);
+
+        if (operator.full_name) {
+          await supabase
+            .from('plantas')
+            .update({
+              assigned_operator_id: null,
+              assigned_operator_name: null,
+            })
+            .ilike('assigned_operator_name', operator.full_name.trim());
+        }
       }
 
       // 2. Update employee/user profile (Name, ID/Carnet, Role, Phone, Department/State/Zone/Country, and Vehicle)
-      const { error: profErr } = await supabase
-        .from('profiles')
-        .update({
-          full_name: operatorName,
-          operator_code: editCode.trim() || null,
-          role: editRole,
-          phone: editPhone.trim() || null,
-          specialty: structuredSpecialty,
-          drives_company_vehicle: drivesVehicle,
-          assigned_vehicle_name: drivesVehicle && vehicleName.trim() ? vehicleName.trim() : null,
-          assigned_vehicle_plate: drivesVehicle && vehiclePlate.trim() ? vehiclePlate.trim().toUpperCase() : null,
-          assigned_vehicle_image: drivesVehicle && vehicleImage.trim() ? vehicleImage.trim() : null,
-        })
-        .eq('id', operator.id);
+      // Note: Do NOT pass assigned_vehicle_image as that column lives in vehiculos_empresa (image_url), not profiles.
+      const effectiveDrivesVehicle = isTechnicalOperator && drivesVehicle;
+      const profilePayload: Record<string, any> = {
+        full_name: operatorName,
+        operator_code: editCode.trim() || null,
+        role: editRole,
+        phone: editPhone.trim() || null,
+        specialty: structuredSpecialty,
+        drives_company_vehicle: effectiveDrivesVehicle,
+        assigned_vehicle_name: effectiveDrivesVehicle && vehicleName.trim() ? vehicleName.trim() : null,
+        assigned_vehicle_plate: effectiveDrivesVehicle && vehiclePlate.trim() ? vehiclePlate.trim().toUpperCase() : null,
+      };
 
-      if (profErr) throw profErr;
+      // Resilient update loop: if any optional column is missing in Supabase's schema cache, strip it and retry
+      for (let attempt = 0; attempt < 5; attempt++) {
+        const { error: profErr } = await supabase
+          .from('profiles')
+          .update(profilePayload)
+          .eq('id', operator.id);
+
+        if (!profErr) break;
+
+        const missingColMatch = String(profErr.message || '').match(/Could not find the '([^']+)' column/);
+        if (missingColMatch && missingColMatch[1] && missingColMatch[1] in profilePayload) {
+          delete profilePayload[missingColMatch[1]];
+          continue;
+        }
+        throw profErr;
+      }
 
       // 3. Link or unlink vehicle in vehiculos_empresa
-      if (drivesVehicle && selectedFleetId) {
+      if (effectiveDrivesVehicle && selectedFleetId) {
         await supabase
           .from('vehiculos_empresa')
           .update({ user_id: operator.id })
           .eq('id', selectedFleetId);
-      } else if (!drivesVehicle && operator.id) {
+      } else if (operator.id) {
         await supabase
           .from('vehiculos_empresa')
           .update({ user_id: null })
@@ -442,9 +489,9 @@ export const AssignOperatorModal: React.FC<Props> = ({
       }
 
       if (Platform.OS === 'web') {
-        window.alert(`Ficha, ubicación y asignaciones guardadas para ${operatorName}.`);
+        window.alert(`Ficha, ubicación y datos guardados correctamente para ${operatorName}.`);
       } else {
-        Alert.alert('Cambios Guardados', `Se actualizaron los datos, ubicación y asignaciones de ${operatorName}.`);
+        Alert.alert('Cambios Guardados', `Se actualizaron los datos y ubicación de ${operatorName}.`);
       }
 
       onSaveSuccess();
@@ -576,7 +623,17 @@ export const AssignOperatorModal: React.FC<Props> = ({
                     return (
                       <TouchableOpacity
                         key={r.id}
-                        onPress={() => setEditRole(r.id)}
+                        onPress={() => {
+                          setEditRole(r.id);
+                          if (r.id !== 'operator') {
+                            setDrivesVehicle(false);
+                            setSelectedFleetId(null);
+                            setVehicleName('');
+                            setVehiclePlate('');
+                            setVehicleImage('');
+                            setSelectedPlantIds(new Set());
+                          }
+                        }}
                         style={{
                           paddingHorizontal: 14,
                           paddingVertical: 8,
@@ -716,6 +773,9 @@ export const AssignOperatorModal: React.FC<Props> = ({
               </View>
             </View>
 
+            {/* SECCIÓN 1 Y 2: EXCLUSIVAS PARA OPERADORES TÉCNICOS (Los Super Admins / Jefes nunca tienen plantas ni flota a su cargo) */}
+            {editRole === 'operator' ? (
+              <>
             {/* SECCIÓN 1: ASIGNACIÓN DE VEHÍCULO CORPORATIVO */}
             <View style={[styles.sectionBox, { backgroundColor: cardSubBg, borderColor: borderModal }]}>
               <View style={styles.sectionHeaderRow}>
@@ -1084,6 +1144,20 @@ export const AssignOperatorModal: React.FC<Props> = ({
                 </View>
               )}
             </View>
+              </>
+            ) : editRole === 'superadmin' ? (
+              <View style={[styles.sectionBox, { backgroundColor: cardSubBg, borderColor: borderModal, flexDirection: 'row', alignItems: 'center', gap: 12 }]}>
+                <MaterialIcons name="admin-panel-settings" size={28} color="#d97706" />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontFamily: F.bold, fontSize: 13.5, color: textPrimary }}>
+                    Dirección Ejecutiva / Super Administrador (Jefe)
+                  </Text>
+                  <Text style={{ fontFamily: F.medium, fontSize: 12, color: textSecondary, marginTop: 2 }}>
+                    Los Super Administradores supervisan toda la plataforma globalmente y no tienen plantas eléctricas ni vehículos de asistencia técnica asignados a su cargo personal.
+                  </Text>
+                </View>
+              </View>
+            ) : null}
 
           </ScrollView>
 
@@ -1107,7 +1181,9 @@ export const AssignOperatorModal: React.FC<Props> = ({
                 <>
                   <MaterialIcons name="save" size={18} color="#ffffff" />
                   <Text style={{ fontFamily: F.bold, color: '#ffffff', fontSize: 13 }}>
-                    Guardar Asignaciones ({selectedPlantIds.size} plantas)
+                    {editRole === 'operator'
+                      ? `Guardar Ficha y Asignaciones (${selectedPlantIds.size} plantas)`
+                      : 'Guardar Ficha y Ubicación'}
                   </Text>
                 </>
               )}

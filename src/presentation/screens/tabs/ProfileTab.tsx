@@ -155,7 +155,7 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
         // Consultar asignación oficial de flota en perfil
         supabase
           .from('profiles')
-          .select('drives_company_vehicle, assigned_vehicle_name, assigned_vehicle_plate, assigned_vehicle_image')
+          .select('drives_company_vehicle, assigned_vehicle_name, assigned_vehicle_plate')
           .eq('id', data.user.id)
           .single()
           .then(({ data: prof }) => {
@@ -163,7 +163,6 @@ export const ProfileTab: React.FC<ProfileTabProps> = ({ onOpenReport }) => {
               setAssignedVehicleProfile({
                 name: prof.assigned_vehicle_name,
                 plate: prof.assigned_vehicle_plate,
-                imageUrl: prof.assigned_vehicle_image,
               });
             }
           });

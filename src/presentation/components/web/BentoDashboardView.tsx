@@ -478,10 +478,52 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   // =========================================================================
   // 100% REAL DATA FROM SUPABASE / MOTOCONTEXT
   // =========================================================================
+  // Helper: Super Admins ("Los Jefes") NEVER have plants or fleet vehicles assigned to their personal charge
+  const isSuperAdminAssignment = (opId?: string | null, opName?: string | null) => {
+    const cleanId = (opId || '').trim();
+    const cleanName = (opName || '').toLowerCase().trim();
+    if (!cleanId && !cleanName) return false;
+
+    if (
+      cleanName.includes('carlos lynch') ||
+      cleanName.includes('dervis martinez') ||
+      cleanName.includes('dervis martínez') ||
+      cleanName.includes('kalioverload')
+    ) {
+      return true;
+    }
+
+    return (superAdminsList || []).some((sa: any) => {
+      if (cleanId && sa.id === cleanId) return true;
+      const saName = (sa.full_name || '').toLowerCase().trim();
+      const saEmail = (sa.email || '').toLowerCase().trim();
+      return (cleanName && saName && cleanName === saName) || (cleanName && saEmail && cleanName === saEmail);
+    });
+  };
+
+  // Automatic DB cleanup: if any plant in public.plantas was accidentally linked to a Super Admin, release it in Supabase
+  useEffect(() => {
+    const plantsWithSuperAdmin = (motos || []).filter(
+      (p) => isPlanta(p) && isSuperAdminAssignment(p.assignedOperatorId, p.assignedOperatorName)
+    );
+    if (plantsWithSuperAdmin.length === 0) return;
+
+    plantsWithSuperAdmin.forEach((plant) => {
+      supabase
+        .from('plantas')
+        .update({ assigned_operator_id: null, assigned_operator_name: null })
+        .eq('id', plant.id)
+        .then(() => {});
+    });
+  }, [motos, superAdminsList]);
+
   const allPlants = useMemo(() => {
     return (motos || []).filter(isPlanta).map((p) => {
       const geo = resolveRealGeo({ location: p.location });
-      const isAssigned = !!(p.assignedOperatorId || (p.assignedOperatorName && p.assignedOperatorName.trim()));
+      const belongsToSuperAdmin = isSuperAdminAssignment(p.assignedOperatorId, p.assignedOperatorName);
+      const effectiveOperatorId = belongsToSuperAdmin ? undefined : p.assignedOperatorId;
+      const effectiveOperatorName = belongsToSuperAdmin ? undefined : p.assignedOperatorName;
+      const isAssigned = !!(effectiveOperatorId || (effectiveOperatorName && effectiveOperatorName.trim()));
       const kva = p.powerKva || 0;
       const category =
         kva >= 100
@@ -491,6 +533,8 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
           : 'Compactas (<50 kVA)';
       return {
         ...p,
+        assignedOperatorId: effectiveOperatorId,
+        assignedOperatorName: effectiveOperatorName,
         geoCountry: geo.country,
         geoZone: geo.zone,
         geoState: geo.state,
@@ -498,7 +542,7 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
         category,
       };
     });
-  }, [motos]);
+  }, [motos, superAdminsList]);
 
   // Helper to enrich a profile with structured specialty ("Dept | State | Zone | Country | Obs") + plant location fallback
   const enrichProfileRecord = (u: any, resolvedRole: 'superadmin' | 'operator' | 'client') => {
@@ -520,14 +564,17 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
       parsedDept = parsedDept || rawSpec;
     }
 
-    // If employee/user still has no explicit state, check if they have an assigned plant in `allPlants`
-    const linkedPlant = allPlants.find(
-      (p) =>
-        p.assignedOperatorId === u.id ||
-        (p as any).user_id === u.id ||
-        (p as any).userId === u.id ||
-        (p.assignedOperatorName && u.full_name && p.assignedOperatorName.toLowerCase().trim() === u.full_name.toLowerCase().trim())
-    );
+    // Super Admins ("Jefes") never have plants in their personal charge
+    const linkedPlant =
+      resolvedRole === 'superadmin'
+        ? undefined
+        : allPlants.find(
+            (p) =>
+              p.assignedOperatorId === u.id ||
+              (p as any).user_id === u.id ||
+              (p as any).userId === u.id ||
+              (p.assignedOperatorName && u.full_name && p.assignedOperatorName.toLowerCase().trim() === u.full_name.toLowerCase().trim())
+          );
 
     const geo = resolveRealGeo({
       state: parsedState,
@@ -543,6 +590,9 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
 
     return {
       ...u,
+      drives_company_vehicle: resolvedRole === 'operator' ? !!u.drives_company_vehicle : false,
+      assigned_vehicle_name: resolvedRole === 'operator' ? u.assigned_vehicle_name : null,
+      assigned_vehicle_plate: resolvedRole === 'operator' ? u.assigned_vehicle_plate : null,
       firstName,
       lastName,
       resolvedRole,
@@ -826,12 +876,14 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
   }, [filteredFleetPlants]);
 
   const personnelWithPlantsCount = useMemo(() => {
-    return allPersonnelList.filter((op: any) =>
-      allPlants.some(
-        (p) =>
-          p.assignedOperatorId === op.id ||
-          (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
-      )
+    return allPersonnelList.filter(
+      (op: any) =>
+        op.resolvedRole === 'operator' &&
+        allPlants.some(
+          (p) =>
+            p.assignedOperatorId === op.id ||
+            (p.assignedOperatorName && op.full_name && p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+        )
     ).length;
   }, [allPersonnelList, allPlants]);
 
@@ -2774,22 +2826,26 @@ export const BentoDashboardView: React.FC<BentoDashboardViewProps> = ({
                     </View>
                   ) : (
                     filteredPersonnelList.map((op: any, idx: number) => {
-                      const assignedPlants = allPlants.filter(
-                        (p) =>
-                          p.assignedOperatorId === op.id ||
-                          (p.assignedOperatorName &&
-                            op.full_name &&
-                            p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
-                      );
-
                       const isSuper = op.resolvedRole === 'superadmin';
+                      const assignedPlants = isSuper
+                        ? []
+                        : allPlants.filter(
+                            (p) =>
+                              p.assignedOperatorId === op.id ||
+                              (p.assignedOperatorName &&
+                                op.full_name &&
+                                p.assignedOperatorName.toLowerCase().trim() === op.full_name.toLowerCase().trim())
+                          );
+
                       const primaryPlant = assignedPlants[0];
                       const deviceName = isSuper
-                        ? 'CONTROL GLOBAL HL'
+                        ? 'Supervisión Global (Sin plantas a cargo)'
                         : primaryPlant
                         ? `${primaryPlant.brand} ${primaryPlant.model} (${primaryPlant.powerKva || 0} kVA)`
                         : '--';
-                      const deviceSerial = primaryPlant
+                      const deviceSerial = isSuper
+                        ? '--'
+                        : primaryPlant
                         ? primaryPlant.serialNumber || primaryPlant.plate || '--'
                         : '--';
 
